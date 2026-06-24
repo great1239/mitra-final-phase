@@ -1,12 +1,12 @@
 # Validation Report
 
-Validated on June 23, 2026.
+Validated on June 24, 2026.
 
 ## Automated verification
 
 | Check | Result |
 |---|---|
-| Unit, API, integration, contract, failure, adapter, ownership, Phase 1, Phase 2, and Phase 3 conformance tests | `50 passed` |
+| Unit, API, integration, contract, failure, adapter, ownership, and Phase 1-6 conformance tests | `59 passed` |
 | Example manifests against JSON Schema 2020-12 | passed |
 | Two-product runtime simulation | passed |
 | Cross-product context isolation | passed |
@@ -30,6 +30,14 @@ Validated on June 23, 2026.
 | Exact capability lookup | passed |
 | Ambiguous intent fail-closed routing | passed |
 | Unexpected adapter exception normalization | passed |
+| Phase 4 Product Attachment Runtime policy and attachment record contracts validate | passed |
+| Product self-attachment through published API | passed |
+| Detached attachment audit listing | passed |
+| Arbitrary transport adapter without runtime code change | passed |
+| Phase 5 integration contract catalog | passed |
+| Phase 6 multi-product runtime simulation | passed |
+| Phase 6 transfer, routing, attachment validation, and failure containment | passed |
+| Phase 7 documentation and review package | completed |
 | Python wheel build and isolated install | passed |
 | All five implementation packages import from built artifact | passed |
 | OpenAPI YAML parse | OpenAPI `3.1.0`, 20 paths |

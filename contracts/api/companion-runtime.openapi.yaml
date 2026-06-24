@@ -205,15 +205,36 @@ paths:
       responses:
         "201":
           description: Attached product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachment:
+                    $ref: ../schemas/attachment-record.schema.json
         "409":
           description: Product ID already has a different active manifest
         "422":
           description: Invalid or incompatible manifest
     get:
       operationId: listAttachments
+      parameters:
+        - in: query
+          name: include_detached
+          description: Include detached historical attachment records.
+          schema: {type: boolean, default: false}
       responses:
         "200":
           description: Attached products and capability manifests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachments:
+                    type: array
+                    items:
+                      $ref: ../schemas/attachment-record.schema.json
   /api/v1/attachments/{product_id}:
     get:
       operationId: getAttachment
@@ -222,6 +243,13 @@ paths:
       responses:
         "200":
           description: Product attachment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachment:
+                    $ref: ../schemas/attachment-record.schema.json
         "404":
           description: Product not found
     delete:
@@ -231,6 +259,13 @@ paths:
       responses:
         "200":
           description: Product marked detached
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachment:
+                    $ref: ../schemas/attachment-record.schema.json
   /api/v1/intents:
     get:
       operationId: discoverIntents

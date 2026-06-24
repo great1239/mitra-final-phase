@@ -107,4 +107,8 @@ class AttachmentStorePort(Protocol):
 class AttachmentRegistryPort(Protocol):
     def get(self, product_id: str) -> dict[str, Any]: ...
 
-    def list(self) -> list[dict[str, Any]]: ...
+    def list(
+        self,
+        *,
+        include_detached: bool = False,
+    ) -> list[dict[str, Any]]: ...

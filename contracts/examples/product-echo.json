@@ -1,0 +1,47 @@
+{
+  "product_id": "echo-lab",
+  "display_name": "Echo Lab",
+  "product_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "embedded",
+  "base_url": null,
+  "health_endpoint": null,
+  "metadata": {
+    "example": true,
+    "purpose": "Demonstrates self-attachment through the public manifest contract"
+  },
+  "capabilities": [
+    {
+      "capability_id": "echo-observation",
+      "description": "Echoes the supplied payload through a generic loopback adapter",
+      "context_scopes": ["session", "workspace"],
+      "metadata": {
+        "owned_by_product": true
+      },
+      "intents": [
+        {
+          "intent_id": "echo.repeat",
+          "description": "Return the supplied message and declared context scopes",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["message"],
+            "properties": {
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "dispatch": {
+            "mode": "loopback",
+            "endpoint": "loopback://echo-lab/repeat"
+          },
+          "metadata": {
+            "example": true
+          }
+        }
+      ]
+    }
+  ]
+}

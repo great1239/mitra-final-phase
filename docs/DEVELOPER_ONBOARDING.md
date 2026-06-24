@@ -36,9 +36,24 @@ To add a product:
 No modification to `CompanionRuntime`, `IntentRouter`, or `ContextRuntime` is
 required.
 
+For self-attachment, use `contracts/examples/product-self-attach.http` as the
+minimal API flow. For automated bootstrap, supply a `ManifestSourceAdapter` to
+the composition root and call `attach_many` over the manifests it returns.
+
 For a new protocol, implement and register `TransportAdapter`. For a new
 manifest registry, implement `ManifestSourceAdapter`. See
 `docs/ADAPTER_GUIDE.md`.
+
+## Review checklist
+
+Before handing off a change:
+
+1. run `pytest`;
+2. validate any new manifest against
+   `contracts/schemas/product-attachment.schema.json`;
+3. update `contracts/integration-contracts.json` when a public contract or
+   example is added;
+4. keep `REVIEW_PACKET.md` and `SUBMISSION_INDEX.md` in sync.
 
 ## Design guardrails
 

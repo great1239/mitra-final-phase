@@ -49,6 +49,10 @@ app = create_app(manifest_sources=[RegistryManifestSource()])
 The bundled `DirectoryManifestSourceAdapter` discovers every `*.json` file in a
 configured directory. It has no knowledge of product names or filenames.
 
+When multiple manifests are returned, the composition root calls `attach_many`.
+Attachment is sequential and validates each manifest through the same public
+contract path used by the API.
+
 ## Adapter constraints
 
 - consume published contracts only;

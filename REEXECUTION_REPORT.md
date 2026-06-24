@@ -1,6 +1,7 @@
 # Security Boundary Re-execution Report
 
-Re-executed on June 23, 2026 after the adapter/port hardening request.
+Re-executed on June 24, 2026 after the Product Attachment Runtime,
+integration contract, testing, and documentation expansion.
 
 ## Boundary audit
 
@@ -23,8 +24,8 @@ implementation code.
 
 | Verification | Result |
 |---|---|
-| Complete pytest suite | `50 passed` |
-| Published example manifests | 2 validated, 0 schema errors |
+| Complete pytest suite | `59 passed` |
+| Published example manifests | 3 validated, 0 schema errors |
 | OpenAPI contract | 3.1.0, 20 paths |
 | Clean wheel/package build | passed |
 | Installed package imports | all five runtime packages and public ports passed |
@@ -42,6 +43,11 @@ implementation code.
 | Selective capability context loading | passed |
 | Phase 3 router policy, registration, and capability contracts | passed |
 | Ambiguity, product availability, and adapter exception handling | passed |
+| Phase 4 product self-attachment and detached audit listing | passed |
+| Phase 4 arbitrary transport and manifest-source adapter paths | passed |
+| Phase 5 integration contract catalog and policy schemas | passed |
+| Phase 6 multi-product simulation, transfer validation, and failure containment | passed |
+| Phase 7 architecture, flow, diagrams, onboarding, and review docs | updated |
 
 ## Remaining environment limitation
 

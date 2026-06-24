@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from typing import Any, Protocol, runtime_checkable
 
 from .constants import RuntimeState
@@ -147,7 +147,16 @@ class AttachmentRuntimeInterface(Protocol):
 
     def get(self, product_id: str) -> dict[str, Any]: ...
 
-    def list(self) -> list[dict[str, Any]]: ...
+    def attach_many(
+        self,
+        manifests: Iterable[ProductAttachmentManifest],
+    ) -> dict[str, Any]: ...
+
+    def list(
+        self,
+        *,
+        include_detached: bool = False,
+    ) -> list[dict[str, Any]]: ...
 
     def detach(self, product_id: str) -> dict[str, Any]: ...
 
@@ -193,6 +202,13 @@ class CompanionRuntimeInterface(
         self,
         manifest: ProductAttachmentManifest,
     ) -> dict[str, Any]: ...
+
+    def attach_many(
+        self,
+        manifests: Iterable[ProductAttachmentManifest],
+    ) -> dict[str, Any]: ...
+
+    def detach(self, product_id: str) -> dict[str, Any]: ...
 
     async def dispatch(
         self,

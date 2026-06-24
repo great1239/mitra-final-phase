@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/integration-contracts/1.0.0",
+  "title": "Mitra Companion Runtime Integration Contracts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime_version",
+    "compatibility_version",
+    "interface_family",
+    "stability",
+    "api",
+    "schemas",
+    "adapter_ports",
+    "examples"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime_version": {"const": "1.0.0"},
+    "compatibility_version": {"const": "mitra-companion-1"},
+    "interface_family": {"const": "companion-runtime-foundations"},
+    "stability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "breaking_changes",
+        "non_breaking_changes",
+        "version_fields_required_on_mutations"
+      ],
+      "properties": {
+        "breaking_changes": {"type": "string"},
+        "non_breaking_changes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        },
+        "version_fields_required_on_mutations": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "schema_version"},
+            {"const": "contract_version"},
+            {"const": "runtime_version"},
+            {"const": "compatibility_version"}
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openapi", "version", "paths"],
+      "properties": {
+        "openapi": {"type": "string"},
+        "version": {"const": "1.0.0"},
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^/"}
+        }
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/fileRef"}
+    },
+    "adapter_ports": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["port", "python_protocol", "purpose"],
+        "properties": {
+          "port": {"type": "string"},
+          "python_protocol": {"type": "string"},
+          "purpose": {"type": "string"}
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/fileRef"}
+    }
+  },
+  "$defs": {
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "path": {"type": "string"},
+        "version": {"type": "string"}
+      },
+      "anyOf": [
+        {"required": ["id"]},
+        {"required": ["name"]}
+      ]
+    }
+  }
+}

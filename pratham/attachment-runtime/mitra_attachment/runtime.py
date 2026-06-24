@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -67,14 +68,30 @@ class AttachmentRuntime:
             manifest.model_dump(mode="json"),
         )
 
+    def attach_many(
+        self,
+        manifests: Iterable[ProductAttachmentManifest],
+    ) -> dict[str, Any]:
+        attachments = [self.attach(manifest) for manifest in manifests]
+        return {
+            "attached_count": len(attachments),
+            "attachments": attachments,
+        }
+
     def get(self, product_id: str) -> dict[str, Any]:
         attachment = self.store.get_attachment(product_id)
         if attachment is None:
             raise ResourceNotFoundError(f"Unknown product: {product_id}")
         return attachment
 
-    def list(self) -> list[dict[str, Any]]:
-        return self.store.list_attachments()
+    def list(
+        self,
+        *,
+        include_detached: bool = False,
+    ) -> list[dict[str, Any]]:
+        return self.store.list_attachments(
+            include_detached=include_detached,
+        )
 
     def detach(self, product_id: str) -> dict[str, Any]:
         self.get(product_id)

@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.codex-test-deps/
+.codex-test-deps-sandbox/
 .coverage
 .env
 var/
@@ -8,4 +10,3 @@ tmp/
 *.db
 *.db-shm
 *.db-wal
-

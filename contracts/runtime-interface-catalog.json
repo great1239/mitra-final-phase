@@ -12,6 +12,8 @@
         {"name": "stop", "kind": "lifecycle", "request_contract": null, "result": "runtime status"},
         {"name": "status", "kind": "query", "request_contract": null, "result": "runtime status"},
         {"name": "attach", "kind": "command", "request_contract": "ProductAttachmentManifest", "result": "attachment record"},
+        {"name": "attach_many", "kind": "command", "request_contract": "ProductAttachmentManifest collection", "result": "attachment summary"},
+        {"name": "detach", "kind": "command", "request_contract": "product_id", "result": "detached attachment record"},
         {"name": "dispatch", "kind": "command", "request_contract": "IntentDispatchRequest", "result": "dispatch receipt and route"},
         {"name": "get_dispatch", "kind": "query", "request_contract": "dispatch_id", "result": "dispatch receipt"}
       ]
@@ -66,14 +68,15 @@
       ]
     },
     {
-      "interface_id": "attachment-runtime",
+      "interface_id": "product-attachment-runtime",
       "owner": "Pratham",
       "python_protocol": "mitra_companion.interfaces.AttachmentRuntimeInterface",
       "responsibility": "Manage capability and product attachment manifests and lifecycle.",
       "operations": [
         {"name": "attach", "kind": "command", "request_contract": "ProductAttachmentManifest", "result": "attachment record"},
+        {"name": "attach_many", "kind": "command", "request_contract": "ProductAttachmentManifest collection", "result": "attachment summary"},
         {"name": "get", "kind": "query", "request_contract": "product_id", "result": "attachment record"},
-        {"name": "list", "kind": "query", "request_contract": null, "result": "attachment records"},
+        {"name": "list", "kind": "query", "request_contract": "include_detached flag", "result": "attachment records"},
         {"name": "detach", "kind": "command", "request_contract": "product_id", "result": "detached attachment"},
         {"name": "mark_degraded", "kind": "command", "request_contract": "product_id and error", "result": "degraded attachment"}
       ]

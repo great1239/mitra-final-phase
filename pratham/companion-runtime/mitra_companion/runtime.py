@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 from uuid import uuid4
 
@@ -110,6 +111,36 @@ class CompanionRuntime:
             "intent_registration_count": registration[
                 "registration_count"
             ],
+        }
+
+    def attach_many(
+        self,
+        manifests: Iterable[ProductAttachmentManifest],
+    ) -> dict[str, Any]:
+        attachments = [self.attach(manifest) for manifest in manifests]
+        return {
+            "attached_count": len(attachments),
+            "attachments": attachments,
+        }
+
+    def detach(self, product_id: str) -> dict[str, Any]:
+        if not self.accepting:
+            raise RuntimeError("Runtime is not accepting detachments")
+        attachment = self.attachments.detach(product_id)
+        if (
+            self.lifecycle.state == RuntimeState.DEGRADED
+            and all(
+                item["state"] == "ATTACHED"
+                for item in self.attachments.list()
+            )
+        ):
+            self.lifecycle.transition(
+                RuntimeState.READY,
+                "Detached degraded product no longer affects routing",
+            )
+        return {
+            **attachment,
+            "intent_registration_count": 0,
         }
 
     def transfer_context(

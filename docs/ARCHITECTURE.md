@@ -95,6 +95,47 @@ loads only the partition identifiers published by the selected capability.
 The Intent Router derives registration records from durable attachment
 manifests rather than maintaining a second mutable capability source.
 
+## Product attachment runtime
+
+```mermaid
+flowchart LR
+  Product["Product-owned manifest"]
+  Source["Manifest Source Adapter"]
+  API["Versioned Attachment API"]
+  Runtime["Product Attachment Runtime"]
+  Store["Attachment Record"]
+  Router["Intent Registration"]
+
+  Product --> Source
+  Product --> API
+  Source --> Runtime
+  API --> Runtime
+  Runtime --> Store
+  Store --> Router
+```
+
+Products can attach themselves through `POST /api/v1/attachments` or through a
+manifest-source adapter. A new transport protocol is added by registering a
+`TransportAdapter`; a new manifest registry is added by registering a
+`ManifestSourceAdapter`. The runtime does not add product-specific branches for
+either case.
+
+Attachment records have three states:
+
+- `ATTACHED`: discoverable and routable;
+- `DEGRADED`: discoverable but not routable;
+- `DETACHED`: hidden from default listings and not routable.
+
+The contract policy is published in
+`contracts/product-attachment-runtime-policy.json`.
+
+## Integration contract layer
+
+`contracts/integration-contracts.json` is the stable catalog for product
+integrators. It references the OpenAPI surface, JSON Schemas, adapter ports,
+and examples. Runtime mutations require explicit version fields so incompatible
+clients fail before state changes.
+
 ## Source alignment
 
 - Phase IV Runtime Operations informed durable lifecycle, SQLite journaling,

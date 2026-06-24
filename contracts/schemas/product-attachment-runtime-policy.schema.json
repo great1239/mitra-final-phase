@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/product-attachment-runtime-policy/1.0.0",
+  "title": "Mitra Product Attachment Runtime Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime",
+    "owner",
+    "ownership",
+    "attachment_sources",
+    "validation_order",
+    "state_policy",
+    "extension_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime": {"const": "product-attachment-runtime"},
+    "owner": {"const": "Pratham"},
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owns", "does_not_own"],
+      "properties": {
+        "owns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        },
+        "does_not_own": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "attachment_sources": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["versioned-api-request", "manifest-source-adapter"]
+      }
+    },
+    "validation_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "state_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ATTACHED", "DEGRADED", "DETACHED"],
+      "patternProperties": {
+        "^(ATTACHED|DEGRADED|DETACHED)$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["discoverable", "routable"],
+          "properties": {
+            "discoverable": {"type": "boolean"},
+            "routable": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "extension_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "companion_runtime_modification_required",
+        "product_specific_branches_allowed",
+        "hidden_system_coupling_allowed",
+        "new_manifest_sources",
+        "new_transport_modes"
+      ],
+      "properties": {
+        "companion_runtime_modification_required": {"const": false},
+        "product_specific_branches_allowed": {"const": false},
+        "hidden_system_coupling_allowed": {"const": false},
+        "new_manifest_sources": {"type": "string"},
+        "new_transport_modes": {"type": "string"}
+      }
+    }
+  }
+}

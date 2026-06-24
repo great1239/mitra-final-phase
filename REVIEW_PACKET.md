@@ -48,18 +48,21 @@ source session
 | Product context isolation | session/product partition plus transfer exclusion |
 | Intent registration/discovery | manifest-derived records and filtered `/api/v1/intents` |
 | Intent dispatch/capability lookup/product routing | exact capability APIs, explicit router, durable dispatch |
-| Products attach without runtime modification | two JSON manifests attach through the same API |
+| Products attach without runtime modification | manifest examples attach through the same API |
+| Product self-attachment | `product-echo.json` attaches through `POST /api/v1/attachments` |
 | Stable/versioned APIs | OpenAPI 3.1 and version fields on mutations |
-| JSON schemas | published JSON Schema 2020-12 contracts for runtime inputs, views, catalogs, and policies |
+| JSON schemas | published JSON Schema 2020-12 contracts for runtime inputs, views, records, catalogs, and policies |
 | Multiple products | Atlas and Nova integration test/demo |
+| Context transfer validation | source product context excluded; portable handoff context included |
+| Attachment validation | duplicate capability/context/intent and invalid schema checks fail closed |
 | Failure handling | contract, revision, route, isolation, and transport failure tests |
-| Architecture/execution diagrams | Mermaid diagrams under `docs/` |
+| Architecture/execution/runtime diagrams | Mermaid diagrams under `docs/` |
 | Developer onboarding | `docs/DEVELOPER_ONBOARDING.md` |
 | Runtime screenshots/video | artifacts under `evidence/` |
 
 ## Verification
 
-- Automated suite: `50 passed`
+- Automated suite: `59 passed`
 - Two products attached through published manifests
 - Two sessions spanning an explicit cross-product transfer
 - Two successful routed dispatches
@@ -78,6 +81,11 @@ source session
 - Phase 3 policy, registration, and capability contracts validate
 - Ambiguous intent, degraded product, and adapter exception paths fail closed
 - Intent registrations survive restart through durable manifests
+- Phase 4 Product Attachment Runtime policy and attachment record contracts validate
+- Product self-attachment, detach audit, and arbitrary transport adapter tests passed
+- Phase 5 integration contract catalog validates and references all published files
+- Phase 6 runtime simulation validates multi-product attachment, transfer, routing, validation, and failure containment
+- Phase 7 documentation/review package updated with architecture, execution flow, runtime diagrams, onboarding, and review packet
 
 ## Key files
 
@@ -93,5 +101,11 @@ source session
 - `contracts/intent-router-policy.json`
 - `contracts/schemas/intent-registration.schema.json`
 - `contracts/schemas/capability-view.schema.json`
+- `contracts/product-attachment-runtime-policy.json`
+- `contracts/schemas/attachment-record.schema.json`
+- `contracts/integration-contracts.json`
 - `contracts/integration-tests/test_contract_examples.py`
+- `pratham/tests/test_phase4_product_attachment_runtime.py`
+- `pratham/tests/test_phase5_integration_contracts.py`
+- `pratham/tests/test_phase6_runtime_simulation.py`
 - `evidence/demo-transcript.json`

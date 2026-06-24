@@ -1,0 +1,160 @@
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime_version": "1.0.0",
+  "compatibility_version": "mitra-companion-1",
+  "interface_family": "companion-runtime-foundations",
+  "stability": {
+    "breaking_changes": "require a new major contract_version",
+    "non_breaking_changes": [
+      "new optional response fields",
+      "new adapter modes registered outside runtime implementation",
+      "new product manifests conforming to the published schema"
+    ],
+    "version_fields_required_on_mutations": [
+      "schema_version",
+      "contract_version",
+      "runtime_version",
+      "compatibility_version"
+    ]
+  },
+  "api": {
+    "openapi": "contracts/api/companion-runtime.openapi.yaml",
+    "version": "1.0.0",
+    "paths": [
+      "/health",
+      "/ready",
+      "/api/v1/runtime/status",
+      "/api/v1/runtime/lifecycle",
+      "/api/v1/sessions",
+      "/api/v1/sessions/{session_id}",
+      "/api/v1/sessions/{session_id}/resume",
+      "/api/v1/sessions/{session_id}/suspend",
+      "/api/v1/sessions/{session_id}/close",
+      "/api/v1/sessions/{session_id}/context",
+      "/api/v1/sessions/{session_id}/transfer",
+      "/api/v1/attachments",
+      "/api/v1/attachments/{product_id}",
+      "/api/v1/intents",
+      "/api/v1/products/{product_id}/intent-registrations",
+      "/api/v1/capabilities",
+      "/api/v1/products/{product_id}/capabilities/{capability_id}",
+      "/api/v1/intents/dispatch",
+      "/api/v1/dispatches",
+      "/api/v1/dispatches/{dispatch_id}"
+    ]
+  },
+  "schemas": [
+    {
+      "id": "product-attachment-manifest",
+      "path": "contracts/schemas/product-attachment.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "attachment-record",
+      "path": "contracts/schemas/attachment-record.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "session-create",
+      "path": "contracts/schemas/session-create.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "context-update",
+      "path": "contracts/schemas/context-update.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "context-view",
+      "path": "contracts/schemas/context-view.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "context-transfer",
+      "path": "contracts/schemas/context-transfer.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "intent-dispatch",
+      "path": "contracts/schemas/intent-dispatch.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "intent-registration",
+      "path": "contracts/schemas/intent-registration.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "capability-view",
+      "path": "contracts/schemas/capability-view.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "error-response",
+      "path": "contracts/schemas/error-response.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "runtime-interface-catalog",
+      "path": "contracts/schemas/runtime-interface-catalog.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "runtime-state-machine",
+      "path": "contracts/schemas/runtime-state-machine.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "ownership-boundary",
+      "path": "contracts/schemas/ownership-boundary.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "context-runtime-policy",
+      "path": "contracts/schemas/context-runtime-policy.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "intent-router-policy",
+      "path": "contracts/schemas/intent-router-policy.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "product-attachment-runtime-policy",
+      "path": "contracts/schemas/product-attachment-runtime-policy.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "integration-contracts",
+      "path": "contracts/schemas/integration-contracts.schema.json",
+      "version": "1.0.0"
+    }
+  ],
+  "adapter_ports": [
+    {
+      "port": "ManifestSourceAdapter",
+      "python_protocol": "mitra_companion.ports.ManifestSourceAdapter",
+      "purpose": "discover product attachment manifests without changing runtime code"
+    },
+    {
+      "port": "TransportAdapter",
+      "python_protocol": "mitra_companion.ports.TransportAdapter",
+      "purpose": "dispatch versioned envelopes through product-owned transports"
+    }
+  ],
+  "examples": [
+    {
+      "name": "embedded client flow",
+      "path": "contracts/examples/embedded-flow.http"
+    },
+    {
+      "name": "self attachment flow",
+      "path": "contracts/examples/product-self-attach.http"
+    },
+    {
+      "name": "synthetic echo product",
+      "path": "contracts/examples/product-echo.json"
+    }
+  ]
+}

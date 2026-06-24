@@ -29,7 +29,7 @@ pratham/
 contracts/
   schemas/             JSON Schema 2020-12 contracts
   api/                 OpenAPI 3.1 contract
-  examples/            two independently attachable example products
+  examples/            independently attachable product manifests and flows
   integration-tests/   shared contract and multi-product tests
 ```
 
@@ -78,9 +78,10 @@ python scripts/run_demo.py
 ```
 
 The suite covers lifecycle, durable session resume, context revision conflicts,
-workspace continuity, product isolation, two attached products, discovery,
-routing, dispatch, contract validation, cross-product transfer, and remote
-transport failure.
+workspace continuity, product isolation, product self-attachment, multiple
+attached products, discovery, routing, dispatch, contract validation,
+cross-product transfer, attachment validation, and transport failure
+containment.
 
 ## Key documents
 
@@ -92,7 +93,16 @@ transport failure.
 - [Phase 2 Validation Report](PHASE_2_VALIDATION_REPORT.md)
 - [Phase 3 Intent Router](docs/PHASE_3_INTENT_ROUTER.md)
 - [Phase 3 Validation Report](PHASE_3_VALIDATION_REPORT.md)
+- [Phase 4 Product Attachment Runtime](docs/PHASE_4_PRODUCT_ATTACHMENT_RUNTIME.md)
+- [Phase 4 Validation Report](PHASE_4_VALIDATION_REPORT.md)
+- [Phase 5 Integration Contracts](docs/PHASE_5_INTEGRATION_CONTRACTS.md)
+- [Phase 5 Validation Report](PHASE_5_VALIDATION_REPORT.md)
+- [Phase 6 Testing](docs/PHASE_6_TESTING.md)
+- [Phase 6 Validation Report](PHASE_6_VALIDATION_REPORT.md)
+- [Phase 7 Documentation](docs/PHASE_7_DOCUMENTATION.md)
+- [Phase 7 Validation Report](PHASE_7_VALIDATION_REPORT.md)
 - [Execution Flow](docs/EXECUTION_FLOW.md)
+- [Runtime Diagrams](docs/RUNTIME_DIAGRAMS.md)
 - [Runtime Lifecycle](docs/RUNTIME_LIFECYCLE.md)
 - [Integration Guide](docs/INTEGRATION_GUIDE.md)
 - [Developer Onboarding](docs/DEVELOPER_ONBOARDING.md)

@@ -32,6 +32,29 @@ sequenceDiagram
 The router never infers an intent from free text. The caller or a separately
 owned conversation/intelligence component supplies the registered `intent_id`.
 
+## Product self-attachment
+
+```mermaid
+sequenceDiagram
+  participant P as Product
+  participant API as Companion API
+  participant A as Product Attachment Runtime
+  participant T as Transport Registry
+  participant R as Intent Router
+
+  P->>API: POST /api/v1/attachments with versioned manifest
+  API->>T: Validate dispatch mode and endpoint
+  API->>A: Attach manifest
+  A->>A: Validate contract, capabilities, scopes, schemas
+  A-->>API: Durable attachment record
+  API->>R: Register manifest-derived intents
+  R-->>API: Deterministic registration count
+  API-->>P: Versioned attachment response
+```
+
+No product-specific code path is added to the Companion Runtime. New manifest
+registries and new transports are plugged in through adapter ports.
+
 ## Context transfer
 
 ```mermaid
@@ -58,6 +81,8 @@ sequenceDiagram
 - cross-product dispatch without transfer: conflict;
 - stale context revision: conflict with current revision preserved;
 - incompatible attachment contract: reject before registration;
+- duplicate attachment capability/scope/intent declarations: reject before
+  registration;
 - HTTP timeout/non-2xx/non-JSON: dispatch fails, product becomes degraded, and
   the lifecycle enters `DEGRADED`;
 - unexpected adapter exception: normalize to transport failure and persist a

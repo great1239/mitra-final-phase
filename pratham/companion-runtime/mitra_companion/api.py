@@ -49,8 +49,7 @@ def create_app(
         if start_runtime:
             companion.start()
             for source in sources:
-                for manifest in source.load():
-                    companion.attach(manifest)
+                companion.attach_many(source.load())
         try:
             yield
         finally:
@@ -349,9 +348,13 @@ def create_app(
         )
 
     @app.get("/api/v1/attachments")
-    async def list_attachments() -> dict:
+    async def list_attachments(
+        include_detached: bool = False,
+    ) -> dict:
         return versioned_response(
-            attachments=companion.attachments.list()
+            attachments=companion.attachments.list(
+                include_detached=include_detached,
+            )
         )
 
     @app.get("/api/v1/attachments/{product_id}")
@@ -363,7 +366,7 @@ def create_app(
     @app.delete("/api/v1/attachments/{product_id}")
     async def detach_product(product_id: str) -> dict:
         return versioned_response(
-            attachment=companion.attachments.detach(product_id)
+            attachment=companion.detach(product_id)
         )
 
     @app.get("/api/v1/intents")

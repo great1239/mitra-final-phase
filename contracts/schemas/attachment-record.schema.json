@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/attachment-record/1.0.0",
+  "title": "Mitra Product Attachment Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "product_id",
+    "state",
+    "manifest",
+    "attached_at",
+    "updated_at",
+    "last_error"
+  ],
+  "properties": {
+    "product_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "state": {
+      "enum": ["ATTACHED", "DEGRADED", "DETACHED"]
+    },
+    "manifest": {
+      "$ref": "https://contracts.mitra.local/product-attachment/1.0.0"
+    },
+    "attached_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_error": {
+      "type": ["string", "null"]
+    },
+    "intent_registration_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

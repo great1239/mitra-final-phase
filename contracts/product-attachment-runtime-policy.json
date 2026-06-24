@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime": "product-attachment-runtime",
+  "owner": "Pratham",
+  "ownership": {
+    "owns": [
+      "manifest validation",
+      "attachment lifecycle state",
+      "capability metadata registration",
+      "adapter-port selection"
+    ],
+    "does_not_own": [
+      "product capability implementation",
+      "conversation design",
+      "governance",
+      "safety",
+      "knowledge",
+      "evidence",
+      "replay",
+      "certification"
+    ]
+  },
+  "attachment_sources": [
+    "versioned-api-request",
+    "manifest-source-adapter"
+  ],
+  "validation_order": [
+    "contract-version",
+    "product-identity",
+    "capability-identity",
+    "context-scope-uniqueness",
+    "intent-input-json-schema",
+    "transport-adapter-target"
+  ],
+  "state_policy": {
+    "ATTACHED": {
+      "discoverable": true,
+      "routable": true
+    },
+    "DEGRADED": {
+      "discoverable": true,
+      "routable": false
+    },
+    "DETACHED": {
+      "discoverable": false,
+      "routable": false
+    }
+  },
+  "extension_policy": {
+    "companion_runtime_modification_required": false,
+    "product_specific_branches_allowed": false,
+    "hidden_system_coupling_allowed": false,
+    "new_manifest_sources": "implement ManifestSourceAdapter",
+    "new_transport_modes": "implement TransportAdapter"
+  }
+}

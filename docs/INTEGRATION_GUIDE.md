@@ -4,7 +4,9 @@
 
 A product declares stable identity, version, attachment mode, capabilities,
 context scopes, explicit intents, input schemas, and transport targets. Start
-from `contracts/examples/product-atlas.json` and validate against
+from `contracts/examples/product-atlas.json`,
+`contracts/examples/product-nova.json`, or the minimal
+`contracts/examples/product-echo.json`, then validate against
 `contracts/schemas/product-attachment.schema.json`.
 
 The manifest requests routing metadata only. It cannot grant authority or add
@@ -27,6 +29,10 @@ Content-Type: application/json
 
 Registration is idempotent for an identical active manifest. A different
 manifest under the same product ID returns `409`.
+
+Detached records are omitted from the default list. Use
+`GET /api/v1/attachments?include_detached=true` when an integration console
+needs audit visibility.
 
 ## 3. Create or resume a session
 
@@ -77,3 +83,6 @@ This release accepts contract `1.0.0` and compatibility
 `mitra-companion-1`. Adding optional fields is a minor-compatible change.
 Renaming/removing fields, changing meaning, or adding required fields requires
 a new major contract.
+
+The machine-readable integration catalog is
+`contracts/integration-contracts.json`.
