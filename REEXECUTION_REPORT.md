@@ -34,7 +34,7 @@ implementation code.
 | Arbitrary `queue` transport adapter | successful dispatch without runtime edits |
 | Deterministic two-product demo | 2 sessions, 2 dispatches, 0 failures |
 | Cross-product context isolation | verified `true` |
-| Demo video full decode | passed; 42-second animated proof walkthrough |
+| Demo video full decode | passed |
 | Ownership contract | exactly 9 owned and 9 excluded capabilities |
 | Forbidden subsystem modules/classes/functions/imports/routes | none |
 | Phase 1 interface and state catalog conformance | passed |
