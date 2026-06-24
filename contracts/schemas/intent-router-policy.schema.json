@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/intent-router-policy/1.0.0",
+  "title": "Mitra Intent Router Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "owner",
+    "registration",
+    "discovery",
+    "routing",
+    "dispatch",
+    "non_ownership"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "owner": {"const": "Pratham"},
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "durability",
+        "identity_keys",
+        "product_specific_code"
+      ],
+      "properties": {
+        "source": {"const": "attached-product-manifest"},
+        "durability": {"const": "attachment-manifest"},
+        "identity_keys": {
+          "const": ["product_id", "capability_id", "intent_id"]
+        },
+        "product_specific_code": {"const": false}
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filters",
+        "ordering",
+        "detached_products",
+        "degraded_products"
+      ],
+      "properties": {
+        "filters": {
+          "const": [
+            "product_id",
+            "capability_id",
+            "intent_id",
+            "available_only"
+          ]
+        },
+        "ordering": {
+          "const": ["product_id", "capability_id", "intent_id"]
+        },
+        "detached_products": {"const": "excluded"},
+        "degraded_products": {
+          "const": "visible-unless-available-only"
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intent_input",
+        "product_precedence",
+        "cross_product_behavior",
+        "capability_selection",
+        "ambiguity_behavior",
+        "unavailable_product_behavior"
+      ],
+      "properties": {
+        "intent_input": {"const": "explicit-registered-id-only"},
+        "product_precedence": {
+          "const": ["request.product_id", "session.active_product_id"]
+        },
+        "cross_product_behavior": {
+          "const": "explicit-context-transfer-required"
+        },
+        "capability_selection": {"const": "explicit-or-single-match"},
+        "ambiguity_behavior": {"const": "fail-closed"},
+        "unavailable_product_behavior": {"const": "fail-closed"}
+      }
+    },
+    "dispatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payload_validation",
+        "context_loading",
+        "transport_selection",
+        "receipt",
+        "unexpected_adapter_error"
+      ],
+      "properties": {
+        "payload_validation": {
+          "const": "registered-json-schema-2020-12"
+        },
+        "context_loading": {
+          "const": "registered-capability-scopes-only"
+        },
+        "transport_selection": {"const": "registered-adapter-mode"},
+        "receipt": {"const": "durable"},
+        "unexpected_adapter_error": {
+          "const": "normalized-transport-failure"
+        }
+      }
+    },
+    "non_ownership": {
+      "type": "array",
+      "minItems": 10,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 3}
+    }
+  }
+}

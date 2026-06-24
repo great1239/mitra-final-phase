@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0.0",
+  "runtime": {
+    "initial_state": "INITIALIZING",
+    "states": [
+      {"name": "INITIALIZING", "description": "Storage and published interfaces are being prepared."},
+      {"name": "READY", "description": "The runtime accepts sessions, attachments, transfers, and dispatches."},
+      {"name": "ACTIVE", "description": "At least one intent dispatch is executing."},
+      {"name": "DEGRADED", "description": "The runtime is operating with a failed or degraded attachment transport."},
+      {"name": "DRAINING", "description": "New work is blocked while shutdown completes."},
+      {"name": "STOPPED", "description": "The runtime is not accepting or executing work.", "terminal": true}
+    ],
+    "transitions": [
+      {"from": "INITIALIZING", "to": "READY", "trigger": "startup completed"},
+      {"from": "INITIALIZING", "to": "DEGRADED", "trigger": "startup dependency failed"},
+      {"from": "INITIALIZING", "to": "STOPPED", "trigger": "startup aborted"},
+      {"from": "READY", "to": "ACTIVE", "trigger": "dispatch started"},
+      {"from": "READY", "to": "DEGRADED", "trigger": "attachment transport failed"},
+      {"from": "READY", "to": "DRAINING", "trigger": "shutdown requested"},
+      {"from": "ACTIVE", "to": "READY", "trigger": "dispatch completed"},
+      {"from": "ACTIVE", "to": "DEGRADED", "trigger": "dispatch transport failed"},
+      {"from": "ACTIVE", "to": "DRAINING", "trigger": "shutdown requested"},
+      {"from": "DEGRADED", "to": "READY", "trigger": "all attachments restored"},
+      {"from": "DEGRADED", "to": "ACTIVE", "trigger": "available attachment dispatch started"},
+      {"from": "DEGRADED", "to": "DRAINING", "trigger": "shutdown requested"},
+      {"from": "DRAINING", "to": "STOPPED", "trigger": "shutdown completed"},
+      {"from": "STOPPED", "to": "INITIALIZING", "trigger": "process restarted"}
+    ]
+  },
+  "session": {
+    "initial_state": "ACTIVE",
+    "states": [
+      {"name": "ACTIVE", "description": "The session may load context and dispatch intents."},
+      {"name": "SUSPENDED", "description": "The session is durable but cannot mutate context, transfer, or dispatch."},
+      {"name": "CLOSED", "description": "The session cannot be resumed or dispatch new work.", "terminal": true}
+    ],
+    "transitions": [
+      {"from": "ACTIVE", "to": "SUSPENDED", "trigger": "client suspends session"},
+      {"from": "ACTIVE", "to": "CLOSED", "trigger": "client closes session"},
+      {"from": "SUSPENDED", "to": "ACTIVE", "trigger": "valid resume token supplied"},
+      {"from": "SUSPENDED", "to": "CLOSED", "trigger": "client closes session"}
+    ]
+  },
+  "attachment": {
+    "initial_state": "ATTACHED",
+    "states": [
+      {"name": "ATTACHED", "description": "The manifest is valid and its transport is available."},
+      {"name": "DEGRADED", "description": "The manifest remains registered but transport failed."},
+      {"name": "DETACHED", "description": "The product is no longer routable.", "terminal": true}
+    ],
+    "transitions": [
+      {"from": "ATTACHED", "to": "DEGRADED", "trigger": "transport failed"},
+      {"from": "DEGRADED", "to": "ATTACHED", "trigger": "manifest reattached after restoration"},
+      {"from": "ATTACHED", "to": "DETACHED", "trigger": "detach requested"},
+      {"from": "DEGRADED", "to": "DETACHED", "trigger": "detach requested"}
+    ]
+  },
+  "dispatch": {
+    "initial_state": "ACCEPTED",
+    "states": [
+      {"name": "ACCEPTED", "description": "The dispatch envelope is durably recorded."},
+      {"name": "COMPLETED", "description": "The adapter returned a valid response.", "terminal": true},
+      {"name": "FAILED", "description": "The adapter failed and the failure was recorded.", "terminal": true}
+    ],
+    "transitions": [
+      {"from": "ACCEPTED", "to": "COMPLETED", "trigger": "adapter response completed"},
+      {"from": "ACCEPTED", "to": "FAILED", "trigger": "adapter invocation failed"}
+    ]
+  }
+}

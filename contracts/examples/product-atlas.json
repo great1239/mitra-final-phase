@@ -1,0 +1,49 @@
+{
+  "product_id": "atlas-workspace",
+  "display_name": "Atlas Workspace",
+  "product_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "embedded",
+  "health_endpoint": "/health",
+  "capabilities": [
+    {
+      "capability_id": "workspace-navigation",
+      "description": "Receives explicit workspace navigation requests.",
+      "context_scopes": ["session", "workspace", "product", "handoff"],
+      "intents": [
+        {
+          "intent_id": "workspace.open-record",
+          "description": "Open a record already identified by the host product.",
+          "input_schema": {
+            "type": "object",
+            "required": ["record_type", "record_id"]
+          },
+          "dispatch": {
+            "mode": "loopback",
+            "endpoint": "loopback://atlas/open-record"
+          },
+          "metadata": {
+            "authority": "host-product"
+          }
+        },
+        {
+          "intent_id": "workspace.show-queue",
+          "description": "Show a named product queue.",
+          "input_schema": {
+            "type": "object",
+            "required": ["queue_id"]
+          },
+          "dispatch": {
+            "mode": "loopback",
+            "endpoint": "loopback://atlas/show-queue"
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "example": true,
+    "business_logic_owner": "atlas-workspace"
+  }
+}
+

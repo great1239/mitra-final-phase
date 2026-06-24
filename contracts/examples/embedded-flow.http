@@ -1,0 +1,36 @@
+### Attach a product
+POST http://localhost:8090/api/v1/attachments
+Content-Type: application/json
+
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime_version": "1.0.0",
+  "compatibility_version": "mitra-companion-1",
+  "manifest": {
+    "product_id": "sample-product",
+    "display_name": "Sample Product",
+    "product_version": "1.0.0",
+    "contract_version": "1.0.0",
+    "attachment_mode": "embedded",
+    "capabilities": [
+      {
+        "capability_id": "sample-navigation",
+        "description": "Example interface-only capability",
+        "context_scopes": ["session", "workspace", "product"],
+        "intents": [
+          {
+            "intent_id": "sample.open-item",
+            "description": "Open a caller-supplied item",
+            "input_schema": {"type": "object"},
+            "dispatch": {
+              "mode": "loopback",
+              "endpoint": "loopback://sample/open-item"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/context-view/1.0.0",
+  "title": "Mitra Context View",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "workspace_id",
+    "active_product_id",
+    "continuity",
+    "loaded_scopes",
+    "merge_precedence",
+    "partitions",
+    "merged"
+  ],
+  "properties": {
+    "session_id": {"type": "string", "minLength": 1},
+    "workspace_id": {"type": "string", "minLength": 1},
+    "active_product_id": {"type": ["string", "null"]},
+    "continuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "client_type",
+        "session_state",
+        "parent_session_id"
+      ],
+      "properties": {
+        "actor_id": {"type": "string", "minLength": 1},
+        "client_type": {"type": "string", "minLength": 1},
+        "session_state": {"enum": ["ACTIVE", "SUSPENDED", "CLOSED"]},
+        "parent_session_id": {"type": ["string", "null"]}
+      }
+    },
+    "loaded_scopes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["session", "workspace", "handoff", "product"]
+      }
+    },
+    "merge_precedence": {
+      "const": ["session", "workspace", "handoff", "product"]
+    },
+    "partitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session": {"$ref": "#/$defs/partition"},
+        "workspace": {"$ref": "#/$defs/partition"},
+        "handoff": {"$ref": "#/$defs/partition"},
+        "product": {"$ref": "#/$defs/partition"}
+      }
+    },
+    "merged": {"type": "object"}
+  },
+  "$defs": {
+    "partition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "scope",
+        "scope_key",
+        "revision",
+        "data",
+        "updated_at"
+      ],
+      "properties": {
+        "session_id": {"type": "string", "minLength": 1},
+        "scope": {
+          "enum": ["session", "workspace", "handoff", "product"]
+        },
+        "scope_key": {"type": ["string", "null"]},
+        "revision": {"type": "integer", "minimum": 0},
+        "data": {"type": "object"},
+        "updated_at": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

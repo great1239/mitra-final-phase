@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/capability-view/1.0.0",
+  "title": "Mitra Capability View",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "product_id",
+    "product_name",
+    "product_version",
+    "attachment_state",
+    "capability_id",
+    "description",
+    "context_scopes",
+    "metadata",
+    "intent_ids",
+    "intent_count"
+  ],
+  "properties": {
+    "product_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "product_name": {"type": "string", "minLength": 3},
+    "product_version": {"type": "string", "minLength": 5},
+    "attachment_state": {"enum": ["ATTACHED", "DEGRADED"]},
+    "capability_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "description": {"type": "string", "minLength": 3},
+    "context_scopes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["session", "workspace", "product", "handoff"]
+      }
+    },
+    "metadata": {"type": "object"},
+    "intent_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_.-]{2,95}$"
+      }
+    },
+    "intent_count": {"type": "integer", "minimum": 1}
+  }
+}

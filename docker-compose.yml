@@ -1,0 +1,25 @@
+services:
+  companion-runtime:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      MITRA_COMPANION_DATA_ROOT: /data
+      MITRA_COMPANION_DATABASE_PATH: /data/companion-runtime.db
+      MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/examples
+    volumes:
+      - companion-runtime-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/ready')",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  companion-runtime-data:

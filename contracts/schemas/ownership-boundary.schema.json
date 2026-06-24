@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/ownership-boundary/1.0.0",
+  "title": "Mitra Runtime Ownership Boundary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "owner",
+    "owns",
+    "does_not_own",
+    "implementation_folders",
+    "integration_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "owner": {"const": "Pratham"},
+    "owns": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 3}
+    },
+    "does_not_own": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 3}
+    },
+    "implementation_folders": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z-]+$"}
+    },
+    "integration_policy": {
+      "const": "published-interfaces-and-adapters-only"
+    }
+  }
+}

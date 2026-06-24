@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/runtime-state-machine/1.0.0",
+  "title": "Mitra Runtime State Machine",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "runtime",
+    "session",
+    "attachment",
+    "dispatch"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "runtime": {"$ref": "#/$defs/stateMachine"},
+    "session": {"$ref": "#/$defs/stateMachine"},
+    "attachment": {"$ref": "#/$defs/stateMachine"},
+    "dispatch": {"$ref": "#/$defs/stateMachine"}
+  },
+  "$defs": {
+    "stateMachine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initial_state", "states", "transitions"],
+      "properties": {
+        "initial_state": {"type": "string"},
+        "states": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "description"],
+            "properties": {
+              "name": {"type": "string"},
+              "description": {"type": "string", "minLength": 3},
+              "terminal": {"type": "boolean", "default": false}
+            }
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "to", "trigger"],
+            "properties": {
+              "from": {"type": "string"},
+              "to": {"type": "string"},
+              "trigger": {"type": "string", "minLength": 3}
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

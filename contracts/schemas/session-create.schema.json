@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/session-create/1.0.0",
+  "title": "Companion Session Create Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime_version",
+    "compatibility_version",
+    "actor_id",
+    "client_type",
+    "workspace_id"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime_version": {"const": "1.0.0"},
+    "compatibility_version": {"const": "mitra-companion-1"},
+    "actor_id": {"type": "string", "minLength": 1},
+    "client_type": {
+      "enum": ["standalone", "embedded", "mobile", "xr", "robotics"]
+    },
+    "workspace_id": {"type": "string", "minLength": 1},
+    "product_id": {"type": ["string", "null"]},
+    "metadata": {"type": "object"}
+  }
+}
+

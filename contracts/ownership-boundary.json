@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "owner": "Pratham",
+  "owns": [
+    "Companion Runtime",
+    "Session Runtime",
+    "Context Runtime",
+    "Intent Router",
+    "Capability Attachment Runtime",
+    "Runtime Lifecycle",
+    "Runtime State",
+    "Context Transfer Runtime",
+    "Product Attachment Runtime"
+  ],
+  "does_not_own": [
+    "Conversation Design",
+    "Governance",
+    "Safety",
+    "Knowledge",
+    "Project Intelligence",
+    "Domain Intelligence",
+    "Evidence",
+    "Replay",
+    "Certification"
+  ],
+  "implementation_folders": [
+    "companion-runtime",
+    "session-runtime",
+    "context-runtime",
+    "intent-router",
+    "attachment-runtime"
+  ],
+  "integration_policy": "published-interfaces-and-adapters-only"
+}

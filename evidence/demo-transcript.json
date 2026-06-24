@@ -1,0 +1,276 @@
+{
+  "status": "DEMO_COMPLETED",
+  "runtime": {
+    "state": "READY",
+    "accepting": true,
+    "database_path": "${MITRA_COMPANION_DATA_ROOT}/demo.db",
+    "counts": {
+      "sessions": 2,
+      "attachments": 2,
+      "dispatches": 2,
+      "failed_dispatches": 0
+    },
+    "attached_products": [
+      "atlas-workspace",
+      "nova-operations"
+    ]
+  },
+  "attachments": [
+    {
+      "product_id": "atlas-workspace",
+      "state": "ATTACHED"
+    },
+    {
+      "product_id": "nova-operations",
+      "state": "ATTACHED"
+    }
+  ],
+  "atlas_session": {
+    "session_id": "ses_8345ade7b852406ea2ef37182281b69c",
+    "parent_session_id": null,
+    "actor_id": "demo-user",
+    "client_type": "embedded",
+    "workspace_id": "atlas-sales",
+    "active_product_id": "atlas-workspace",
+    "state": "ACTIVE",
+    "created_at": "2026-06-23T10:30:23.361746+00:00",
+    "updated_at": "2026-06-23T10:30:23.361746+00:00",
+    "last_resumed_at": null,
+    "metadata": {
+      "device": "desktop"
+    }
+  },
+  "atlas_dispatch": {
+    "dispatch_id": "dsp_ceefcfe4978e4b3d81e4e4a99add4e53",
+    "session_id": "ses_8345ade7b852406ea2ef37182281b69c",
+    "product_id": "atlas-workspace",
+    "capability_id": "workspace-navigation",
+    "intent_id": "workspace.open-record",
+    "status": "COMPLETED",
+    "error": null,
+    "created_at": "2026-06-23T10:30:23.440627+00:00",
+    "finished_at": "2026-06-23T10:30:23.462068+00:00",
+    "request": {
+      "capability_id": "workspace-navigation",
+      "compatibility_version": "mitra-companion-1",
+      "context": {
+        "merged": {
+          "locale": "en-IN",
+          "selected_record": "lead-42"
+        },
+        "partitions": {
+          "handoff": {
+            "data": {},
+            "revision": 0,
+            "scope": "handoff",
+            "scope_key": "ses_8345ade7b852406ea2ef37182281b69c",
+            "session_id": "ses_8345ade7b852406ea2ef37182281b69c",
+            "updated_at": null
+          },
+          "product": {
+            "data": {
+              "selected_record": "lead-42"
+            },
+            "revision": 1,
+            "scope": "product",
+            "scope_key": "atlas-workspace",
+            "session_id": "ses_8345ade7b852406ea2ef37182281b69c",
+            "updated_at": "2026-06-23T10:30:23.397809+00:00"
+          },
+          "session": {
+            "data": {
+              "locale": "en-IN"
+            },
+            "revision": 1,
+            "scope": "session",
+            "scope_key": "ses_8345ade7b852406ea2ef37182281b69c",
+            "session_id": "ses_8345ade7b852406ea2ef37182281b69c",
+            "updated_at": "2026-06-23T10:30:23.381012+00:00"
+          },
+          "workspace": {
+            "data": {},
+            "revision": 0,
+            "scope": "workspace",
+            "scope_key": "atlas-sales",
+            "session_id": "ses_8345ade7b852406ea2ef37182281b69c",
+            "updated_at": null
+          }
+        }
+      },
+      "contract_version": "1.0.0",
+      "correlation_id": "corr_3ec19067cbc74aa58f7225043465e338",
+      "dispatch_id": "dsp_ceefcfe4978e4b3d81e4e4a99add4e53",
+      "intent_id": "workspace.open-record",
+      "occurred_at": "2026-06-23T10:30:23.438614+00:00",
+      "payload": {
+        "record_id": "lead-42",
+        "record_type": "lead"
+      },
+      "product_id": "atlas-workspace",
+      "runtime_version": "1.0.0",
+      "schema_version": "1.0.0",
+      "session_id": "ses_8345ade7b852406ea2ef37182281b69c"
+    },
+    "response": {
+      "accepted": true,
+      "capability_id": "workspace-navigation",
+      "correlation_id": "corr_3ec19067cbc74aa58f7225043465e338",
+      "intent_id": "workspace.open-record",
+      "payload": {
+        "record_id": "lead-42",
+        "record_type": "lead"
+      },
+      "product_id": "atlas-workspace",
+      "received_context_scopes": [
+        "handoff",
+        "product",
+        "session",
+        "workspace"
+      ],
+      "transport": "loopback"
+    }
+  },
+  "transfer": {
+    "receipt": {
+      "transfer_id": "xfer_7acad406581347e9be22088ad758a9cd",
+      "source_session_id": "ses_8345ade7b852406ea2ef37182281b69c",
+      "target_session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+      "target_workspace_id": "nova-operations",
+      "target_product_id": "nova-operations",
+      "portable_context": {
+        "handoff_reference": "lead-42"
+      },
+      "created_at": "2026-06-23T10:30:23.502893+00:00"
+    },
+    "target_session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+    "target_context": {
+      "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+      "active_product_id": "nova-operations",
+      "partitions": {
+        "session": {
+          "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+          "scope": "session",
+          "scope_key": "ses_c6a386e8f012498087ea7cfe86a07b05",
+          "revision": 0,
+          "data": {},
+          "updated_at": null
+        },
+        "workspace": {
+          "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+          "scope": "workspace",
+          "scope_key": "nova-operations",
+          "revision": 0,
+          "data": {},
+          "updated_at": null
+        },
+        "handoff": {
+          "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+          "scope": "handoff",
+          "scope_key": "ses_c6a386e8f012498087ea7cfe86a07b05",
+          "revision": 1,
+          "data": {
+            "handoff_reference": "lead-42"
+          },
+          "updated_at": "2026-06-23T10:30:23.518774+00:00"
+        },
+        "product": {
+          "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+          "scope": "product",
+          "scope_key": "nova-operations",
+          "revision": 0,
+          "data": {},
+          "updated_at": null
+        }
+      },
+      "merged": {
+        "handoff_reference": "lead-42"
+      }
+    }
+  },
+  "nova_dispatch": {
+    "dispatch_id": "dsp_5f08305b40f5431d9fad837307554b0f",
+    "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+    "product_id": "nova-operations",
+    "capability_id": "operations-navigation",
+    "intent_id": "operations.show-status",
+    "status": "COMPLETED",
+    "error": null,
+    "created_at": "2026-06-23T10:30:23.575521+00:00",
+    "finished_at": "2026-06-23T10:30:23.596442+00:00",
+    "request": {
+      "capability_id": "operations-navigation",
+      "compatibility_version": "mitra-companion-1",
+      "context": {
+        "merged": {
+          "handoff_reference": "lead-42"
+        },
+        "partitions": {
+          "handoff": {
+            "data": {
+              "handoff_reference": "lead-42"
+            },
+            "revision": 1,
+            "scope": "handoff",
+            "scope_key": "ses_c6a386e8f012498087ea7cfe86a07b05",
+            "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+            "updated_at": "2026-06-23T10:30:23.518774+00:00"
+          },
+          "product": {
+            "data": {},
+            "revision": 0,
+            "scope": "product",
+            "scope_key": "nova-operations",
+            "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+            "updated_at": null
+          },
+          "session": {
+            "data": {},
+            "revision": 0,
+            "scope": "session",
+            "scope_key": "ses_c6a386e8f012498087ea7cfe86a07b05",
+            "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+            "updated_at": null
+          },
+          "workspace": {
+            "data": {},
+            "revision": 0,
+            "scope": "workspace",
+            "scope_key": "nova-operations",
+            "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05",
+            "updated_at": null
+          }
+        }
+      },
+      "contract_version": "1.0.0",
+      "correlation_id": "corr_066ca9a101ff4d8eb4647a18dfa0864b",
+      "dispatch_id": "dsp_5f08305b40f5431d9fad837307554b0f",
+      "intent_id": "operations.show-status",
+      "occurred_at": "2026-06-23T10:30:23.573764+00:00",
+      "payload": {
+        "resource_id": "lead-42"
+      },
+      "product_id": "nova-operations",
+      "runtime_version": "1.0.0",
+      "schema_version": "1.0.0",
+      "session_id": "ses_c6a386e8f012498087ea7cfe86a07b05"
+    },
+    "response": {
+      "accepted": true,
+      "capability_id": "operations-navigation",
+      "correlation_id": "corr_066ca9a101ff4d8eb4647a18dfa0864b",
+      "intent_id": "operations.show-status",
+      "payload": {
+        "resource_id": "lead-42"
+      },
+      "product_id": "nova-operations",
+      "received_context_scopes": [
+        "handoff",
+        "product",
+        "session",
+        "workspace"
+      ],
+      "transport": "loopback"
+    }
+  },
+  "product_isolation_verified": true
+}

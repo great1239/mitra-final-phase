@@ -1,0 +1,354 @@
+openapi: 3.1.0
+info:
+  title: Mitra Companion Runtime API
+  version: 1.0.0
+  description: >
+    Versioned interface for sessions, partitioned context, explicit intent
+    routing, context transfer, and product attachment. The runtime does not
+    own governance, safety, knowledge, domain intelligence, evidence, replay,
+    or certification.
+servers:
+  - url: http://localhost:8090
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Runtime health
+  /ready:
+    get:
+      operationId: getReadiness
+      responses:
+        "200":
+          description: Runtime accepts work
+        "503":
+          description: Runtime is not ready
+  /api/v1/runtime/status:
+    get:
+      operationId: getRuntimeStatus
+      responses:
+        "200":
+          description: Runtime state and counts
+  /api/v1/runtime/lifecycle:
+    get:
+      operationId: getRuntimeLifecycle
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+      responses:
+        "200":
+          description: Ordered lifecycle transition journal
+  /api/v1/sessions:
+    post:
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/session-create.schema.json
+      responses:
+        "201":
+          description: Session and one-time resume token
+        "422":
+          description: Invalid or incompatible contract
+    get:
+      operationId: listSessions
+      responses:
+        "200":
+          description: Recent sessions
+  /api/v1/sessions/{session_id}:
+    get:
+      operationId: getSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Session and isolated context partitions
+        "404":
+          description: Session not found
+  /api/v1/sessions/{session_id}/resume:
+    post:
+      operationId: resumeSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - schema_version
+                - contract_version
+                - runtime_version
+                - compatibility_version
+                - resume_token
+              properties:
+                schema_version: {const: 1.0.0}
+                contract_version: {const: 1.0.0}
+                runtime_version: {const: 1.0.0}
+                compatibility_version: {const: mitra-companion-1}
+                resume_token: {type: string, minLength: 24}
+      responses:
+        "200":
+          description: Resumed session
+        "409":
+          description: Invalid token or closed session
+  /api/v1/sessions/{session_id}/suspend:
+    post:
+      operationId: suspendSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Suspended session
+        "404":
+          description: Session not found
+        "409":
+          description: Closed session cannot be suspended
+  /api/v1/sessions/{session_id}/close:
+    post:
+      operationId: closeSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Closed session
+        "404":
+          description: Session not found
+  /api/v1/sessions/{session_id}/context:
+    get:
+      operationId: loadContext
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - in: query
+          name: scope
+          description: >
+            Optional repeatable partition selector. Omit to load all context
+            partitions available to the session.
+          schema:
+            type: array
+            uniqueItems: true
+            items:
+              enum: [session, workspace, handoff, product]
+      responses:
+        "200":
+          description: Selected isolated context partitions and merged view
+    patch:
+      operationId: updateContext
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/context-update.schema.json
+      responses:
+        "200":
+          description: Updated context partition and revision
+        "409":
+          description: Optimistic revision conflict
+  /api/v1/sessions/{session_id}/transfer:
+    post:
+      operationId: transferContext
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/context-transfer.schema.json
+      responses:
+        "201":
+          description: New session, transfer receipt, and target context
+        "404":
+          description: Source session or target product not found
+  /api/v1/attachments:
+    post:
+      operationId: attachProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - schema_version
+                - contract_version
+                - runtime_version
+                - compatibility_version
+                - manifest
+              properties:
+                schema_version: {const: 1.0.0}
+                contract_version: {const: 1.0.0}
+                runtime_version: {const: 1.0.0}
+                compatibility_version: {const: mitra-companion-1}
+                manifest:
+                  $ref: ../schemas/product-attachment.schema.json
+      responses:
+        "201":
+          description: Attached product
+        "409":
+          description: Product ID already has a different active manifest
+        "422":
+          description: Invalid or incompatible manifest
+    get:
+      operationId: listAttachments
+      responses:
+        "200":
+          description: Attached products and capability manifests
+  /api/v1/attachments/{product_id}:
+    get:
+      operationId: getAttachment
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Product attachment
+        "404":
+          description: Product not found
+    delete:
+      operationId: detachProduct
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Product marked detached
+  /api/v1/intents:
+    get:
+      operationId: discoverIntents
+      parameters:
+        - in: query
+          name: product_id
+          schema: {type: string}
+        - in: query
+          name: capability_id
+          schema: {type: string}
+        - in: query
+          name: intent_id
+          schema: {type: string}
+        - in: query
+          name: available_only
+          schema: {type: boolean, default: false}
+      responses:
+        "200":
+          description: Deterministically ordered registered intents
+  /api/v1/products/{product_id}/intent-registrations:
+    get:
+      operationId: getIntentRegistrations
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Intent registrations materialized from the manifest
+        "404":
+          description: Product not found
+        "422":
+          description: Detached product cannot register intents
+  /api/v1/capabilities:
+    get:
+      operationId: discoverCapabilities
+      parameters:
+        - in: query
+          name: product_id
+          schema: {type: string}
+        - in: query
+          name: available_only
+          schema: {type: boolean, default: false}
+      responses:
+        "200":
+          description: Deterministically ordered capability views
+  /api/v1/products/{product_id}/capabilities/{capability_id}:
+    get:
+      operationId: lookupCapability
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+        - in: path
+          name: capability_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Exact capability view
+        "404":
+          description: Product or capability not found
+  /api/v1/intents/dispatch:
+    post:
+      operationId: dispatchIntent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/intent-dispatch.schema.json
+      responses:
+        "200":
+          description: Route and completed dispatch receipt
+        "409":
+          description: Ambiguous or cross-product route
+        "422":
+          description: No registered route
+        "502":
+          description: Product transport failed
+  /api/v1/dispatches:
+    get:
+      operationId: listDispatches
+      responses:
+        "200":
+          description: Recent dispatch receipts
+  /api/v1/dispatches/{dispatch_id}:
+    get:
+      operationId: getDispatch
+      parameters:
+        - in: path
+          name: dispatch_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Dispatch request and response receipt
+        "404":
+          description: Dispatch not found
+components:
+  schemas:
+    VersionedContract:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - contract_version
+        - runtime_version
+        - compatibility_version
+      properties:
+        schema_version: {const: 1.0.0}
+        contract_version: {const: 1.0.0}
+        runtime_version: {const: 1.0.0}
+        compatibility_version: {const: mitra-companion-1}
+  parameters:
+    SessionId:
+      in: path
+      name: session_id
+      required: true
+      schema: {type: string}
+    ProductId:
+      in: path
+      name: product_id
+      required: true
+      schema: {type: string}

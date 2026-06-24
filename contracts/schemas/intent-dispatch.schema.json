@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/intent-dispatch/1.0.0",
+  "title": "Companion Intent Dispatch Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime_version",
+    "compatibility_version",
+    "session_id",
+    "intent_id",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime_version": {"const": "1.0.0"},
+    "compatibility_version": {"const": "mitra-companion-1"},
+    "session_id": {"type": "string", "minLength": 1},
+    "intent_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{2,95}$"
+    },
+    "product_id": {"type": ["string", "null"]},
+    "capability_id": {"type": ["string", "null"]},
+    "payload": {"type": "object"},
+    "correlation_id": {"type": ["string", "null"]}
+  }
+}
+

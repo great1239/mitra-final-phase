@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "owner": "Pratham",
+  "registration": {
+    "source": "attached-product-manifest",
+    "durability": "attachment-manifest",
+    "identity_keys": ["product_id", "capability_id", "intent_id"],
+    "product_specific_code": false
+  },
+  "discovery": {
+    "filters": [
+      "product_id",
+      "capability_id",
+      "intent_id",
+      "available_only"
+    ],
+    "ordering": ["product_id", "capability_id", "intent_id"],
+    "detached_products": "excluded",
+    "degraded_products": "visible-unless-available-only"
+  },
+  "routing": {
+    "intent_input": "explicit-registered-id-only",
+    "product_precedence": ["request.product_id", "session.active_product_id"],
+    "cross_product_behavior": "explicit-context-transfer-required",
+    "capability_selection": "explicit-or-single-match",
+    "ambiguity_behavior": "fail-closed",
+    "unavailable_product_behavior": "fail-closed"
+  },
+  "dispatch": {
+    "payload_validation": "registered-json-schema-2020-12",
+    "context_loading": "registered-capability-scopes-only",
+    "transport_selection": "registered-adapter-mode",
+    "receipt": "durable",
+    "unexpected_adapter_error": "normalized-transport-failure"
+  },
+  "non_ownership": [
+    "natural-language-understanding",
+    "conversation-design",
+    "governance",
+    "safety",
+    "knowledge",
+    "project-intelligence",
+    "domain-intelligence",
+    "evidence",
+    "replay",
+    "certification"
+  ]
+}

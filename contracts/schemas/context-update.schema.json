@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/context-update/1.0.0",
+  "title": "Companion Context Update Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime_version",
+    "compatibility_version",
+    "scope",
+    "patch"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime_version": {"const": "1.0.0"},
+    "compatibility_version": {"const": "mitra-companion-1"},
+    "scope": {
+      "enum": ["session", "workspace", "product", "handoff"]
+    },
+    "patch": {"type": "object"},
+    "expected_revision": {"type": ["integer", "null"], "minimum": 0},
+    "replace": {"type": "boolean", "default": false}
+  }
+}
+

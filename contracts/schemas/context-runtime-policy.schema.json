@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/context-runtime-policy/1.0.0",
+  "title": "Mitra Context Runtime Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "owner",
+    "merge_precedence",
+    "selective_loading",
+    "update_semantics",
+    "partitions",
+    "non_ownership"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "owner": {"const": "Pratham"},
+    "merge_precedence": {
+      "const": ["session", "workspace", "handoff", "product"]
+    },
+    "selective_loading": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported", "unknown_scopes", "capability_access"],
+      "properties": {
+        "supported": {"const": true},
+        "unknown_scopes": {"const": "reject"},
+        "capability_access": {
+          "const": "published-context-scopes-only"
+        }
+      }
+    },
+    "update_semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concurrency",
+        "patch_mode",
+        "replace_mode",
+        "mutable_session_state"
+      ],
+      "properties": {
+        "concurrency": {"const": "optimistic-revision"},
+        "patch_mode": {"const": "shallow-merge"},
+        "replace_mode": {"const": "full-partition-replacement"},
+        "mutable_session_state": {"const": "ACTIVE"}
+      }
+    },
+    "partitions": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "identity_keys",
+          "continuity",
+          "isolation",
+          "transfer_behavior"
+        ],
+        "properties": {
+          "scope": {
+            "enum": ["session", "workspace", "handoff", "product"]
+          },
+          "identity_keys": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "continuity": {"type": "string", "minLength": 3},
+          "isolation": {"type": "string", "minLength": 3},
+          "transfer_behavior": {"type": "string", "minLength": 3}
+        }
+      }
+    },
+    "non_ownership": {
+      "type": "array",
+      "minItems": 9,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 3}
+    }
+  }
+}

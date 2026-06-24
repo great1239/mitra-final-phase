@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/runtime-interface-catalog/1.0.0",
+  "title": "Mitra Runtime Interface Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "contract_version", "interfaces"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "interfaces": {
+      "type": "array",
+      "minItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "interface_id",
+          "owner",
+          "python_protocol",
+          "responsibility",
+          "operations"
+        ],
+        "properties": {
+          "interface_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,63}$"
+          },
+          "owner": {"const": "Pratham"},
+          "python_protocol": {"type": "string", "minLength": 3},
+          "responsibility": {"type": "string", "minLength": 10},
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "kind", "result"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "kind": {"enum": ["command", "query", "lifecycle"]},
+                "request_contract": {
+                  "type": ["string", "null"]
+                },
+                "result": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

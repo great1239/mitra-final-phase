@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "owner": "Pratham",
+  "merge_precedence": ["session", "workspace", "handoff", "product"],
+  "selective_loading": {
+    "supported": true,
+    "unknown_scopes": "reject",
+    "capability_access": "published-context-scopes-only"
+  },
+  "update_semantics": {
+    "concurrency": "optimistic-revision",
+    "patch_mode": "shallow-merge",
+    "replace_mode": "full-partition-replacement",
+    "mutable_session_state": "ACTIVE"
+  },
+  "partitions": [
+    {
+      "scope": "session",
+      "identity_keys": ["session_id"],
+      "continuity": "resume-and-runtime-restart",
+      "isolation": "session",
+      "transfer_behavior": "not-copied"
+    },
+    {
+      "scope": "workspace",
+      "identity_keys": ["actor_id", "workspace_id"],
+      "continuity": "sessions-and-client-types",
+      "isolation": "actor-workspace",
+      "transfer_behavior": "target-workspace-is-loaded"
+    },
+    {
+      "scope": "handoff",
+      "identity_keys": ["session_id"],
+      "continuity": "target-session",
+      "isolation": "session",
+      "transfer_behavior": "explicit-portable-context-only"
+    },
+    {
+      "scope": "product",
+      "identity_keys": ["session_id", "active_product_id"],
+      "continuity": "active-session-product",
+      "isolation": "session-product",
+      "transfer_behavior": "never-copied"
+    }
+  ],
+  "non_ownership": [
+    "conversation-design",
+    "governance",
+    "safety",
+    "knowledge",
+    "project-intelligence",
+    "domain-intelligence",
+    "evidence",
+    "replay",
+    "certification"
+  ]
+}

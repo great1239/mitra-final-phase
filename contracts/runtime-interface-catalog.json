@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "interfaces": [
+    {
+      "interface_id": "companion-runtime",
+      "owner": "Pratham",
+      "python_protocol": "mitra_companion.interfaces.CompanionRuntimeInterface",
+      "responsibility": "Compose and expose the bounded companion execution runtime.",
+      "operations": [
+        {"name": "start", "kind": "lifecycle", "request_contract": null, "result": "runtime status"},
+        {"name": "stop", "kind": "lifecycle", "request_contract": null, "result": "runtime status"},
+        {"name": "status", "kind": "query", "request_contract": null, "result": "runtime status"},
+        {"name": "attach", "kind": "command", "request_contract": "ProductAttachmentManifest", "result": "attachment record"},
+        {"name": "dispatch", "kind": "command", "request_contract": "IntentDispatchRequest", "result": "dispatch receipt and route"},
+        {"name": "get_dispatch", "kind": "query", "request_contract": "dispatch_id", "result": "dispatch receipt"}
+      ]
+    },
+    {
+      "interface_id": "runtime-lifecycle",
+      "owner": "Pratham",
+      "python_protocol": "mitra_companion.interfaces.LifecycleInterface",
+      "responsibility": "Validate, persist, and expose runtime lifecycle transitions.",
+      "operations": [
+        {"name": "transition", "kind": "lifecycle", "request_contract": "RuntimeState and reason", "result": "transition record"},
+        {"name": "history", "kind": "query", "request_contract": "limit", "result": "ordered transition records"}
+      ]
+    },
+    {
+      "interface_id": "session-runtime",
+      "owner": "Pratham",
+      "python_protocol": "mitra_companion.interfaces.SessionRuntimeInterface",
+      "responsibility": "Create, retrieve, resume, and transfer durable companion sessions.",
+      "operations": [
+        {"name": "create", "kind": "command", "request_contract": "SessionCreateRequest", "result": "session and resume token"},
+        {"name": "get", "kind": "query", "request_contract": "session_id", "result": "session"},
+        {"name": "resume", "kind": "command", "request_contract": "SessionResumeRequest", "result": "resumed session"},
+        {"name": "suspend", "kind": "command", "request_contract": "session_id", "result": "suspended session"},
+        {"name": "close", "kind": "command", "request_contract": "session_id", "result": "closed session"},
+        {"name": "transfer", "kind": "command", "request_contract": "session transfer values", "result": "target session and transfer receipt"}
+      ]
+    },
+    {
+      "interface_id": "context-runtime",
+      "owner": "Pratham",
+      "python_protocol": "mitra_companion.interfaces.ContextRuntimeInterface",
+      "responsibility": "Load and update isolated context partitions with revision control.",
+      "operations": [
+        {"name": "load", "kind": "query", "request_contract": "session_id and optional context scopes", "result": "partitioned and merged ContextView"},
+        {"name": "load_for_capability", "kind": "query", "request_contract": "session_id and published capability context scopes", "result": "least-privilege ContextView"},
+        {"name": "update", "kind": "command", "request_contract": "ContextUpdateRequest", "result": "updated partition"},
+        {"name": "initialize_transfer", "kind": "command", "request_contract": "portable context", "result": "target context"}
+      ]
+    },
+    {
+      "interface_id": "intent-router",
+      "owner": "Pratham",
+      "python_protocol": "mitra_companion.interfaces.IntentRouterInterface",
+      "responsibility": "Discover and route explicit registered intent identifiers.",
+      "operations": [
+        {"name": "register", "kind": "command", "request_contract": "attached product_id", "result": "deterministic intent registration records"},
+        {"name": "discover", "kind": "query", "request_contract": "product, capability, intent, and availability filters", "result": "ordered registered intents"},
+        {"name": "capabilities", "kind": "query", "request_contract": "product and availability filters", "result": "ordered capability views"},
+        {"name": "lookup_capability", "kind": "query", "request_contract": "product_id and capability_id", "result": "exact capability view"},
+        {"name": "route", "kind": "query", "request_contract": "session, intent, product, capability", "result": "single dispatch route"}
+      ]
+    },
+    {
+      "interface_id": "attachment-runtime",
+      "owner": "Pratham",
+      "python_protocol": "mitra_companion.interfaces.AttachmentRuntimeInterface",
+      "responsibility": "Manage capability and product attachment manifests and lifecycle.",
+      "operations": [
+        {"name": "attach", "kind": "command", "request_contract": "ProductAttachmentManifest", "result": "attachment record"},
+        {"name": "get", "kind": "query", "request_contract": "product_id", "result": "attachment record"},
+        {"name": "list", "kind": "query", "request_contract": null, "result": "attachment records"},
+        {"name": "detach", "kind": "command", "request_contract": "product_id", "result": "detached attachment"},
+        {"name": "mark_degraded", "kind": "command", "request_contract": "product_id and error", "result": "degraded attachment"}
+      ]
+    },
+    {
+      "interface_id": "context-transfer-runtime",
+      "owner": "Pratham",
+      "python_protocol": "mitra_companion.interfaces.ContextTransferRuntimeInterface",
+      "responsibility": "Create an isolated target session and apply explicit portable handoff context.",
+      "operations": [
+        {"name": "transfer_context", "kind": "command", "request_contract": "ContextTransferRequest", "result": "target session, transfer receipt, and target context"}
+      ]
+    }
+  ]
+}
