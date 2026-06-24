@@ -41,7 +41,7 @@ Validated on June 24, 2026.
 | Python wheel build and isolated install | passed |
 | All five implementation packages import from built artifact | passed |
 | OpenAPI YAML parse | OpenAPI `3.1.0`, 20 paths |
-| Demo video decode | H.264 MP4, 1440x1080, 30 fps, 17 seconds |
+| Demo video decode | H.264 MP4, 1280x720, 30 fps, 42 seconds |
 
 ## Live evidence
 
