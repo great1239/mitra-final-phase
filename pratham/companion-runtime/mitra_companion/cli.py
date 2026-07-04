@@ -21,6 +21,15 @@ def main() -> None:
         type=int,
         default=int(os.getenv("MITRA_COMPANION_PORT", "8090")),
     )
+    serve.add_argument(
+        "--workers",
+        type=int,
+        default=int(os.getenv("MITRA_COMPANION_UVICORN_WORKERS", "1")),
+    )
+    serve.add_argument(
+        "--forwarded-allow-ips",
+        default=os.getenv("MITRA_COMPANION_FORWARDED_ALLOW_IPS", "*"),
+    )
 
     subparsers.add_parser("validate", help="Validate local runtime configuration")
     subparsers.add_parser("status", help="Print persisted runtime status")
@@ -34,6 +43,9 @@ def main() -> None:
             "mitra_companion.app:app",
             host=args.host,
             port=args.port,
+            workers=max(1, args.workers),
+            proxy_headers=True,
+            forwarded_allow_ips=args.forwarded_allow_ips,
         )
         return
 
@@ -55,4 +67,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

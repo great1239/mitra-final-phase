@@ -1,14 +1,32 @@
 services:
   companion-runtime:
     build: .
+    restart: unless-stopped
+    init: true
     ports:
       - "8090:8090"
     environment:
       MITRA_COMPANION_DATA_ROOT: /data
       MITRA_COMPANION_DATABASE_PATH: /data/companion-runtime.db
       MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/examples
+      MITRA_COMPANION_ENVIRONMENT: production
+      MITRA_COMPANION_OTEL_ENABLED: "true"
+      MITRA_COMPANION_UVICORN_WORKERS: "2"
+      OTEL_SERVICE_NAME: mitra-companion-runtime
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
     volumes:
       - companion-runtime-data:/data
+    tmpfs:
+      - /tmp
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    stop_grace_period: 30s
+    depends_on:
+      - otel-collector
     healthcheck:
       test:
         [
@@ -19,7 +37,48 @@ services:
         ]
       interval: 10s
       timeout: 3s
+      start_period: 20s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./deploy/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4318:4318"
+      - "8889:8889"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
 
 volumes:
   companion-runtime-data:

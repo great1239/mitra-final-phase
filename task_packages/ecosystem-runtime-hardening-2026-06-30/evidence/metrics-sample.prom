@@ -1,0 +1,32 @@
+# HELP mitra_runtime_events_total Structured runtime events.
+# TYPE mitra_runtime_events_total counter
+mitra_runtime_events_total 37
+# HELP mitra_dispatch_total Intent dispatch attempts.
+# TYPE mitra_dispatch_total counter
+mitra_dispatch_total 30
+# HELP mitra_dispatch_completed_total Completed dispatches.
+# TYPE mitra_dispatch_completed_total counter
+mitra_dispatch_completed_total 30
+# HELP mitra_dispatch_failed_total Failed dispatches.
+# TYPE mitra_dispatch_failed_total counter
+mitra_dispatch_failed_total 0
+# HELP mitra_dispatch_latency_ms_avg Average dispatch latency.
+# TYPE mitra_dispatch_latency_ms_avg gauge
+mitra_dispatch_latency_ms_avg 12.4
+# HELP mitra_dispatch_latency_ms_max Maximum dispatch latency.
+# TYPE mitra_dispatch_latency_ms_max gauge
+mitra_dispatch_latency_ms_max 31.7
+# HELP mitra_attachment_health_checks_total Attachment health checks.
+# TYPE mitra_attachment_health_checks_total counter
+mitra_attachment_health_checks_total 2
+# HELP mitra_attachment_health_failures_total Unhealthy attachment checks.
+# TYPE mitra_attachment_health_failures_total counter
+mitra_attachment_health_failures_total 1
+# HELP mitra_recovery_validations_total Recovery validation checks.
+# TYPE mitra_recovery_validations_total counter
+mitra_recovery_validations_total 2
+# HELP mitra_recovery_success_total Successful attachment recoveries.
+# TYPE mitra_recovery_success_total counter
+mitra_recovery_success_total 1
+mitra_dispatch_latency_ms_avg_by_product{product_id="trade-bot-main"} 11.8
+mitra_dispatch_latency_ms_avg_by_product{product_id="uniguru-ai"} 13.0

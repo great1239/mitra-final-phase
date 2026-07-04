@@ -2,19 +2,27 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    MITRA_COMPANION_DATA_ROOT=/data
+    PIP_NO_CACHE_DIR=1 \
+    MITRA_COMPANION_DATA_ROOT=/data \
+    MITRA_COMPANION_ENVIRONMENT=production \
+    OTEL_SERVICE_NAME=mitra-companion-runtime
 
 WORKDIR /app
+RUN groupadd --system mitra \
+    && useradd --system --gid mitra --create-home --home-dir /app mitra
 
 COPY requirements.txt pyproject.toml ./
 COPY pratham ./pratham
 COPY contracts ./contracts
 COPY scripts ./scripts
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . \
+    && mkdir -p /data /tmp/mitra \
+    && chown -R mitra:mitra /app /data /tmp/mitra
 
 EXPOSE 8090
 VOLUME ["/data"]
 
+USER mitra
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/ready')"]
 CMD ["mitra-companion", "serve", "--host", "0.0.0.0", "--port", "8090"]
-

@@ -1,12 +1,12 @@
 # Validation Report
 
-Validated on June 24, 2026.
+Validated on June 30, 2026.
 
 ## Automated verification
 
 | Check | Result |
 |---|---|
-| Unit, API, integration, contract, failure, adapter, ownership, and Phase 1-6 conformance tests | `59 passed` |
+| Unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, multi-instance runtime, and Phase 1-7 conformance tests | `71 passed` |
 | Example manifests against JSON Schema 2020-12 | passed |
 | Two-product runtime simulation | passed |
 | Cross-product context isolation | passed |
@@ -38,6 +38,13 @@ Validated on June 24, 2026.
 | Phase 6 multi-product runtime simulation | passed |
 | Phase 6 transfer, routing, attachment validation, and failure containment | passed |
 | Phase 7 documentation and review package | completed |
+| OpenTelemetry instrumentation and collector configuration | passed |
+| Prometheus runtime metrics and collector exporter configuration | passed |
+| k6 production load profile artifact | passed |
+| Structured JSONL telemetry with service/environment fields | passed |
+| Production readiness gate | passed |
+| Non-root/read-only/restart/resource-bounded container posture | passed |
+| Multi-instance runtime continuity | passed |
 | Python wheel build and isolated install | passed |
 | All five implementation packages import from built artifact | passed |
 | OpenAPI YAML parse | OpenAPI `3.1.0`, 20 paths |

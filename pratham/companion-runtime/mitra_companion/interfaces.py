@@ -5,6 +5,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from .constants import RuntimeState
 from .contracts import (
+    CompanionMessageRequest,
     ContextTransferRequest,
     IntentDispatchRequest,
     ProductAttachmentManifest,
@@ -198,6 +199,8 @@ class CompanionRuntimeInterface(
 
     def status(self) -> dict[str, Any]: ...
 
+    def ecosystem_chain(self) -> dict[str, Any]: ...
+
     def attach(
         self,
         manifest: ProductAttachmentManifest,
@@ -215,4 +218,34 @@ class CompanionRuntimeInterface(
         request: IntentDispatchRequest,
     ) -> dict[str, Any]: ...
 
+    async def companion_message(
+        self,
+        request: CompanionMessageRequest,
+    ) -> dict[str, Any]: ...
+
+    def companion_memory(
+        self,
+        session_id: str,
+        *,
+        limit: int = 100,
+    ) -> dict[str, Any]: ...
+
+    def companion_tasks(
+        self,
+        *,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]: ...
+
     def get_dispatch(self, dispatch_id: str) -> dict[str, Any]: ...
+
+    async def check_attachment_health(
+        self,
+        product_id: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    def metrics_snapshot(self) -> dict[str, Any]: ...
+
+    def recent_events(self, limit: int = 100) -> list[dict[str, Any]]: ...
+
+    def prometheus_metrics(self) -> str: ...

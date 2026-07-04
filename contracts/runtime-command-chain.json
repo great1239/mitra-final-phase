@@ -1,0 +1,96 @@
+{
+  "source": "previous-assignment-pdfs",
+  "runtime_position": "Mitra receives the user request, preserves session/context, selects a published capability, and routes execution. It does not replace product runtimes or downstream authority systems.",
+  "systems": [
+    {
+      "system": "Mitra",
+      "role": "companion interaction and execution runtime",
+      "owns": [
+        "session continuity",
+        "context loading",
+        "capability discovery",
+        "intent routing",
+        "product transport dispatch",
+        "user-facing execution status"
+      ],
+      "hands_to": ["attached product runtime", "TANTRA"]
+    },
+    {
+      "system": "attached product runtime",
+      "role": "product-owned capability implementation",
+      "owns": [
+        "domain response",
+        "business rules",
+        "product data access",
+        "native API behavior"
+      ],
+      "hands_to": ["Mitra"]
+    },
+    {
+      "system": "TANTRA",
+      "role": "operational trace chain coordinator",
+      "owns": [
+        "trace propagation",
+        "execution package handoff",
+        "cross-system chain orchestration"
+      ],
+      "hands_to": ["SHAKTI", "MDU", "TMS", "Parikshak"]
+    },
+    {
+      "system": "SHAKTI",
+      "role": "constitutional validation authority",
+      "owns": [
+        "validation decision",
+        "authority record",
+        "constitutional posture"
+      ],
+      "hands_to": ["MDU", "Parikshak"]
+    },
+    {
+      "system": "MDU",
+      "role": "lineage and provenance registry",
+      "owns": [
+        "artifact registration",
+        "lineage chain",
+        "provenance lookup"
+      ],
+      "hands_to": ["TMS", "Parikshak"]
+    },
+    {
+      "system": "TMS",
+      "role": "convergence monitor",
+      "owns": [
+        "convergence status",
+        "partial or failed convergence posture"
+      ],
+      "hands_to": ["Parikshak"]
+    },
+    {
+      "system": "Parikshak",
+      "role": "review readiness consumer",
+      "owns": [
+        "review posture",
+        "readiness summary",
+        "blocked or partial review status"
+      ],
+      "hands_to": ["reviewer"]
+    }
+  ],
+  "product_execution_path": [
+    "user request",
+    "Mitra outcome extraction",
+    "capability discovery",
+    "least-context loading",
+    "manifest transport dispatch",
+    "product response",
+    "Mitra response"
+  ],
+  "trace_path": [
+    "runtime submission",
+    "TANTRA",
+    "SHAKTI",
+    "MDU",
+    "TMS",
+    "Parikshak"
+  ]
+}

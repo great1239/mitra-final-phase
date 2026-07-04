@@ -11,12 +11,22 @@ dependencies = [
   "fastapi>=0.115.0,<1.0.0",
   "httpx>=0.28.0,<1.0.0",
   "jsonschema>=4.23.0,<5.0.0",
+  "opentelemetry-api>=1.28.0,<2.0.0",
+  "opentelemetry-exporter-otlp>=1.28.0,<2.0.0",
+  "opentelemetry-instrumentation-fastapi>=0.49b0,<1.0.0",
+  "opentelemetry-sdk>=1.28.0,<2.0.0",
   "pydantic>=2.8.0,<3.0.0",
   "uvicorn[standard]>=0.34.0,<1.0.0",
 ]
 
 [project.scripts]
 mitra-companion = "mitra_companion.cli:main"
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.4,<10",
+  "pytest-asyncio>=1.4,<2",
+]
 
 [tool.setuptools.packages.find]
 where = [

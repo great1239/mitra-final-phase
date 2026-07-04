@@ -50,6 +50,17 @@ class RuntimeStore:
                     occurred_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS runtime_instances (
+                    instance_id TEXT PRIMARY KEY,
+                    service_name TEXT NOT NULL,
+                    environment TEXT NOT NULL,
+                    process_id INTEGER,
+                    state TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    last_heartbeat_at TEXT NOT NULL,
+                    stopped_at TEXT
+                );
+
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
                     parent_session_id TEXT,
@@ -127,9 +138,138 @@ class RuntimeStore:
                     FOREIGN KEY(source_session_id) REFERENCES sessions(session_id),
                     FOREIGN KEY(target_session_id) REFERENCES sessions(session_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS companion_messages (
+                    turn_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    summary_json TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_companion_messages_session
+                    ON companion_messages(session_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS companion_tasks (
+                    task_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    status_detail TEXT,
+                    notification_json TEXT NOT NULL,
+                    result_json TEXT,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_companion_tasks_session
+                    ON companion_tasks(session_id, updated_at);
                 """
             )
             self._migrate_legacy_workspace_contexts(connection)
+
+    def upsert_runtime_instance(
+        self,
+        *,
+        instance_id: str,
+        service_name: str,
+        environment: str,
+        process_id: int,
+        state: str,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO runtime_instances(
+                    instance_id, service_name, environment, process_id, state,
+                    started_at, last_heartbeat_at, stopped_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+                ON CONFLICT(instance_id) DO UPDATE SET
+                    service_name = excluded.service_name,
+                    environment = excluded.environment,
+                    process_id = excluded.process_id,
+                    state = excluded.state,
+                    last_heartbeat_at = excluded.last_heartbeat_at,
+                    stopped_at = NULL
+                """,
+                (
+                    instance_id,
+                    service_name,
+                    environment,
+                    process_id,
+                    state,
+                    now,
+                    now,
+                ),
+            )
+        return self.get_runtime_instance(instance_id) or {}
+
+    def heartbeat_runtime_instance(
+        self,
+        *,
+        instance_id: str,
+        state: str,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE runtime_instances
+                SET state = ?, last_heartbeat_at = ?
+                WHERE instance_id = ?
+                """,
+                (state, now, instance_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(instance_id)
+        return self.get_runtime_instance(instance_id) or {}
+
+    def stop_runtime_instance(self, instance_id: str) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE runtime_instances
+                SET state = ?, last_heartbeat_at = ?, stopped_at = ?
+                WHERE instance_id = ?
+                """,
+                (RuntimeState.STOPPED.value, now, now, instance_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(instance_id)
+        return self.get_runtime_instance(instance_id) or {}
+
+    def get_runtime_instance(
+        self,
+        instance_id: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM runtime_instances WHERE instance_id = ?",
+                (instance_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_runtime_instances(
+        self,
+        *,
+        include_stopped: bool = False,
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM runtime_instances"
+        params: tuple[Any, ...] = ()
+        if not include_stopped:
+            query += " WHERE state != ?"
+            params = (RuntimeState.STOPPED.value,)
+        query += " ORDER BY last_heartbeat_at DESC"
+        with self.connection() as connection:
+            rows = connection.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
 
     @staticmethod
     def _migrate_legacy_workspace_contexts(
@@ -770,6 +910,211 @@ class RuntimeStore:
             "portable_context": portable_context,
             "created_at": created_at,
         }
+
+    def record_companion_message(
+        self,
+        *,
+        turn_id: str,
+        session_id: str,
+        role: str,
+        content: str,
+        status: str,
+        summary: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        created_at = utc_now()
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO companion_messages(
+                    turn_id, session_id, role, content, status,
+                    summary_json, metadata_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    turn_id,
+                    session_id,
+                    role,
+                    content,
+                    status,
+                    json.dumps(summary, sort_keys=True, ensure_ascii=False),
+                    json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+                    created_at,
+                ),
+            )
+        return self.get_companion_message(turn_id) or {}
+
+    @staticmethod
+    def _decode_companion_message(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        data = dict(row)
+        data["summary"] = json.loads(data.pop("summary_json"))
+        data["metadata"] = json.loads(data.pop("metadata_json"))
+        return data
+
+    def get_companion_message(self, turn_id: str) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM companion_messages WHERE turn_id = ?",
+                (turn_id,),
+            ).fetchone()
+        return self._decode_companion_message(row)
+
+    def list_companion_messages(
+        self,
+        session_id: str,
+        *,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM companion_messages
+                WHERE session_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+        return [
+            self._decode_companion_message(row) or {}
+            for row in reversed(rows)
+        ]
+
+    def latest_companion_summary(self, session_id: str) -> dict[str, Any]:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT summary_json FROM companion_messages
+                WHERE session_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
+        return json.loads(row["summary_json"]) if row else {}
+
+    def create_companion_task(
+        self,
+        *,
+        task_id: str,
+        session_id: str,
+        kind: str,
+        status: str,
+        status_detail: str | None,
+        notification: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO companion_tasks(
+                    task_id, session_id, kind, status, status_detail,
+                    notification_json, result_json, metadata_json,
+                    created_at, updated_at, finished_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL)
+                """,
+                (
+                    task_id,
+                    session_id,
+                    kind,
+                    status,
+                    status_detail,
+                    json.dumps(
+                        notification,
+                        sort_keys=True,
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+                    now,
+                    now,
+                ),
+            )
+        return self.get_companion_task(task_id) or {}
+
+    def update_companion_task(
+        self,
+        task_id: str,
+        *,
+        status: str,
+        status_detail: str | None,
+        notification: dict[str, Any],
+        result: dict[str, Any] | None,
+        finished: bool,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE companion_tasks
+                SET status = ?, status_detail = ?, notification_json = ?,
+                    result_json = ?, updated_at = ?, finished_at = ?
+                WHERE task_id = ?
+                """,
+                (
+                    status,
+                    status_detail,
+                    json.dumps(
+                        notification,
+                        sort_keys=True,
+                        ensure_ascii=False,
+                    ),
+                    (
+                        json.dumps(result, sort_keys=True, ensure_ascii=False)
+                        if result is not None
+                        else None
+                    ),
+                    now,
+                    now if finished else None,
+                    task_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(task_id)
+        return self.get_companion_task(task_id) or {}
+
+    @staticmethod
+    def _decode_companion_task(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        data = dict(row)
+        data["notification"] = json.loads(data.pop("notification_json"))
+        raw_result = data.pop("result_json")
+        data["result"] = json.loads(raw_result) if raw_result else None
+        data["metadata"] = json.loads(data.pop("metadata_json"))
+        return data
+
+    def get_companion_task(self, task_id: str) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM companion_tasks WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+        return self._decode_companion_task(row)
+
+    def list_companion_tasks(
+        self,
+        *,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM companion_tasks"
+        params: tuple[Any, ...]
+        if session_id:
+            query += " WHERE session_id = ?"
+            params = (session_id, limit)
+        else:
+            params = (limit,)
+        query += " ORDER BY updated_at DESC LIMIT ?"
+        with self.connection() as connection:
+            rows = connection.execute(query, params).fetchall()
+        return [self._decode_companion_task(row) or {} for row in rows]
 
     def counts(self) -> dict[str, int]:
         with self.connection() as connection:

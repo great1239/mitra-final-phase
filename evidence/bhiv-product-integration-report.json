@@ -1,0 +1,65 @@
+{
+  "generated_for": "Pratham Ecosystem Runtime Integration and Production Hardening",
+  "scope": {
+    "runtime": "Mitra Companion Runtime",
+    "bhiv_products": [
+      {
+        "product_id": "uniguru-ai",
+        "product_name": "UniGuru",
+        "integration_direction": "backward",
+        "folder": "uniguru_ai",
+        "manifest": "contracts/examples/product-uniguru-runtime.json",
+        "native_routes": ["POST /runtime/execute", "GET /health"],
+        "source_file": "uniguru_ai/uniguru_v2-main-main/backend/service/uniguru_runtime_api.py",
+        "health_file": "uniguru_ai/backend/service/api.py"
+      },
+      {
+        "product_id": "trade-bot-main",
+        "product_name": "Samruddhi",
+        "integration_direction": "forward",
+        "folder": "trade-bot-main",
+        "manifest": "contracts/examples/product-trade-bot-main.json",
+        "native_routes": ["POST /tools/predict", "POST /tools/analyze", "GET /tools/health"],
+        "source_file": "trade-bot-main/backend/api_server.py"
+      }
+    ]
+  },
+  "integration_proof": {
+    "attachment": "Both products attach from published manifests through the generic attachment API.",
+    "sessions": "One product-scoped session is created for UniGuru and one for Samruddhi.",
+    "routing": "Intent routing resolves only registered manifest intent IDs.",
+    "dispatch": ["uniguru.execute-query", "tradebot.predict"],
+    "payload_projection": "Manifest option dispatch.options.request_body=payload sends native product request bodies without runtime product branches.",
+    "zero_product_branches": true
+  },
+  "hardening_proof": {
+    "fastapi_production_deployment": "Docker Compose runs the FastAPI runtime through Uvicorn worker/proxy settings with /ready healthchecks.",
+    "opentelemetry": "FastAPI and runtime dispatch/attachment-health spans are instrumented and exported to the OpenTelemetry Collector over OTLP.",
+    "structured_logging": "RuntimeTelemetry JSONL events",
+    "metrics": ["/api/v1/runtime/metrics", "/metrics"],
+    "prometheus": "Runtime Prometheus text exposition is available at /metrics; the collector Prometheus exporter is available on :8889.",
+    "attachment_health": [
+      "UniGuru GET /health",
+      "Samruddhi GET /tools/health",
+      "/api/v1/attachments/health",
+      "/api/v1/attachments/{product_id}/health"
+    ],
+    "failure_recovery": "Simulated HTTP outage degrades one attachment; healthy check restores it.",
+    "restart_validation": "BHIV attachments, sessions, and routes survive CompanionRuntime recreation.",
+    "multi_instance_validation": "Two runtime instances share persisted attachments and sessions; one instance dispatches routes created by the other and continues after the first stops.",
+    "load_validation": "30 concurrent BHIV dispatches complete successfully in focused tests.",
+    "k6_load_profile": "scripts/load/k6_companion_runtime.js runs a ramping-vus production load scenario against UniGuru and Samruddhi through published contracts.",
+    "production_readiness_gate": "scripts/production_readiness_gate.py verifies non-root/read-only/restart/resource-bounded container posture, runbooks, SLOs, observability outputs, and evidence files."
+  },
+  "product_scope_note": {
+    "pdf_requested_real_product_count": 3,
+    "available_real_product_count": 2,
+    "available_products": ["UniGuru", "Samruddhi"],
+    "scope_clarification": "The clarified assignment validates multiple independent BHIV products using UniGuru and Samruddhi/trade-bot as the two independent products in scope.",
+    "resolution": "The assignment-scoped independent BHIV products are integrated through published contracts only; a third product can be added later by publishing another manifest without runtime code changes."
+  },
+  "focused_verification": {
+    "command": "pytest pratham/tests/test_bhiv_product_integration.py pratham/tests/test_production_hardening.py pratham/tests/test_phase5_integration_contracts.py pratham/tests/test_production_readiness_gate.py -q",
+    "result": "15 passed"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "generated_for": "Pratham Ecosystem Runtime Integration and Production Hardening",
+  "scope": {
+    "runtime": "Mitra Companion Runtime",
+    "bhiv_products": [
+      {
+        "product_id": "uniguru-ai",
+        "folder": "uniguru_ai",
+        "manifest": "contracts/examples/product-uniguru-runtime.json",
+        "native_routes": ["POST /runtime/execute", "GET /health"],
+        "source_file": "uniguru_ai/uniguru_v2-main-main/backend/service/uniguru_runtime_api.py",
+        "health_file": "uniguru_ai/backend/service/api.py"
+      },
+      {
+        "product_id": "trade-bot-main",
+        "folder": "trade-bot-main",
+        "manifest": "contracts/examples/product-trade-bot-main.json",
+        "native_routes": ["POST /tools/predict", "POST /tools/analyze", "GET /tools/health"],
+        "source_file": "trade-bot-main/backend/api_server.py"
+      }
+    ]
+  },
+  "integration_proof": {
+    "attachment": "Both products attach from published manifests through the generic attachment API.",
+    "sessions": "One product-scoped session is created for UniGuru AI and one for Trade Bot Main.",
+    "routing": "Intent routing resolves only registered manifest intent IDs.",
+    "dispatch": ["uniguru.execute-query", "tradebot.predict"],
+    "payload_projection": "Manifest option dispatch.options.request_body=payload sends native product request bodies without runtime product branches.",
+    "zero_product_branches": true
+  },
+  "hardening_proof": {
+    "structured_logging": "RuntimeTelemetry JSONL events",
+    "metrics": ["/api/v1/runtime/metrics", "/metrics"],
+    "attachment_health": [
+      "UniGuru AI GET /health",
+      "Trade Bot Main GET /tools/health",
+      "/api/v1/attachments/health",
+      "/api/v1/attachments/{product_id}/health"
+    ],
+    "failure_recovery": "Simulated HTTP outage degrades one attachment; healthy check restores it.",
+    "restart_validation": "BHIV attachments, sessions, and routes survive CompanionRuntime recreation.",
+    "load_validation": "30 concurrent BHIV dispatches complete successfully in focused tests."
+  },
+  "focused_verification": {
+    "command": "pytest pratham/tests/test_bhiv_product_integration.py pratham/tests/test_production_hardening.py -q",
+    "result": "6 passed"
+  }
+}

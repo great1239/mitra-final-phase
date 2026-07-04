@@ -120,6 +120,32 @@ class IntentDispatchRequest(VersionedContract):
     correlation_id: str | None = None
 
 
+class CompanionMessageRequest(VersionedContract):
+    session_id: str | None = Field(default=None, min_length=1)
+    actor_id: str | None = Field(default=None, min_length=1, max_length=200)
+    client_type: Literal["standalone", "embedded", "mobile", "xr", "robotics"] = (
+        "standalone"
+    )
+    workspace_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+    )
+    product_id: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9-]{2,63}$",
+    )
+    capability_id: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9-]{2,63}$",
+    )
+    message: str = Field(min_length=1, max_length=4000)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    auto_dispatch: bool = True
+    allow_ai_fallback: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 def validate_contract(contract: VersionedContract) -> None:
     expected = {
         "schema_version": SCHEMA_VERSION,

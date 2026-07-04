@@ -4,9 +4,9 @@ info:
   version: 1.0.0
   description: >
     Versioned interface for sessions, partitioned context, explicit intent
-    routing, context transfer, and product attachment. The runtime does not
-    own governance, safety, knowledge, domain intelligence, evidence, replay,
-    or certification.
+    routing, context transfer, product attachment, and bounded companion
+    interaction. The runtime does not own governance, safety, knowledge,
+    domain intelligence, evidence, replay, certification, or product logic.
 servers:
   - url: http://localhost:8090
 paths:
@@ -16,6 +16,16 @@ paths:
       responses:
         "200":
           description: Runtime health
+  /metrics:
+    get:
+      operationId: getPrometheusMetrics
+      responses:
+        "200":
+          description: Prometheus-compatible runtime metrics
+          content:
+            text/plain:
+              schema:
+                type: string
   /ready:
     get:
       operationId: getReadiness
@@ -40,6 +50,86 @@ paths:
       responses:
         "200":
           description: Ordered lifecycle transition journal
+  /api/v1/runtime/chain:
+    get:
+      operationId: getRuntimeChain
+      responses:
+        "200":
+          description: Runtime-readable Mitra and BHIV command-chain model
+  /api/v1/companion/messages:
+    post:
+      operationId: createCompanionMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/companion-message.schema.json
+      responses:
+        "200":
+          description: Companion turn with selection, memory, task status, and optional dispatch receipt
+        "409":
+          description: Session, attachment, or routing conflict
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/companion/messages/stream:
+    post:
+      operationId: streamCompanionMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/companion-message.schema.json
+      responses:
+        "200":
+          description: NDJSON typing, execution-status, and final-message events
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+  /api/v1/companion/sessions/{session_id}/memory:
+    get:
+      operationId: getCompanionMemory
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+      responses:
+        "200":
+          description: Companion memory summary, recent turns, and execution tasks
+        "404":
+          description: Session not found
+  /api/v1/companion/tasks:
+    get:
+      operationId: listCompanionTasks
+      parameters:
+        - in: query
+          name: session_id
+          schema: {type: string}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+      responses:
+        "200":
+          description: Recent companion execution task records
+  /api/v1/runtime/metrics:
+    get:
+      operationId: getRuntimeMetrics
+      responses:
+        "200":
+          description: Runtime counters, dispatch latency metrics, and attachment health snapshots
+  /api/v1/runtime/telemetry:
+    get:
+      operationId: getRuntimeTelemetry
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+      responses:
+        "200":
+          description: Recent structured runtime telemetry events
   /api/v1/sessions:
     post:
       operationId: createSession
@@ -235,6 +325,12 @@ paths:
                     type: array
                     items:
                       $ref: ../schemas/attachment-record.schema.json
+  /api/v1/attachments/health:
+    post:
+      operationId: checkAllAttachmentHealth
+      responses:
+        "200":
+          description: Active health check for all attached products with recovery validation
   /api/v1/attachments/{product_id}:
     get:
       operationId: getAttachment
@@ -266,6 +362,16 @@ paths:
                 properties:
                   attachment:
                     $ref: ../schemas/attachment-record.schema.json
+  /api/v1/attachments/{product_id}/health:
+    post:
+      operationId: checkAttachmentHealth
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Active health check for one attached product with recovery validation
+        "404":
+          description: Product not found
   /api/v1/intents:
     get:
       operationId: discoverIntents

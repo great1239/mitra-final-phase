@@ -23,9 +23,17 @@
     "version": "1.0.0",
     "paths": [
       "/health",
+      "/metrics",
       "/ready",
       "/api/v1/runtime/status",
       "/api/v1/runtime/lifecycle",
+      "/api/v1/runtime/chain",
+      "/api/v1/companion/messages",
+      "/api/v1/companion/messages/stream",
+      "/api/v1/companion/sessions/{session_id}/memory",
+      "/api/v1/companion/tasks",
+      "/api/v1/runtime/metrics",
+      "/api/v1/runtime/telemetry",
       "/api/v1/sessions",
       "/api/v1/sessions/{session_id}",
       "/api/v1/sessions/{session_id}/resume",
@@ -34,7 +42,9 @@
       "/api/v1/sessions/{session_id}/context",
       "/api/v1/sessions/{session_id}/transfer",
       "/api/v1/attachments",
+      "/api/v1/attachments/health",
       "/api/v1/attachments/{product_id}",
+      "/api/v1/attachments/{product_id}/health",
       "/api/v1/intents",
       "/api/v1/products/{product_id}/intent-registrations",
       "/api/v1/capabilities",
@@ -78,6 +88,11 @@
     {
       "id": "intent-dispatch",
       "path": "contracts/schemas/intent-dispatch.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "companion-message",
+      "path": "contracts/schemas/companion-message.schema.json",
       "version": "1.0.0"
     },
     {
@@ -155,6 +170,18 @@
     {
       "name": "synthetic echo product",
       "path": "contracts/examples/product-echo.json"
+    },
+    {
+      "name": "UniGuru backward integration BHIV product manifest",
+      "path": "contracts/examples/product-uniguru-runtime.json"
+    },
+    {
+      "name": "Samruddhi forward integration BHIV product manifest",
+      "path": "contracts/examples/product-trade-bot-main.json"
+    },
+    {
+      "name": "runtime command chain model",
+      "path": "contracts/runtime-command-chain.json"
     }
   ]
 }

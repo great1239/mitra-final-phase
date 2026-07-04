@@ -8,10 +8,12 @@ experience:
 - future mobile, XR, and robotics clients.
 
 The runtime owns session continuity, context partitions and transfer, explicit
-intent routing, product capability attachment, lifecycle state, and versioned
-integration APIs. It intentionally does not implement conversation design,
-governance, safety, knowledge, domain intelligence, evidence, replay, or
-certification.
+intent routing, product capability attachment, bounded companion interaction,
+lifecycle state, versioned integration APIs, structured telemetry, runtime
+metrics, attachment health monitoring, and recovery validation. It
+intentionally does not implement product conversation design, governance,
+safety, knowledge, domain intelligence, evidence, replay, certification, or
+product-specific business logic.
 
 All external integration occurs through published manifest-source and transport
 adapter ports. Runtime implementation code contains no product identities.
@@ -43,11 +45,20 @@ mitra-companion validate
 mitra-companion serve --port 8090
 ```
 
+Production container path:
+
+```powershell
+docker compose up -d --wait
+k6 run scripts/load/k6_companion_runtime.js
+```
+
 Open:
 
 - dashboard: `http://localhost:8090/`
 - API explorer: `http://localhost:8090/docs`
 - health: `http://localhost:8090/health`
+- metrics: `http://localhost:8090/metrics`
+- OpenTelemetry Collector Prometheus exporter: `http://localhost:8889/metrics`
 
 Load any directory of published attachment manifests:
 
@@ -64,9 +75,19 @@ mitra-companion serve --port 8090
 3. The active product submits a versioned capability manifest.
 4. The router materializes deterministic registrations and discovers only
    explicit registered intent IDs.
-5. A dispatch loads only the context scopes declared by that capability.
-6. The transport registry invokes the adapter named by the published manifest.
-7. Cross-product work requires an explicit transfer. Product context is never
+5. A companion message can rank published capabilities, ask clarifying
+   questions for missing schema fields, preserve memory, and dispatch only
+   selected registered intents.
+6. Each companion response includes a product-neutral `outcome` describing what
+   the customer appears to want, plus manifest/schema-derived capability
+   understanding so sparse BHIV products can still be routed without runtime
+   product branches.
+7. The runtime command chain is published through
+   `GET /api/v1/runtime/chain` and loaded from
+   `contracts/runtime-command-chain.json`.
+8. A dispatch loads only the context scopes declared by that capability.
+9. The transport registry invokes the adapter named by the published manifest.
+10. Cross-product work requires an explicit transfer. Product context is never
    copied into the target product; only caller-supplied portable context enters
    the handoff partition.
 
@@ -80,8 +101,12 @@ python scripts/run_demo.py
 The suite covers lifecycle, durable session resume, context revision conflicts,
 workspace continuity, product isolation, product self-attachment, multiple
 attached products, discovery, routing, dispatch, contract validation,
-cross-product transfer, attachment validation, and transport failure
-containment.
+cross-product transfer, attachment validation, transport failure containment,
+BHIV product integration, structured telemetry, metrics, health checks,
+recovery validation, restart validation, and concurrency validation.
+The live companion suite also covers natural selection, schema-driven payload
+inference, clarification handling, execution tasks, memory persistence, and
+contracted streaming surfaces.
 
 ## Key documents
 
@@ -110,6 +135,12 @@ containment.
 - [Security and IP Boundaries](docs/SECURITY_IP_BOUNDARIES.md)
 - [Pratham Ownership Boundary](docs/OWNERSHIP_BOUNDARY.md)
 - [Adapter Guide](docs/ADAPTER_GUIDE.md)
+- [BHIV Product Integration](docs/BHIV_PRODUCT_INTEGRATION.md)
+- [Production Hardening](docs/PRODUCTION_HARDENING.md)
+- [Production Tactics Compliance](docs/PRODUCTION_TACTICS.md)
+- [Production Readiness Gate](docs/PRODUCTION_READINESS.md)
+- [Operations Runbook](docs/OPERATIONS_RUNBOOK.md)
+- [SLO and Capacity Targets](docs/SLO_AND_CAPACITY.md)
 - [Review Packet](REVIEW_PACKET.md)
 - [Validation Report](VALIDATION_REPORT.md)
 - [Security Boundary Re-execution](REEXECUTION_REPORT.md)

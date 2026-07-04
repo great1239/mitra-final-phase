@@ -6,12 +6,18 @@ from html import escape
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    PlainTextResponse,
+    Response,
+    StreamingResponse,
+)
 
 from .config import RuntimeSettings
 from .constants import ContextScope, RuntimeState
 from .contracts import (
     AttachmentRequest,
+    CompanionMessageRequest,
     ContextTransferRequest,
     ContextUpdateRequest,
     IntentDispatchRequest,
@@ -23,6 +29,7 @@ from .contracts import (
 )
 from .errors import CompanionRuntimeError
 from .manifest_sources import DirectoryManifestSourceAdapter
+from .observability import configure_opentelemetry
 from .ports import ManifestSourceAdapter
 from .runtime import CompanionRuntime
 
@@ -66,6 +73,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.runtime = companion
+    app.state.opentelemetry = configure_opentelemetry(app, runtime_settings)
 
     @app.exception_handler(CompanionRuntimeError)
     async def companion_error_handler(request, exc: CompanionRuntimeError):
@@ -216,7 +224,13 @@ def create_app(
         return versioned_response(
             status="healthy" if healthy else "degraded",
             runtime=companion.status(),
+            metrics=companion.metrics_snapshot(),
+            opentelemetry=app.state.opentelemetry,
         )
+
+    @app.get("/metrics", response_class=PlainTextResponse)
+    async def prometheus_metrics() -> str:
+        return companion.prometheus_metrics()
 
     @app.get("/ready")
     async def ready() -> dict:
@@ -226,7 +240,32 @@ def create_app(
 
     @app.get("/api/v1/runtime/status")
     async def runtime_status() -> dict:
-        return versioned_response(runtime=companion.status())
+        return versioned_response(
+            runtime=companion.status(),
+            opentelemetry=app.state.opentelemetry,
+        )
+
+    @app.get("/api/v1/runtime/instances")
+    async def runtime_instances(
+        include_stopped: bool = False,
+    ) -> dict:
+        return versioned_response(
+            instances=companion.runtime_instances(
+                include_stopped=include_stopped,
+            )
+        )
+
+    @app.get("/api/v1/runtime/metrics")
+    async def runtime_metrics() -> dict:
+        return versioned_response(metrics=companion.metrics_snapshot())
+
+    @app.get("/api/v1/runtime/telemetry")
+    async def runtime_telemetry(
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> dict:
+        return versioned_response(
+            events=companion.recent_events(limit),
+        )
 
     @app.get("/api/v1/runtime/lifecycle")
     async def runtime_lifecycle(
@@ -235,6 +274,95 @@ def create_app(
         return versioned_response(
             state=companion.lifecycle.state.value,
             transitions=companion.lifecycle.history(limit),
+        )
+
+    @app.get("/api/v1/runtime/chain")
+    async def runtime_chain() -> dict:
+        return versioned_response(chain=companion.ecosystem_chain())
+
+    @app.post("/api/v1/companion/messages")
+    async def companion_message(request: CompanionMessageRequest) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            **await companion.companion_message(request)
+        )
+
+    @app.post("/api/v1/companion/messages/stream")
+    async def companion_message_stream(
+        request: CompanionMessageRequest,
+    ) -> StreamingResponse:
+        validate_contract(request)
+
+        async def events():
+            yield json.dumps(
+                versioned_response(
+                    event="typing",
+                    typing_state="started",
+                ),
+                ensure_ascii=False,
+            ) + "\n"
+            try:
+                result = await companion.companion_message(request)
+                yield json.dumps(
+                    versioned_response(
+                        event="execution_status",
+                        status=result["status"],
+                        task=result.get("task"),
+                    ),
+                    ensure_ascii=False,
+                ) + "\n"
+                yield json.dumps(
+                    versioned_response(
+                        event="message",
+                        **result,
+                    ),
+                    ensure_ascii=False,
+                ) + "\n"
+            except Exception as exc:
+                yield json.dumps(
+                    versioned_response(
+                        event="error",
+                        error={
+                            "code": "COMPANION_STREAM_ERROR",
+                            "message": str(exc),
+                            "retryable": False,
+                        },
+                    ),
+                    ensure_ascii=False,
+                ) + "\n"
+            finally:
+                yield json.dumps(
+                    versioned_response(
+                        event="typing",
+                        typing_state="stopped",
+                    ),
+                    ensure_ascii=False,
+                ) + "\n"
+
+        return StreamingResponse(
+            events(),
+            media_type="application/x-ndjson",
+        )
+
+    @app.get("/api/v1/companion/sessions/{session_id}/memory")
+    async def companion_memory(
+        session_id: str,
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> dict:
+        return versioned_response(
+            memory=companion.companion_memory(session_id, limit=limit)
+        )
+
+    @app.get("/api/v1/companion/tasks")
+    async def companion_tasks(
+        session_id: str | None = None,
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> dict:
+        return versioned_response(
+            tasks=companion.companion_tasks(
+                session_id=session_id,
+                limit=limit,
+            )
         )
 
     @app.post("/api/v1/sessions", status_code=201)
@@ -361,6 +489,18 @@ def create_app(
     async def get_attachment(product_id: str) -> dict:
         return versioned_response(
             attachment=companion.attachments.get(product_id)
+        )
+
+    @app.post("/api/v1/attachments/health")
+    async def check_all_attachment_health() -> dict:
+        return versioned_response(
+            **await companion.check_attachment_health()
+        )
+
+    @app.post("/api/v1/attachments/{product_id}/health")
+    async def check_attachment_health(product_id: str) -> dict:
+        return versioned_response(
+            **await companion.check_attachment_health(product_id)
         )
 
     @app.delete("/api/v1/attachments/{product_id}")
