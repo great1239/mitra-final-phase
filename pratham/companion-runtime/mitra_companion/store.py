@@ -128,6 +128,24 @@ class RuntimeStore:
                 CREATE INDEX IF NOT EXISTS idx_dispatches_session
                     ON dispatches(session_id, created_at);
 
+                CREATE TABLE IF NOT EXISTS dispatch_phases (
+                    dispatch_id TEXT NOT NULL,
+                    phase_name TEXT NOT NULL,
+                    phase_index INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    started_at TEXT,
+                    finished_at TEXT,
+                    duration_ms REAL,
+                    detail_json TEXT,
+                    output_hash TEXT,
+                    last_error TEXT,
+                    PRIMARY KEY(dispatch_id, phase_name),
+                    FOREIGN KEY(dispatch_id) REFERENCES dispatches(dispatch_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_dispatch_phases_dispatch
+                    ON dispatch_phases(dispatch_id, phase_index);
+
                 CREATE TABLE IF NOT EXISTS context_transfers (
                     transfer_id TEXT PRIMARY KEY,
                     source_session_id TEXT NOT NULL,
@@ -173,6 +191,7 @@ class RuntimeStore:
                 """
             )
             self._migrate_legacy_workspace_contexts(connection)
+            self._migrate_dispatch_phases(connection)
 
     def upsert_runtime_instance(
         self,
@@ -370,6 +389,20 @@ class RuntimeStore:
             HAVING COUNT(DISTINCT s.actor_id) = 1
             """
         )
+
+    @staticmethod
+    def _migrate_dispatch_phases(connection: sqlite3.Connection) -> None:
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(dispatch_phases)"
+            ).fetchall()
+        }
+        if columns and "attempts" not in columns:
+            connection.execute(
+                "ALTER TABLE dispatch_phases "
+                "ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0"
+            )
 
     def record_transition(
         self,
@@ -904,6 +937,170 @@ class RuntimeStore:
                 (limit,),
             ).fetchall()
         return [self._decode_dispatch(row) or {} for row in rows]
+
+    def start_dispatch_phase(
+        self,
+        *,
+        dispatch_id: str,
+        phase_name: str,
+        phase_index: int,
+        detail: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO dispatch_phases(
+                    dispatch_id, phase_name, phase_index, status,
+                    attempts, started_at, finished_at, duration_ms, detail_json,
+                    output_hash, last_error
+                ) VALUES (?, ?, ?, ?, 1, ?, NULL, NULL, ?, NULL, NULL)
+                ON CONFLICT(dispatch_id, phase_name) DO UPDATE SET
+                    phase_index = excluded.phase_index,
+                    status = excluded.status,
+                    attempts = dispatch_phases.attempts + 1,
+                    started_at = excluded.started_at,
+                    finished_at = NULL,
+                    duration_ms = NULL,
+                    detail_json = excluded.detail_json,
+                    output_hash = NULL,
+                    last_error = NULL
+                """,
+                (
+                    dispatch_id,
+                    phase_name,
+                    phase_index,
+                    "RUNNING",
+                    now,
+                    json.dumps(detail or {}, sort_keys=True, ensure_ascii=False),
+                ),
+            )
+        return self.get_dispatch_phase(dispatch_id, phase_name) or {}
+
+    def complete_dispatch_phase(
+        self,
+        *,
+        dispatch_id: str,
+        phase_name: str,
+        phase_index: int,
+        detail: dict[str, Any] | None = None,
+        output_hash: str | None = None,
+        duration_ms: float | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO dispatch_phases(
+                    dispatch_id, phase_name, phase_index, status,
+                    attempts, started_at, finished_at, duration_ms, detail_json,
+                    output_hash, last_error
+                ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, NULL)
+                ON CONFLICT(dispatch_id, phase_name) DO UPDATE SET
+                    phase_index = excluded.phase_index,
+                    status = excluded.status,
+                    finished_at = excluded.finished_at,
+                    duration_ms = excluded.duration_ms,
+                    detail_json = excluded.detail_json,
+                    output_hash = excluded.output_hash,
+                    last_error = NULL
+                """,
+                (
+                    dispatch_id,
+                    phase_name,
+                    phase_index,
+                    "COMPLETED",
+                    now,
+                    now,
+                    duration_ms,
+                    json.dumps(detail or {}, sort_keys=True, ensure_ascii=False),
+                    output_hash,
+                ),
+            )
+        return self.get_dispatch_phase(dispatch_id, phase_name) or {}
+
+    def fail_dispatch_phase(
+        self,
+        *,
+        dispatch_id: str,
+        phase_name: str,
+        phase_index: int,
+        error: str,
+        detail: dict[str, Any] | None = None,
+        duration_ms: float | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO dispatch_phases(
+                    dispatch_id, phase_name, phase_index, status,
+                    attempts, started_at, finished_at, duration_ms, detail_json,
+                    output_hash, last_error
+                ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, NULL, ?)
+                ON CONFLICT(dispatch_id, phase_name) DO UPDATE SET
+                    phase_index = excluded.phase_index,
+                    status = excluded.status,
+                    finished_at = excluded.finished_at,
+                    duration_ms = excluded.duration_ms,
+                    detail_json = excluded.detail_json,
+                    output_hash = NULL,
+                    last_error = excluded.last_error
+                """,
+                (
+                    dispatch_id,
+                    phase_name,
+                    phase_index,
+                    "FAILED",
+                    now,
+                    now,
+                    duration_ms,
+                    json.dumps(detail or {}, sort_keys=True, ensure_ascii=False),
+                    error,
+                ),
+            )
+        return self.get_dispatch_phase(dispatch_id, phase_name) or {}
+
+    @staticmethod
+    def _decode_dispatch_phase(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        data = dict(row)
+        raw_detail = data.pop("detail_json", None)
+        data["detail"] = json.loads(raw_detail) if raw_detail else {}
+        return data
+
+    def get_dispatch_phase(
+        self,
+        dispatch_id: str,
+        phase_name: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM dispatch_phases
+                WHERE dispatch_id = ? AND phase_name = ?
+                """,
+                (dispatch_id, phase_name),
+            ).fetchone()
+        return self._decode_dispatch_phase(row)
+
+    def list_dispatch_phases(
+        self,
+        dispatch_id: str,
+    ) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM dispatch_phases
+                WHERE dispatch_id = ?
+                ORDER BY phase_index
+                """,
+                (dispatch_id,),
+            ).fetchall()
+        return [self._decode_dispatch_phase(row) or {} for row in rows]
 
     def record_transfer(
         self,

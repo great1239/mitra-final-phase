@@ -8,6 +8,16 @@ CONTRACT_VERSION = "1.0.0"
 RUNTIME_VERSION = "1.0.0"
 COMPATIBILITY_VERSION = "mitra-companion-1"
 
+DISPATCH_PHASE_MODEL = (
+    "request.accepted",
+    "route.selected",
+    "payload.validated",
+    "context.loaded",
+    "transport.dispatched",
+    "receipt.persisted",
+    "dispatch.completed",
+)
+
 
 class RuntimeState(StrEnum):
     INITIALIZING = "INITIALIZING"

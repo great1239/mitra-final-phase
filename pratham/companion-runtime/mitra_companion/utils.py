@@ -23,6 +23,10 @@ def canonical_json(value: Any) -> str:
     )
 
 
+def sha256_json(value: Any) -> str:
+    return sha256_text(canonical_json(value))
+
+
 def merge_context(*partitions: dict[str, Any]) -> dict[str, Any]:
     merged: dict[str, Any] = {}
     for partition in partitions:

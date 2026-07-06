@@ -56,6 +56,12 @@ paths:
       responses:
         "200":
           description: Runtime-readable Mitra and BHIV command-chain model
+  /api/v1/runtime/capability-catalog:
+    get:
+      operationId: getRuntimeCapabilityCatalog
+      responses:
+        "200":
+          description: Manifest-backed product, capability, dependency, and contract catalog
   /api/v1/runtime/analysis:
     post:
       operationId: createRuntimeAnalysis
@@ -479,6 +485,32 @@ paths:
       responses:
         "200":
           description: Dispatch request and response receipt
+        "404":
+          description: Dispatch not found
+  /api/v1/dispatches/{dispatch_id}/phases:
+    get:
+      operationId: getDispatchPhases
+      parameters:
+        - in: path
+          name: dispatch_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Durable dispatch phase checkpoint journal
+        "404":
+          description: Dispatch not found
+  /api/v1/dispatches/{dispatch_id}/proof:
+    get:
+      operationId: getDispatchProof
+      parameters:
+        - in: path
+          name: dispatch_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Portable dispatch proof bundle with hashes and lineage
         "404":
           description: Dispatch not found
 components:

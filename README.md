@@ -18,7 +18,11 @@ metrics, attachment health monitoring, recovery validation, and runtime
 analysis for assignment-to-product matching. It runs as a persistent service
 process by default: each live runtime instance keeps heartbeating, marks stale
 peer instances, recovers interrupted companion tasks after restart, and runs
-periodic attachment maintenance instead of behaving as a one-shot invocation. It
+periodic attachment maintenance instead of behaving as a one-shot invocation.
+It also imports useful generic systems from earlier submissions: manifest-backed
+capability catalogs, public contract summaries, semantic-version dependency
+reports, seven-phase dispatch checkpoints, and portable dispatch proof bundles.
+It
 intentionally does not implement product conversation design, governance,
 safety, knowledge, domain intelligence, evidence, replay, certification, or
 product-specific business logic.
@@ -67,6 +71,7 @@ Open:
 - health: `http://localhost:8090/health`
 - metrics: `http://localhost:8090/metrics`
 - runtime analysis: `POST http://localhost:8090/api/v1/runtime/analysis`
+- capability catalog: `GET http://localhost:8090/api/v1/runtime/capability-catalog`
 - runtime instances: `GET http://localhost:8090/api/v1/runtime/instances`
 - OpenTelemetry Collector Prometheus exporter: `http://localhost:8889/metrics`
 
@@ -103,9 +108,16 @@ mitra-companion serve --port 8090
 9. The persistent supervisor refreshes the current runtime heartbeat, removes
    stale peer instances from the active set, recovers interrupted tasks, and
    triggers periodic attachment health maintenance.
-10. A dispatch loads only the context scopes declared by that capability.
-11. The transport registry invokes the adapter named by the published manifest.
-12. Cross-product work requires an explicit transfer. Product context is never
+10. The capability catalog validates manifest-declared product/capability
+   dependencies and summarizes contract registrations without product branches.
+11. A dispatch loads only the context scopes declared by that capability.
+12. The transport registry invokes the adapter named by the published manifest.
+13. Dispatch phases are checkpointed as a seven-step product-neutral journal:
+   request accepted, route selected, payload validated, context loaded,
+   transport dispatched, receipt persisted, and terminal completion/failure.
+14. Each durable dispatch receipt can produce a portable proof bundle at
+   `GET /api/v1/dispatches/{dispatch_id}/proof`.
+15. Cross-product work requires an explicit transfer. Product context is never
    copied into the target product; only caller-supplied portable context enters
    the handoff partition.
 
@@ -128,7 +140,8 @@ contracted streaming surfaces. The runtime analysis suite covers assignment
 profiling, product profiling, communication hints, fit-matrix scoring,
 automatic AI payload repair, and the standalone analysis API. Persistent
 runtime coverage verifies the supervisor heartbeat, stale peer cleanup, and
-interrupted task recovery after restart.
+interrupted task recovery after restart. Reuse coverage verifies manifest
+dependency validation, dispatch checkpoint phases, and proof-bundle hashing.
 
 ## Key documents
 
@@ -163,6 +176,7 @@ interrupted task recovery after restart.
 - [Production Readiness Gate](docs/PRODUCTION_READINESS.md)
 - [Operations Runbook](docs/OPERATIONS_RUNBOOK.md)
 - [SLO and Capacity Targets](docs/SLO_AND_CAPACITY.md)
+- [Previous Submission Reuse](docs/PREVIOUS_SUBMISSION_REUSE.md)
 - [Review Packet](REVIEW_PACKET.md)
 - [Validation Report](VALIDATION_REPORT.md)
 - [Security Boundary Re-execution](REEXECUTION_REPORT.md)

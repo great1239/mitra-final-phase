@@ -58,6 +58,10 @@ def test_operations_documents_and_environment_template_are_present():
     assert "Automated production-readiness gate" in _read(
         "docs/PRODUCTION_READINESS.md"
     )
+    reuse_doc = _read("docs/PREVIOUS_SUBMISSION_REUSE.md")
+    assert "Phase IV durable execution checkpoints" in reuse_doc
+    assert "Commercial Foundation public contract registry" in reuse_doc
+    assert "Runtime proof-bundle producer" in reuse_doc
 
 
 def test_runtime_instances_are_first_class_production_surface():
@@ -76,14 +80,32 @@ def test_runtime_instances_are_first_class_production_surface():
     assert "recover_interrupted_companion_tasks" in _read(
         "pratham/companion-runtime/mitra_companion/store.py"
     )
+    assert "dispatch_phases" in _read(
+        "pratham/companion-runtime/mitra_companion/store.py"
+    )
     assert "PersistentRuntimeSupervisor" in _read(
         "pratham/companion-runtime/mitra_companion/runtime.py"
     )
     assert "persistent_tick" in _read(
         "pratham/companion-runtime/mitra_companion/runtime.py"
     )
+    assert "DISPATCH_PHASE_MODEL" in _read(
+        "pratham/companion-runtime/mitra_companion/runtime.py"
+    )
     assert "/api/v1/runtime/instances" in _read(
         "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/runtime/capability-catalog" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/dispatches/{dispatch_id}/proof" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "CapabilityDependencyRegistry" in _read(
+        "pratham/companion-runtime/mitra_companion/dependency_registry.py"
+    )
+    assert "DispatchProofBuilder" in _read(
+        "pratham/companion-runtime/mitra_companion/proofs.py"
     )
     assert (
         "test_multiple_runtime_instances_share_state_routes_and_dispatch"

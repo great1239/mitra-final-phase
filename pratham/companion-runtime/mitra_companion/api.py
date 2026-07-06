@@ -281,6 +281,10 @@ def create_app(
     async def runtime_chain() -> dict:
         return versioned_response(chain=companion.ecosystem_chain())
 
+    @app.get("/api/v1/runtime/capability-catalog")
+    async def runtime_capability_catalog() -> dict:
+        return versioned_response(catalog=companion.capability_catalog())
+
     @app.post("/api/v1/runtime/analysis")
     async def runtime_analysis(request: RuntimeAnalysisRequest) -> dict:
         validate_contract(request)
@@ -584,6 +588,18 @@ def create_app(
     async def get_dispatch(dispatch_id: str) -> dict:
         return versioned_response(
             dispatch=companion.get_dispatch(dispatch_id)
+        )
+
+    @app.get("/api/v1/dispatches/{dispatch_id}/phases")
+    async def get_dispatch_phases(dispatch_id: str) -> dict:
+        return versioned_response(
+            phases=companion.dispatch_phases(dispatch_id)
+        )
+
+    @app.get("/api/v1/dispatches/{dispatch_id}/proof")
+    async def get_dispatch_proof(dispatch_id: str) -> dict:
+        return versioned_response(
+            proof=companion.dispatch_proof(dispatch_id)
         )
 
     return app

@@ -28,6 +28,7 @@ def main() -> int:
         "docs/SLO_AND_CAPACITY.md",
         "docs/PRODUCTION_HARDENING.md",
         "docs/PRODUCTION_TACTICS.md",
+        "docs/PREVIOUS_SUBMISSION_REUSE.md",
         "scripts/load/k6_companion_runtime.js",
         "evidence/load-testing-report.md",
         "evidence/failure-recovery-report.md",
@@ -71,15 +72,29 @@ def main() -> int:
         "pratham/companion-runtime/mitra_companion/runtime.py": [
             "PersistentRuntimeSupervisor",
             "persistent_tick",
+            "DISPATCH_PHASE_MODEL",
         ],
         "pratham/companion-runtime/mitra_companion/api.py": [
             "/api/v1/runtime/instances",
+            "/api/v1/runtime/capability-catalog",
+            "/api/v1/dispatches/{dispatch_id}/proof",
         ],
         "pratham/companion-runtime/mitra_companion/store.py": [
             "runtime_instances",
             "heartbeat_runtime_instance",
             "mark_stale_runtime_instances",
             "recover_interrupted_companion_tasks",
+            "dispatch_phases",
+        ],
+        "pratham/companion-runtime/mitra_companion/dependency_registry.py": [
+            "CapabilityDependencyRegistry",
+            "semantic version dependency validation",
+            "public API/event/permission catalog",
+        ],
+        "pratham/companion-runtime/mitra_companion/proofs.py": [
+            "DispatchProofBuilder",
+            "mitra-dispatch-proof-v1",
+            "phase_summary",
         ],
         "scripts/load/k6_companion_runtime.js": [
             "ramping-vus",
@@ -110,6 +125,11 @@ def main() -> int:
             "Persistent runtime process",
             "Automated production-readiness gate",
             "Production Acceptance Boundary",
+        ],
+        "docs/PREVIOUS_SUBMISSION_REUSE.md": [
+            "Phase IV durable execution checkpoints",
+            "Commercial Foundation public contract registry",
+            "Runtime proof-bundle producer",
         ],
         "evidence/telemetry-sample.jsonl": [
             '"service":"mitra-companion-runtime"',

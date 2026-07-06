@@ -18,7 +18,12 @@ from mitra_session import SessionRuntime
 
 from .analysis import RuntimeAnalyzer
 from .config import RuntimeSettings
-from .constants import AttachmentState, DispatchStatus, RuntimeState
+from .constants import (
+    DISPATCH_PHASE_MODEL,
+    AttachmentState,
+    DispatchStatus,
+    RuntimeState,
+)
 from .contracts import (
     CompanionMessageRequest,
     ContextTransferRequest,
@@ -26,6 +31,7 @@ from .contracts import (
     ProductAttachmentManifest,
     RuntimeAnalysisRequest,
 )
+from .dependency_registry import CapabilityDependencyRegistry
 from .errors import IntentRoutingError, ResourceNotFoundError, TransportError
 from .interaction import (
     NaturalIntentResolver,
@@ -35,10 +41,11 @@ from .interaction import (
 )
 from .lifecycle import RuntimeLifecycle
 from .observability import runtime_span
+from .proofs import DispatchProofBuilder
 from .store import RuntimeStore
 from .telemetry import RuntimeTelemetry
 from .transport import CapabilityTransport
-from .utils import utc_now
+from .utils import sha256_json, utc_now
 
 
 class PersistentRuntimeSupervisor:
@@ -130,6 +137,9 @@ class CompanionRuntime:
             threshold=settings.deterministic_intent_threshold,
             ai_analysis_url=settings.ai_analysis_url,
             ai_timeout_seconds=settings.ai_analysis_timeout_seconds,
+        )
+        self.proofs = DispatchProofBuilder(
+            runtime_instance_id=settings.runtime_instance_id,
         )
         self.supervisor = PersistentRuntimeSupervisor(self)
         self.accepting = False
@@ -296,6 +306,16 @@ class CompanionRuntime:
             "stale_instances": stale_instances,
             "recovered_tasks": recovered_tasks,
             "maintenance": maintenance,
+        }
+
+    def capability_catalog(self) -> dict[str, Any]:
+        catalog = CapabilityDependencyRegistry(
+            self.attachments.list(include_detached=True)
+        ).catalog()
+        return {
+            **catalog,
+            "dispatch_phase_model": list(DISPATCH_PHASE_MODEL),
+            "proof_bundle_model": "mitra-dispatch-proof-v1",
         }
 
     def ecosystem_chain(self) -> dict[str, Any]:
@@ -471,12 +491,70 @@ class CompanionRuntime:
             status=DispatchStatus.ACCEPTED.value,
             request=envelope,
         )
+        self.store.complete_dispatch_phase(
+            dispatch_id=dispatch_id,
+            phase_name="request.accepted",
+            phase_index=0,
+            detail={
+                "session_id": request.session_id,
+                "correlation_id": correlation_id,
+                "payload_keys": sorted(request.payload),
+            },
+            output_hash=sha256_json(envelope),
+        )
+        self.store.complete_dispatch_phase(
+            dispatch_id=dispatch_id,
+            phase_name="route.selected",
+            phase_index=1,
+            detail={
+                "product_id": route["product_id"],
+                "capability_id": route["capability_id"],
+                "intent_id": route["intent_id"],
+                "product_resolution": route.get("product_resolution"),
+                "capability_resolution": route.get(
+                    "capability_resolution"
+                ),
+            },
+            output_hash=sha256_json(route),
+        )
+        self.store.complete_dispatch_phase(
+            dispatch_id=dispatch_id,
+            phase_name="payload.validated",
+            phase_index=2,
+            detail={
+                "schema_type": route["input_schema"].get("type"),
+                "required_fields": route["input_schema"].get("required", []),
+                "payload_keys": sorted(request.payload),
+            },
+            output_hash=sha256_json(request.payload),
+        )
+        self.store.complete_dispatch_phase(
+            dispatch_id=dispatch_id,
+            phase_name="context.loaded",
+            phase_index=3,
+            detail={
+                "loaded_scopes": context["loaded_scopes"],
+                "partition_count": len(context["partitions"]),
+                "merge_precedence": context["merge_precedence"],
+            },
+            output_hash=sha256_json(context),
+        )
         if self.lifecycle.state == RuntimeState.READY:
             self.lifecycle.transition(
                 RuntimeState.ACTIVE,
                 "Intent dispatch started",
             )
         dispatch_started = time.perf_counter()
+        transport_started = time.perf_counter()
+        self.store.start_dispatch_phase(
+            dispatch_id=dispatch_id,
+            phase_name="transport.dispatched",
+            phase_index=4,
+            detail={
+                "mode": route["dispatch"]["mode"],
+                "endpoint": route["dispatch"]["endpoint"],
+            },
+        )
         try:
             try:
                 with runtime_span(
@@ -498,10 +576,40 @@ class CompanionRuntime:
                     "Capability transport raised an unexpected error: "
                     f"{type(exc).__name__}: {exc}"
                 ) from exc
+            self.store.complete_dispatch_phase(
+                dispatch_id=dispatch_id,
+                phase_name="transport.dispatched",
+                phase_index=4,
+                detail={"status": "response-received"},
+                output_hash=sha256_json(response),
+                duration_ms=(time.perf_counter() - transport_started) * 1000,
+            )
             dispatch = self.store.complete_dispatch(
                 dispatch_id,
                 status=DispatchStatus.COMPLETED.value,
                 response=response,
+            )
+            self.store.complete_dispatch_phase(
+                dispatch_id=dispatch_id,
+                phase_name="receipt.persisted",
+                phase_index=5,
+                detail={
+                    "status": dispatch["status"],
+                    "finished_at": dispatch["finished_at"],
+                    "response_persisted": dispatch.get("response") is not None,
+                },
+                output_hash=sha256_json(dispatch),
+            )
+            self.store.complete_dispatch_phase(
+                dispatch_id=dispatch_id,
+                phase_name="dispatch.completed",
+                phase_index=6,
+                detail={
+                    "status": dispatch["status"],
+                    "finished_at": dispatch["finished_at"],
+                },
+                output_hash=sha256_json(dispatch),
+                duration_ms=(time.perf_counter() - dispatch_started) * 1000,
             )
             self.telemetry.record_dispatch(
                 product_id=route["product_id"],
@@ -517,10 +625,40 @@ class CompanionRuntime:
                 RuntimeState.DEGRADED,
                 f"Capability transport failed for {route['product_id']}",
             )
+            self.store.fail_dispatch_phase(
+                dispatch_id=dispatch_id,
+                phase_name="transport.dispatched",
+                phase_index=4,
+                error=str(exc),
+                detail={
+                    "mode": route["dispatch"]["mode"],
+                    "endpoint": route["dispatch"]["endpoint"],
+                },
+                duration_ms=(time.perf_counter() - transport_started) * 1000,
+            )
             dispatch = self.store.complete_dispatch(
                 dispatch_id,
                 status=DispatchStatus.FAILED.value,
                 error=str(exc),
+            )
+            self.store.complete_dispatch_phase(
+                dispatch_id=dispatch_id,
+                phase_name="receipt.persisted",
+                phase_index=5,
+                detail={
+                    "status": dispatch["status"],
+                    "finished_at": dispatch["finished_at"],
+                    "error_persisted": bool(dispatch.get("error")),
+                },
+                output_hash=sha256_json(dispatch),
+            )
+            self.store.fail_dispatch_phase(
+                dispatch_id=dispatch_id,
+                phase_name="dispatch.completed",
+                phase_index=6,
+                error=str(exc),
+                detail={"status": dispatch["status"]},
+                duration_ms=(time.perf_counter() - dispatch_started) * 1000,
             )
             self.telemetry.record_dispatch(
                 product_id=route["product_id"],
@@ -541,6 +679,7 @@ class CompanionRuntime:
         return {
             "dispatch": dispatch,
             "route": route,
+            "phases": self.store.list_dispatch_phases(dispatch_id),
         }
 
     async def companion_message(
@@ -852,6 +991,15 @@ class CompanionRuntime:
         if dispatch is None:
             raise ResourceNotFoundError(f"Unknown dispatch: {dispatch_id}")
         return dispatch
+
+    def dispatch_phases(self, dispatch_id: str) -> list[dict[str, Any]]:
+        self.get_dispatch(dispatch_id)
+        return self.store.list_dispatch_phases(dispatch_id)
+
+    def dispatch_proof(self, dispatch_id: str) -> dict[str, Any]:
+        dispatch = self.get_dispatch(dispatch_id)
+        phases = self.store.list_dispatch_phases(dispatch_id)
+        return self.proofs.build(dispatch=dispatch, phases=phases)
 
     def _session_for_companion_message(
         self,

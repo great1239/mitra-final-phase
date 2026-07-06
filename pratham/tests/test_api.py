@@ -5,6 +5,17 @@ from fastapi.testclient import TestClient
 from mitra_companion.api import create_app
 
 
+EXPECTED_DISPATCH_PHASES = [
+    "request.accepted",
+    "route.selected",
+    "payload.validated",
+    "context.loaded",
+    "transport.dispatched",
+    "receipt.persisted",
+    "dispatch.completed",
+]
+
+
 def test_versioned_api_end_to_end(settings_factory, atlas_manifest):
     app = create_app(settings_factory())
     with TestClient(app) as client:
@@ -115,6 +126,26 @@ def test_versioned_api_end_to_end(settings_factory, atlas_manifest):
         )
         assert dispatched.status_code == 200, dispatched.text
         assert dispatched.json()["dispatch"]["status"] == "COMPLETED"
+        dispatch_id = dispatched.json()["dispatch"]["dispatch_id"]
+
+        catalog = client.get("/api/v1/runtime/capability-catalog")
+        assert catalog.status_code == 200, catalog.text
+        assert catalog.json()["catalog"]["product_count"] == 1
+        assert catalog.json()["catalog"]["compatible"] is True
+
+        phases = client.get(f"/api/v1/dispatches/{dispatch_id}/phases")
+        assert phases.status_code == 200, phases.text
+        assert [item["phase_name"] for item in phases.json()["phases"]] == [
+            *EXPECTED_DISPATCH_PHASES,
+        ]
+
+        proof = client.get(f"/api/v1/dispatches/{dispatch_id}/proof")
+        assert proof.status_code == 200, proof.text
+        assert proof.json()["proof"]["proof_type"] == (
+            "mitra-dispatch-proof-v1"
+        )
+        assert proof.json()["proof"]["phase_summary"]["complete"] is True
+        assert proof.json()["proof"]["bundle_hash"]
 
         suspended = client.post(
             f"/api/v1/sessions/{session_id}/suspend",

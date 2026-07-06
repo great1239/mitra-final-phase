@@ -28,6 +28,7 @@
       "/api/v1/runtime/status",
       "/api/v1/runtime/lifecycle",
       "/api/v1/runtime/chain",
+      "/api/v1/runtime/capability-catalog",
       "/api/v1/runtime/analysis",
       "/api/v1/companion/messages",
       "/api/v1/companion/messages/stream",
@@ -52,7 +53,9 @@
       "/api/v1/products/{product_id}/capabilities/{capability_id}",
       "/api/v1/intents/dispatch",
       "/api/v1/dispatches",
-      "/api/v1/dispatches/{dispatch_id}"
+      "/api/v1/dispatches/{dispatch_id}",
+      "/api/v1/dispatches/{dispatch_id}/phases",
+      "/api/v1/dispatches/{dispatch_id}/proof"
     ]
   },
   "schemas": [

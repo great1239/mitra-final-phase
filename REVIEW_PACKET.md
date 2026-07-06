@@ -58,6 +58,7 @@ source session
 | Unknown BHIV capability understanding | Manifest/schema/metadata-derived capability understanding with sparse-manifest test coverage |
 | Command-chain understanding | `/api/v1/runtime/chain` loads `contracts/runtime-command-chain.json` without hardcoded runtime product names |
 | Runtime intelligence | capability ranking, fit matrix, recommendations, cost/latency metadata, retry strategy, and automatic AI fallback when deterministic matching or payload inference is incomplete |
+| Previous submission reuse | `/api/v1/runtime/capability-catalog`, seven-phase dispatch journal, public contract summaries, semantic-version dependency checks, and `/api/v1/dispatches/{dispatch_id}/proof` |
 | Products attach without runtime modification | manifest examples attach through the same API |
 | Product self-attachment | `product-echo.json` attaches through `POST /api/v1/attachments` |
 | Stable/versioned APIs | OpenAPI 3.1 and version fields on mutations |
@@ -77,7 +78,8 @@ source session
 
 ## Verification
 
-- Automated suite: `81 passed`
+- Latest full automated suite before the reuse extension: `81 passed`
+- Current reuse extension static checks: `py_compile` on changed runtime/test modules and `git diff --check` passed; focused pytest was blocked by the environment approval usage limit
 - Companion interaction and runtime analysis tests: `7 passed`
 - Focused BHIV, hardening, contract, and production-readiness suite: `18 passed`
 - Two products attached through published manifests
@@ -92,6 +94,7 @@ source session
 - Runtime implementation contains no example or ecosystem product names
 - Runtime implementation contains no BHIV product-specific branches; native product payloads are selected by manifest transport options
 - Runtime analysis verifies assignment-to-product fit without dispatch and is included in companion message responses
+- Previous submission reuse adds manifest dependency validation, public API/event/permission/UI contract summaries, seven durable dispatch phases, and portable dispatch proof bundles
 - Structured telemetry emits `dispatch.completed`, `dispatch.failed`, `attachment.health_checked`, and `attachment.recovery_validated` events
 - Structured logs include timestamp, service, environment, severity, event type, product, dispatch, latency, health, and recovery fields
 - Runtime metrics expose dispatch counters, per-product latency, health checks, and recovery counters through `/api/v1/runtime/metrics` and `/metrics`
