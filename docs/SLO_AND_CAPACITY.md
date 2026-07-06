@@ -1,60 +1,45 @@
 # SLO And Capacity Targets
 
-These targets define the minimum production-readiness bar for the assignment
-runtime. They are intentionally small because the validation environment uses
-local product fixtures, but the same signals scale to a larger deployment.
+Small validation targets are used here because product fixtures run locally.
+The same signals apply to larger deployments.
 
-## Service Level Objectives
+## Service Objectives
 
 | Signal | Target | Evidence |
 | --- | --- | --- |
-| Readiness | `/ready` returns HTTP 200 while accepting work | FastAPI readiness route and Compose healthcheck |
-| Dispatch success | At least 98% successful dispatch checks under k6 load | `scripts/load/k6_companion_runtime.js` threshold `checks: rate>0.98` |
-| Dispatch failure rate | Less than 2% HTTP request failures under k6 load | k6 threshold `http_req_failed: rate<0.02` |
-| Dispatch latency | p95 under 1500 ms in the k6 profile | k6 threshold `http_req_duration: p(95)<1500` |
-| Attachment recovery | degraded attachment returns to `ATTACHED` after healthy published health check | `test_attachment_health_monitoring_and_recovery_validation` |
-| Restart recovery | attachments, sessions, and routes survive runtime restart | `test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes` |
-| Operator restart/recovery | versioned restart, recovery, and instance reconciliation endpoints stay live | `test_runtime_operations_api_exposes_production_mode` |
-| Multi-instance continuity | one runtime instance can consume attachments and sessions created by another instance | `test_multiple_runtime_instances_share_state_routes_and_dispatch` |
-| Persistent heartbeat freshness | a live service process refreshes its own heartbeat without external traffic | `test_persistent_runtime_supervisor_refreshes_heartbeat` |
-| Stale peer convergence | inactive peer instances are removed from the active set after the configured stale window | `test_persistent_runtime_marks_stale_peer_instances` |
-| Interrupted task recovery | a task left `RUNNING` by a prior process is durably closed on restart | `test_persistent_runtime_recovers_interrupted_tasks_on_restart` |
+| Readiness | `/ready` returns 200 while accepting work | Compose healthcheck |
+| Dispatch success | at least 98% successful k6 checks | k6 `checks: rate>0.98` |
+| Dispatch latency | p95 under 1500 ms in k6 profile | k6 threshold |
+| Attachment recovery | degraded product returns to `ATTACHED` after healthy check | recovery test |
+| Restart recovery | attachments, sessions, and routes survive restart | restart test |
+| Multi-instance continuity | one instance can consume state created by another | multi-instance test |
+| Persistent heartbeat freshness | live process refreshes heartbeat without traffic | supervisor test |
+| Stale peer convergence | expired peers are removed from active set | stale-peer test |
+| Product exchange delivery | target inbox receives and records exchange receipt | product-exchange tests |
 
 ## Capacity Envelope
 
-The production Compose profile starts with:
-
 - `MITRA_COMPANION_UVICORN_WORKERS=2`
-- `MITRA_COMPANION_CONFIG_PROFILE=production`
-- optional `MITRA_COMPANION_ENV_FILE=/data/production.env`
-- `MITRA_COMPANION_LOG_PATH=/data/production-runtime.jsonl`
-- optional `MITRA_COMPANION_SECRETS_DIR=/run/secrets`
-- generated or orchestrator-assigned unique `MITRA_COMPANION_INSTANCE_ID`
-- `MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true`
-- `MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS=5`
-- `MITRA_COMPANION_PERSISTENT_STALE_AFTER_SECONDS=30`
+- unique `MITRA_COMPANION_INSTANCE_ID` per process
+- persistent runtime enabled
+- heartbeat interval: 5 seconds
+- stale peer window: 30 seconds
 - CPU limit: `1.0`
 - memory limit: `768M`
 - process limit: `256`
-- read-only filesystem with explicit `/data` and `/tmp` write surfaces
 
-Before scaling beyond this envelope, rerun:
+Before changing the envelope:
 
 ```powershell
 k6 run scripts/load/k6_companion_runtime.js
 pytest -q
 ```
 
-## Escalation Criteria
+## Escalate When
 
-Escalate as an operational incident when:
-
-- `/ready` fails for more than one probe interval after startup.
-- a persistent runtime has no fresh `last_heartbeat_at` after two heartbeat
-  intervals.
-- `/api/v1/runtime/startup` has no completed `runtime_process_started` phase.
-- `/api/v1/runtime/secrets` exposes a secret value instead of redacted
-  metadata.
-- `dispatch.failed` events rise above the k6 failure budget.
-- a product remains `DEGRADED` after its published health endpoint is healthy.
-- telemetry stops writing JSONL records or `/metrics` stops exposing counters.
+- `/ready` fails longer than one probe interval;
+- runtime startup lacks `runtime_process_started`;
+- heartbeat is stale for two intervals;
+- dispatch failures exceed the budget;
+- product remains `DEGRADED` after its health endpoint is healthy;
+- logs or `/metrics` stop updating.

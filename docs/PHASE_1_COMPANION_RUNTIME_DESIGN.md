@@ -1,158 +1,61 @@
 # Phase 1 - Companion Runtime Design
 
-## Phase 1 outcome
-
-Phase 1 establishes the architecture and contracts for Pratham's bounded
-runtime ownership. It defines:
-
-1. Companion Runtime architecture;
-2. runtime lifecycle;
-3. runtime and component states;
-4. public runtime interfaces.
-
-The implementation is contract-first and adapter-driven. It contains no
-conversation design, governance, safety, knowledge, project/domain
-intelligence, evidence, replay, or certification behavior.
+Phase 1 defined the runtime boundary, lifecycle, state model, and public
+interfaces. The current canonical overview is `docs/ARCHITECTURE.md`; this
+file keeps the phase acceptance summary.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  Client["Companion Client"]
-  API["Versioned API"]
-  CR["Companion Runtime"]
-  SR["Session Runtime"]
-  XR["Context Runtime"]
-  IR["Intent Router"]
-  AR["Attachment Runtime"]
-  LR["Lifecycle / Runtime State"]
-  MR["Manifest Source Adapter"]
-  TR["Transport Adapter"]
-  Product["Attached Product Interface"]
+`CompanionRuntime` composes lifecycle, sessions, context, intent routing,
+attachment, transport, and durable storage. Products are visible only through
+published manifests and adapter ports.
 
-  Client --> API
-  API --> CR
-  CR --> LR
-  CR --> SR
-  CR --> XR
-  CR --> IR
-  CR --> AR
-  MR --> AR
-  AR --> IR
-  SR --> XR
-  XR --> IR
-  IR --> TR
-  TR --> Product
-```
+Rules:
 
-### Architectural rules
-
-- `CompanionRuntime` is the composition root.
-- Component runtimes depend on narrow protocols, not concrete siblings.
-- Products are known only through published attachment manifests.
-- Intent routing uses explicit registered IDs; no language or domain inference
-  occurs.
-- Context is partitioned into session, workspace, handoff, and active-product
-  scopes.
-- Cross-product work requires a new target session and explicit portable
-  handoff context.
-- Transport and manifest discovery are adapters selected at composition time.
-- Durable state is a replaceable port; SQLite is the default implementation.
+- no product-specific runtime branches;
+- explicit registered intent IDs only;
+- context is partitioned by session, workspace, handoff, and product;
+- cross-product work requires transfer or product exchange;
+- SQLite is the default durable store behind narrow ports.
 
 ## Lifecycle
 
-```mermaid
-stateDiagram-v2
-  [*] --> INITIALIZING
-  INITIALIZING --> READY: startup completed
-  INITIALIZING --> DEGRADED: startup dependency failed
-  INITIALIZING --> STOPPED: startup aborted
-  READY --> ACTIVE: dispatch started
-  READY --> DEGRADED: transport failed
-  READY --> DRAINING: shutdown requested
-  ACTIVE --> READY: dispatch completed
-  ACTIVE --> DEGRADED: dispatch failed
-  ACTIVE --> DRAINING: shutdown requested
-  DEGRADED --> READY: attachments restored
-  DEGRADED --> ACTIVE: available dispatch started
-  DEGRADED --> DRAINING: shutdown requested
-  DRAINING --> STOPPED: shutdown completed
-  STOPPED --> INITIALIZING: process restarted
-```
+Runtime state follows `contracts/runtime-state-machine.json`:
 
-Lifecycle invariants:
+`INITIALIZING -> READY/DEGRADED/STOPPED -> ACTIVE/DRAINING -> STOPPED`
 
-- every transition is validated against `ALLOWED_TRANSITIONS`;
-- every accepted transition is durably journaled;
-- invalid transitions fail closed;
-- `DRAINING` accepts only completion to `STOPPED`;
-- `STOPPED` can re-enter only through `INITIALIZING`.
+Transitions are validated by `ALLOWED_TRANSITIONS` and journaled in storage.
+Invalid transitions fail closed.
 
 ## States
 
-### Runtime
+- Runtime: `INITIALIZING`, `READY`, `ACTIVE`, `DEGRADED`, `DRAINING`,
+  `STOPPED`.
+- Session: `ACTIVE`, `SUSPENDED`, `CLOSED`.
+- Attachment: `ATTACHED`, `DEGRADED`, `DETACHED`.
+- Dispatch: `ACCEPTED`, `COMPLETED`, `FAILED`.
 
-| State | Meaning |
-|---|---|
-| `INITIALIZING` | persistence and published interfaces are being prepared |
-| `READY` | new sessions, attachments, transfers, and dispatches are accepted |
-| `ACTIVE` | a dispatch is executing |
-| `DEGRADED` | an attachment transport has failed; unaffected interfaces remain observable |
-| `DRAINING` | shutdown has begun and new work is blocked |
-| `STOPPED` | runtime execution is stopped |
-
-### Session
-
-| State | Meaning |
-|---|---|
-| `ACTIVE` | context mutation, transfer, and intent dispatch are permitted |
-| `SUSPENDED` | durable and resumable; mutation, transfer, and dispatch are blocked |
-| `CLOSED` | terminal; resume and execution are blocked |
-
-### Attachment
-
-| State | Meaning |
-|---|---|
-| `ATTACHED` | manifest and adapter target are valid |
-| `DEGRADED` | manifest remains registered but transport failed |
-| `DETACHED` | terminal routing state; no new intent route may use it |
-
-### Dispatch
-
-| State | Meaning |
-|---|---|
-| `ACCEPTED` | dispatch envelope is durably recorded |
-| `COMPLETED` | adapter returned a valid result |
-| `FAILED` | adapter failed and the failure was durably recorded |
-
-The normative machine-readable definition is
-`contracts/runtime-state-machine.json`.
+The machine-readable source is `contracts/runtime-state-machine.json`.
 
 ## Runtime interfaces
 
-| Interface | Protocol | Main operations |
-|---|---|---|
-| Companion Runtime | `CompanionRuntimeInterface` | start, stop, status, attach, dispatch, transfer context |
-| Lifecycle | `LifecycleInterface` | transition, history |
-| Session Runtime | `SessionRuntimeInterface` | create, get, resume, suspend, close, transfer |
-| Context Runtime | `ContextRuntimeInterface` | load, update, initialize transfer |
-| Intent Router | `IntentRouterInterface` | discover, route |
-| Attachment Runtime | `AttachmentRuntimeInterface` | attach, get, list, degrade, detach |
-| Context Transfer Runtime | `ContextTransferRuntimeInterface` | transfer context |
+The interface catalog is `contracts/runtime-interface-catalog.json`.
 
-Python protocols are published in
-`mitra_companion.interfaces`. Adapter and persistence ports are published in
-`mitra_companion.ports`. The normative operation catalog is
-`contracts/runtime-interface-catalog.json`.
+Main protocols:
+
+- `CompanionRuntimeInterface`
+- `LifecycleInterface`
+- `SessionRuntimeInterface`
+- `ContextRuntimeInterface`
+- `ContextTransferRuntimeInterface`
+- `IntentRouterInterface`
+- `AttachmentRuntimeInterface`
 
 ## Phase 1 acceptance criteria
 
-- architecture diagram and component responsibilities are documented;
-- lifecycle states and legal transitions are exact and machine-readable;
-- all declared component states have defined triggers;
-- public runtime protocols are runtime-checkable;
-- concrete implementations conform to their protocols;
-- API operations map to owned runtime interfaces only;
-- interface and state catalogs validate against JSON Schema;
-- no forbidden subsystem implementation is introduced.
-
+| Requirement | Evidence |
+| --- | --- |
+| Runtime state machine | schema and implementation transition tests |
+| Runtime interfaces | protocol catalog and concrete conformance tests |
+| Product-neutral architecture | ownership boundary tests |
+| Contract-first integration | OpenAPI and JSON Schema catalog |

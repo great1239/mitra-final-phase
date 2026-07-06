@@ -75,6 +75,7 @@ class PersistentRuntimeSupervisor:
         if self.running:
             return
         self._stop.clear()
+        self._last_maintenance_at = time.monotonic()
         self._thread = threading.Thread(
             target=self._run,
             name=f"mitra-runtime-supervisor-{self.runtime.instance_id}",

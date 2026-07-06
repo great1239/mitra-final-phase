@@ -1,34 +1,24 @@
 # Production Readiness Gate
 
-This document is the reviewer-facing production gate for the Mitra Companion
-Runtime assignment. It is intentionally stricter than the functional tests:
-the runtime must be deployable, observable, recoverable, and operable without
-product-specific code paths.
+This is the reviewer-facing readiness summary. Detailed behavior lives in
+OpenAPI, tests, and the runbook.
 
 ## Gate Status
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| Container runs without root privileges | Met | `Dockerfile` creates and runs as `mitra`; Compose also drops Linux capabilities and enables `no-new-privileges`. |
-| Multiple runtime instances | Met | Runtime instances register unique IDs, heartbeat into shared state, expose `/api/v1/runtime/instances`, and share attachments, sessions, routes, and dispatches through persisted storage. |
-| Runtime startup manager | Met | `RuntimeStartupManager` performs production config loading, process startup, manifest-source loading, and supervisor verification; `/api/v1/runtime/startup` reports the phases. |
-| Persistent runtime process | Met | Runtime startup enables a background supervisor by default for heartbeat refresh, stale peer cleanup, interrupted task recovery, and periodic attachment maintenance. |
-| Graceful restart and runtime recovery | Met | `/api/v1/runtime/restart`, `/api/v1/runtime/recovery`, and `/api/v1/runtime/instances/reconcile` expose controlled operator flows. |
-| Health and readiness probes | Met | Image and Compose healthchecks call `/ready`; API exposes `/health` and `/api/v1/runtime/status`. |
-| Restart and graceful shutdown posture | Met | Compose uses `restart: unless-stopped`, `init: true`, and `stop_grace_period: 30s`; runtime records lifecycle transitions. |
-| Writable surface is constrained | Met | Compose sets the service read-only with explicit `/data` volume and `/tmp` tmpfs. |
-| Runtime resources are bounded | Met | Compose declares CPU and memory limits/reservations and `pids_limit`. |
-| Production configuration loading | Met | `MITRA_COMPANION_ENV_FILE`, `MITRA_COMPANION_CONFIG_PROFILE`, and environment overrides are supported by `RuntimeSettings.from_environment`. |
-| Production secrets management | Met | Mounted `*_FILE` secret values and `MITRA_COMPANION_SECRETS_DIR` are supported; `/api/v1/runtime/secrets` returns only redacted metadata. |
-| Structured operational logs | Met | JSONL telemetry records dispatch and health events; process-level production logs write runtime start, restart, recovery, and stop events to `MITRA_COMPANION_LOG_PATH`. |
-| Metrics and tracing | Met | `/metrics`, `/api/v1/runtime/metrics`, FastAPI OpenTelemetry instrumentation, runtime spans, and OTLP collector config. |
-| Load and concurrency evidence | Met | `scripts/load/k6_companion_runtime.js` plus concurrent dispatch tests. |
-| Failure containment and recovery | Met | Simulated product failure degrades only the affected attachment and healthy checks restore it. |
-| Contract-first ecosystem integration | Met | UniGuru and Samruddhi attach through published manifests, schemas, OpenAPI, adapter ports, and contract tests. |
-| Operational documentation | Met | `docs/OPERATIONS_RUNBOOK.md`, `docs/SLO_AND_CAPACITY.md`, `docs/PRODUCTION_HARDENING.md`, and `docs/PRODUCTION_TACTICS.md`. |
-| Automated production-readiness gate | Met | `scripts/production_readiness_gate.py` and `test_production_readiness_gate.py`. |
+| Container runs without root privileges | Met | `Dockerfile`, Compose hardening |
+| Multiple runtime instances | Met | instance table, heartbeats, shared storage |
+| Runtime startup manager | Met | startup phases and `/api/v1/runtime/startup` |
+| Persistent runtime process | Met | supervisor heartbeat, stale-peer cleanup, task recovery |
+| Production configuration loading | Met | env-file support and redacted config API |
+| Production secrets management | Met | mounted secret files and redacted secrets API |
+| Graceful restart and recovery | Met | restart, recovery, and reconcile endpoints |
+| Product exchange mailbox | Met | product connect, exchange inbox, acknowledgement tests |
+| Observability | Met | JSONL logs, metrics, telemetry, OpenTelemetry |
+| Automated production-readiness gate | Met | `scripts/production_readiness_gate.py` |
 
-## Required Production Commands
+## Required Commands
 
 ```powershell
 docker compose up -d --wait
@@ -40,22 +30,9 @@ pytest -q
 ## Production Acceptance Boundary
 
 The runtime is production-ready for the assignment-scoped independent BHIV
-products in this workspace: UniGuru and Samruddhi/trade-bot. They consume the
-runtime through published manifests, adapter interfaces, versioned API
-contracts, and generic dispatch paths only.
+products in this workspace. New products attach by manifest and can share
+explicit payloads through product exchanges without runtime code changes.
 
-The runtime is not restricted to a single process. Each runtime process or
-container has a unique runtime instance ID and shares durable ecosystem state
-through the configured database path. A load balancer can route clients across
-instances while sessions, attachments, routes, and dispatch receipts remain
-available to every instance. It is also not a single-invocation runtime: normal
-service startup is coordinated by the startup manager and leaves the persistent
-supervisor running until shutdown, so the process keeps its heartbeat fresh,
-cleans stale peer records, and closes interrupted companion tasks after
-restart. Operators can trigger graceful restart, recovery, and instance
-reconciliation through published versioned endpoints.
-
-The original PDF also contains a three-product target. If a third real BHIV
-product is supplied later, the runtime path is already production-ready:
-publish a manifest, validate the contract, attach, create a session, dispatch,
-and capture evidence without changing runtime code.
+Downstream authority, validation, provenance, convergence, and review systems
+remain outside Mitra and consume dispatch receipts, phase journals, proof
+bundles, or product exchange payloads.
