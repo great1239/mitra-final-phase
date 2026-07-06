@@ -32,6 +32,13 @@ def test_container_deployment_has_production_safety_controls():
 
 def test_operations_documents_and_environment_template_are_present():
     production_env = _read("deploy/production.env.example")
+    assert "MITRA_COMPANION_CONFIG_PROFILE=production" in production_env
+    assert "MITRA_COMPANION_ENV_FILE" in production_env
+    assert "MITRA_COMPANION_LOG_PATH=/data/production-runtime.jsonl" in (
+        production_env
+    )
+    assert "MITRA_COMPANION_LOG_LEVEL=INFO" in production_env
+    assert "MITRA_COMPANION_SECRETS_DIR" in production_env
     assert "MITRA_COMPANION_UVICORN_WORKERS=2" in production_env
     assert "MITRA_COMPANION_INSTANCE_ID" in production_env
     assert "MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true" in production_env
@@ -40,6 +47,11 @@ def test_operations_documents_and_environment_template_are_present():
     )
     assert "Failure Response" in _read("docs/OPERATIONS_RUNBOOK.md")
     assert "Multi-Instance Validation" in _read("docs/OPERATIONS_RUNBOOK.md")
+    assert "Recovery And Instance Reconciliation" in _read(
+        "docs/OPERATIONS_RUNBOOK.md"
+    )
+    assert "/api/v1/runtime/restart" in _read("docs/OPERATIONS_RUNBOOK.md")
+    assert "/api/v1/runtime/recovery" in _read("docs/OPERATIONS_RUNBOOK.md")
     assert "persistent_runtime.supervisor_running" in _read(
         "docs/OPERATIONS_RUNBOOK.md"
     )
@@ -52,7 +64,16 @@ def test_operations_documents_and_environment_template_are_present():
     assert "Multiple runtime instances" in _read(
         "docs/PRODUCTION_READINESS.md"
     )
+    assert "Runtime startup manager" in _read(
+        "docs/PRODUCTION_READINESS.md"
+    )
     assert "Persistent runtime process" in _read(
+        "docs/PRODUCTION_READINESS.md"
+    )
+    assert "Production configuration loading" in _read(
+        "docs/PRODUCTION_READINESS.md"
+    )
+    assert "Production secrets management" in _read(
         "docs/PRODUCTION_READINESS.md"
     )
     assert "Automated production-readiness gate" in _read(
@@ -90,8 +111,32 @@ def test_runtime_instances_are_first_class_production_surface():
     assert "persistent_tick" in _read(
         "pratham/companion-runtime/mitra_companion/runtime.py"
     )
+    assert "RuntimeStartupManager" in _read(
+        "pratham/companion-runtime/mitra_companion/runtime.py"
+    )
+    assert "RuntimeStartupManager" in _read(
+        "pratham/companion-runtime/mitra_companion/startup.py"
+    )
+    assert "configure_production_logging" in _read(
+        "pratham/companion-runtime/mitra_companion/production_logging.py"
+    )
     assert "DISPATCH_PHASE_MODEL" in _read(
         "pratham/companion-runtime/mitra_companion/runtime.py"
+    )
+    assert "/api/v1/runtime/startup" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/runtime/restart" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/runtime/recovery" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/runtime/config" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/runtime/secrets" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
     )
     assert "/api/v1/runtime/instances" in _read(
         "pratham/companion-runtime/mitra_companion/api.py"

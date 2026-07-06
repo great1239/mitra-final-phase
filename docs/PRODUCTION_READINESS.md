@@ -11,12 +11,16 @@ product-specific code paths.
 | --- | --- | --- |
 | Container runs without root privileges | Met | `Dockerfile` creates and runs as `mitra`; Compose also drops Linux capabilities and enables `no-new-privileges`. |
 | Multiple runtime instances | Met | Runtime instances register unique IDs, heartbeat into shared state, expose `/api/v1/runtime/instances`, and share attachments, sessions, routes, and dispatches through persisted storage. |
+| Runtime startup manager | Met | `RuntimeStartupManager` performs production config loading, process startup, manifest-source loading, and supervisor verification; `/api/v1/runtime/startup` reports the phases. |
 | Persistent runtime process | Met | Runtime startup enables a background supervisor by default for heartbeat refresh, stale peer cleanup, interrupted task recovery, and periodic attachment maintenance. |
+| Graceful restart and runtime recovery | Met | `/api/v1/runtime/restart`, `/api/v1/runtime/recovery`, and `/api/v1/runtime/instances/reconcile` expose controlled operator flows. |
 | Health and readiness probes | Met | Image and Compose healthchecks call `/ready`; API exposes `/health` and `/api/v1/runtime/status`. |
 | Restart and graceful shutdown posture | Met | Compose uses `restart: unless-stopped`, `init: true`, and `stop_grace_period: 30s`; runtime records lifecycle transitions. |
 | Writable surface is constrained | Met | Compose sets the service read-only with explicit `/data` volume and `/tmp` tmpfs. |
 | Runtime resources are bounded | Met | Compose declares CPU and memory limits/reservations and `pids_limit`. |
-| Structured operational logs | Met | JSONL telemetry records timestamp, service, environment, severity, event type, product, dispatch, latency, failure, health, and recovery fields. |
+| Production configuration loading | Met | `MITRA_COMPANION_ENV_FILE`, `MITRA_COMPANION_CONFIG_PROFILE`, and environment overrides are supported by `RuntimeSettings.from_environment`. |
+| Production secrets management | Met | Mounted `*_FILE` secret values and `MITRA_COMPANION_SECRETS_DIR` are supported; `/api/v1/runtime/secrets` returns only redacted metadata. |
+| Structured operational logs | Met | JSONL telemetry records dispatch and health events; process-level production logs write runtime start, restart, recovery, and stop events to `MITRA_COMPANION_LOG_PATH`. |
 | Metrics and tracing | Met | `/metrics`, `/api/v1/runtime/metrics`, FastAPI OpenTelemetry instrumentation, runtime spans, and OTLP collector config. |
 | Load and concurrency evidence | Met | `scripts/load/k6_companion_runtime.js` plus concurrent dispatch tests. |
 | Failure containment and recovery | Met | Simulated product failure degrades only the affected attachment and healthy checks restore it. |
@@ -45,9 +49,11 @@ container has a unique runtime instance ID and shares durable ecosystem state
 through the configured database path. A load balancer can route clients across
 instances while sessions, attachments, routes, and dispatch receipts remain
 available to every instance. It is also not a single-invocation runtime: normal
-service startup leaves the persistent supervisor running until shutdown, so the
-process keeps its heartbeat fresh, cleans stale peer records, and closes
-interrupted companion tasks after restart.
+service startup is coordinated by the startup manager and leaves the persistent
+supervisor running until shutdown, so the process keeps its heartbeat fresh,
+cleans stale peer records, and closes interrupted companion tasks after
+restart. Operators can trigger graceful restart, recovery, and instance
+reconciliation through published versioned endpoints.
 
 The original PDF also contains a three-product target. If a third real BHIV
 product is supplied later, the runtime path is already production-ready:

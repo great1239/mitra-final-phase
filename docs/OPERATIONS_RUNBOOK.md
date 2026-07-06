@@ -25,6 +25,9 @@ curl http://127.0.0.1:8090/health
 ```powershell
 curl http://127.0.0.1:8090/metrics
 curl http://127.0.0.1:8090/api/v1/runtime/status
+curl http://127.0.0.1:8090/api/v1/runtime/startup
+curl http://127.0.0.1:8090/api/v1/runtime/config
+curl http://127.0.0.1:8090/api/v1/runtime/secrets
 curl http://127.0.0.1:8889/metrics
 ```
 
@@ -47,6 +50,10 @@ Primary signals:
   container with a recent `last_heartbeat_at`.
 - `/api/v1/runtime/status` should report `runtime_mode: persistent` and
   `persistent_runtime.supervisor_running: true` for normal service processes.
+- `/api/v1/runtime/startup` should show completed production configuration,
+  runtime process startup, manifest loading, and supervisor check phases.
+- `/api/v1/runtime/config` and `/api/v1/runtime/secrets` must return redacted
+  metadata only; secret values must never appear in API responses.
 - `mitra_dispatch_failed_total` should stay within the SLO budget.
 - `mitra_dispatch_latency_ms_avg` and per-product latency must remain below
   the target in `docs/SLO_AND_CAPACITY.md`.
@@ -67,15 +74,41 @@ Primary signals:
 
 ## Restart Validation
 
-Restart the runtime service, then verify:
+Use the operator endpoint or restart the runtime service, then verify:
+
+```powershell
+curl -X POST http://127.0.0.1:8090/api/v1/runtime/restart `
+  -H "Content-Type: application/json" `
+  -d "{\"schema_version\":\"1.0.0\",\"contract_version\":\"1.0.0\",\"runtime_version\":\"1.0.0\",\"compatibility_version\":\"mitra-companion-1\"}"
+```
 
 - `/ready` returns HTTP 200.
+- `/api/v1/runtime/startup` reports a fresh `runtime_process_started` phase.
 - `/api/v1/attachments` still contains the attached product manifests.
 - product-scoped sessions and deterministic routes are preserved.
 - a dispatch receipt is persisted for the next successful dispatch.
 
 The automated coverage for this is
-`test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes`.
+`test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes` and
+`test_runtime_operations_api_exposes_production_mode`.
+
+## Recovery And Instance Reconciliation
+
+Run a recovery pass after a process crash, stale peer heartbeat, or suspected
+interrupted task:
+
+```powershell
+curl -X POST http://127.0.0.1:8090/api/v1/runtime/recovery `
+  -H "Content-Type: application/json" `
+  -d "{\"schema_version\":\"1.0.0\",\"contract_version\":\"1.0.0\",\"runtime_version\":\"1.0.0\",\"compatibility_version\":\"mitra-companion-1\"}"
+curl -X POST http://127.0.0.1:8090/api/v1/runtime/instances/reconcile `
+  -H "Content-Type: application/json" `
+  -d "{\"schema_version\":\"1.0.0\",\"contract_version\":\"1.0.0\",\"runtime_version\":\"1.0.0\",\"compatibility_version\":\"mitra-companion-1\"}"
+```
+
+Validate that stale peers are stopped, interrupted tasks have terminal records,
+and `/api/v1/runtime/instances?include_stopped=true` shows the expected
+instance history.
 
 ## Multi-Instance Validation
 

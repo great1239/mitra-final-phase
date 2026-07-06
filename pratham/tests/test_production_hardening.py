@@ -692,7 +692,35 @@ def test_production_tactics_are_deployed_as_first_class_artifacts():
         / "mitra_companion"
         / "config.py"
     ).read_text(encoding="utf-8")
+    assert "production_summary" in (
+        root
+        / "pratham"
+        / "companion-runtime"
+        / "mitra_companion"
+        / "config.py"
+    ).read_text(encoding="utf-8")
+    assert "RuntimeStartupManager" in (
+        root
+        / "pratham"
+        / "companion-runtime"
+        / "mitra_companion"
+        / "startup.py"
+    ).read_text(encoding="utf-8")
+    assert "configure_production_logging" in (
+        root
+        / "pratham"
+        / "companion-runtime"
+        / "mitra_companion"
+        / "production_logging.py"
+    ).read_text(encoding="utf-8")
     assert "/api/v1/runtime/instances" in (
+        root
+        / "pratham"
+        / "companion-runtime"
+        / "mitra_companion"
+        / "api.py"
+    ).read_text(encoding="utf-8")
+    assert "/api/v1/runtime/restart" in (
         root
         / "pratham"
         / "companion-runtime"

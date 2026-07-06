@@ -13,6 +13,7 @@ moving downstream authority or product-specific business logic into Mitra.
 | Runtime proof-bundle producer | `GET /api/v1/dispatches/{dispatch_id}/proof` returns canonical request/response hashes, phase journal, lineage nodes, reconstruction hints, and handover steps. | Mitra emits dispatch proof; external systems decide any downstream validation. |
 | Operational gateway negative-path discipline | Failed product transport records failed dispatch phases and a durable failed dispatch receipt. | Failures stay contained to the affected attachment and dispatch. |
 | Source scope and prior-submission feature catalog | `contracts/source-scope-catalog.json`, `SourceScopeRegistry`, and `GET /api/v1/runtime/source-scope` expose which useful systems were imported, adapted, or left external. | Mitra can understand previous submissions without absorbing downstream authority or product logic. |
+| Persistent service operations | `RuntimeStartupManager`, redacted production config/secrets summaries, process-level JSONL logs, restart/recovery endpoints, and runtime instance reconciliation convert prior validation loops into service operations. | Operations remain Mitra-owned and product-neutral. |
 
 ## Not Copied Into Mitra
 
@@ -35,5 +36,6 @@ Runtime coverage now includes:
 - dispatch proof bundle hashes and lineage nodes;
 - manifest dependency validation through the capability catalog;
 - public API/event/permission/UI summaries through manifest metadata;
+- startup manager, production configuration, secrets, and process-log coverage;
 - API exposure for catalog, phases, and proof bundle;
 - existing boundary scans proving no product-specific branches were added.

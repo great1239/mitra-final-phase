@@ -16,9 +16,12 @@ intent routing, product capability attachment, bounded companion interaction,
 lifecycle state, versioned integration APIs, structured telemetry, runtime
 metrics, attachment health monitoring, recovery validation, and runtime
 analysis for assignment-to-product matching. It runs as a persistent service
-process by default: each live runtime instance keeps heartbeating, marks stale
-peer instances, recovers interrupted companion tasks after restart, and runs
-periodic attachment maintenance instead of behaving as a one-shot invocation.
+process by default: a startup manager loads production configuration, starts
+the runtime, loads manifest sources, verifies the persistent supervisor, and
+keeps the instance alive for repeated work. Each live runtime instance keeps
+heartbeating, marks stale peer instances, recovers interrupted companion tasks
+after restart, and runs periodic attachment maintenance instead of behaving as
+a one-shot invocation.
 It also imports useful generic systems from earlier submissions: manifest-backed
 capability catalogs, public contract summaries, semantic-version dependency
 reports, source-scope catalogs, seven-phase dispatch checkpoints, and portable
@@ -71,6 +74,11 @@ Open:
 - health: `http://localhost:8090/health`
 - metrics: `http://localhost:8090/metrics`
 - runtime analysis: `POST http://localhost:8090/api/v1/runtime/analysis`
+- runtime startup: `GET http://localhost:8090/api/v1/runtime/startup`
+- graceful restart: `POST http://localhost:8090/api/v1/runtime/restart`
+- recovery pass: `POST http://localhost:8090/api/v1/runtime/recovery`
+- redacted config: `GET http://localhost:8090/api/v1/runtime/config`
+- redacted secrets: `GET http://localhost:8090/api/v1/runtime/secrets`
 - source scope: `GET http://localhost:8090/api/v1/runtime/source-scope`
 - capability catalog: `GET http://localhost:8090/api/v1/runtime/capability-catalog`
 - runtime instances: `GET http://localhost:8090/api/v1/runtime/instances`
@@ -109,19 +117,24 @@ mitra-companion serve --port 8090
 9. The previous-submission source scope is published through
    `GET /api/v1/runtime/source-scope` and loaded from
    `contracts/source-scope-catalog.json`.
-10. The persistent supervisor refreshes the current runtime heartbeat, removes
+10. The startup manager records production configuration, process startup,
+   manifest-source loading, and persistent-supervisor checks.
+11. The persistent supervisor refreshes the current runtime heartbeat, removes
    stale peer instances from the active set, recovers interrupted tasks, and
    triggers periodic attachment health maintenance.
-11. The capability catalog validates manifest-declared product/capability
+12. Production configuration can load from an env file; AI and observability
+   endpoints can be supplied by mounted secret files and are only exposed as
+   redacted metadata through runtime APIs.
+13. The capability catalog validates manifest-declared product/capability
    dependencies and summarizes contract registrations without product branches.
-12. A dispatch loads only the context scopes declared by that capability.
-13. The transport registry invokes the adapter named by the published manifest.
-14. Dispatch phases are checkpointed as a seven-step product-neutral journal:
+14. A dispatch loads only the context scopes declared by that capability.
+15. The transport registry invokes the adapter named by the published manifest.
+16. Dispatch phases are checkpointed as a seven-step product-neutral journal:
    request accepted, route selected, payload validated, context loaded,
    transport dispatched, receipt persisted, and terminal completion/failure.
-15. Each durable dispatch receipt can produce a portable proof bundle at
+17. Each durable dispatch receipt can produce a portable proof bundle at
    `GET /api/v1/dispatches/{dispatch_id}/proof`.
-16. Cross-product work requires an explicit transfer. Product context is never
+18. Cross-product work requires an explicit transfer. Product context is never
    copied into the target product; only caller-supplied portable context enters
    the handoff partition.
 
@@ -144,9 +157,12 @@ contracted streaming surfaces. The runtime analysis suite covers assignment
 profiling, product profiling, communication hints, fit-matrix scoring,
 automatic AI payload repair, and the standalone analysis API. Persistent
 runtime coverage verifies the supervisor heartbeat, stale peer cleanup, and
-interrupted task recovery after restart. Reuse coverage verifies manifest
-dependency validation, source-scope catalog exposure, dispatch checkpoint
-phases, and proof-bundle hashing.
+interrupted task recovery after restart. Production-mode coverage verifies
+env-file configuration loading, secret-file redaction, startup-manager reports,
+operator restart/recovery endpoints, runtime instance reconciliation, and JSONL
+process logging. Reuse coverage verifies manifest dependency validation,
+source-scope catalog exposure, dispatch checkpoint phases, and proof-bundle
+hashing.
 
 ## Key documents
 

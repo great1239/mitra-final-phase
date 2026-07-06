@@ -206,15 +206,28 @@
         "ecosystem-runtime-hardening"
       ],
       "implemented_in": [
+        "mitra_companion.startup.RuntimeStartupManager",
         "mitra_companion.runtime.PersistentRuntimeSupervisor",
         "mitra_companion.store.mark_stale_runtime_instances",
-        "mitra_companion.store.recover_interrupted_companion_tasks"
+        "mitra_companion.store.recover_interrupted_companion_tasks",
+        "mitra_companion.config.RuntimeSettings.production_summary",
+        "mitra_companion.config.RuntimeSettings.secrets_summary",
+        "mitra_companion.production_logging.configure_production_logging",
+        "/api/v1/runtime/startup",
+        "/api/v1/runtime/restart",
+        "/api/v1/runtime/recovery",
+        "/api/v1/runtime/config",
+        "/api/v1/runtime/secrets",
+        "/api/v1/runtime/instances/reconcile"
       ],
-      "runtime_surface": "runtime status, instance heartbeat, persistent tick",
+      "runtime_surface": "runtime status, startup manager, instance heartbeat, persistent tick, restart, recovery, redacted production config and secrets",
       "used_for": [
         "keep Mitra alive as a service process",
         "recover interrupted tasks",
-        "clean stale runtime peers"
+        "clean stale runtime peers",
+        "load production configuration",
+        "operate graceful restart and recovery",
+        "redact production secrets"
       ],
       "boundary": "internal-runtime"
     },

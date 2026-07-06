@@ -14,6 +14,7 @@ local product fixtures, but the same signals scale to a larger deployment.
 | Dispatch latency | p95 under 1500 ms in the k6 profile | k6 threshold `http_req_duration: p(95)<1500` |
 | Attachment recovery | degraded attachment returns to `ATTACHED` after healthy published health check | `test_attachment_health_monitoring_and_recovery_validation` |
 | Restart recovery | attachments, sessions, and routes survive runtime restart | `test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes` |
+| Operator restart/recovery | versioned restart, recovery, and instance reconciliation endpoints stay live | `test_runtime_operations_api_exposes_production_mode` |
 | Multi-instance continuity | one runtime instance can consume attachments and sessions created by another instance | `test_multiple_runtime_instances_share_state_routes_and_dispatch` |
 | Persistent heartbeat freshness | a live service process refreshes its own heartbeat without external traffic | `test_persistent_runtime_supervisor_refreshes_heartbeat` |
 | Stale peer convergence | inactive peer instances are removed from the active set after the configured stale window | `test_persistent_runtime_marks_stale_peer_instances` |
@@ -24,6 +25,10 @@ local product fixtures, but the same signals scale to a larger deployment.
 The production Compose profile starts with:
 
 - `MITRA_COMPANION_UVICORN_WORKERS=2`
+- `MITRA_COMPANION_CONFIG_PROFILE=production`
+- optional `MITRA_COMPANION_ENV_FILE=/data/production.env`
+- `MITRA_COMPANION_LOG_PATH=/data/production-runtime.jsonl`
+- optional `MITRA_COMPANION_SECRETS_DIR=/run/secrets`
 - generated or orchestrator-assigned unique `MITRA_COMPANION_INSTANCE_ID`
 - `MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true`
 - `MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS=5`
@@ -47,6 +52,9 @@ Escalate as an operational incident when:
 - `/ready` fails for more than one probe interval after startup.
 - a persistent runtime has no fresh `last_heartbeat_at` after two heartbeat
   intervals.
+- `/api/v1/runtime/startup` has no completed `runtime_process_started` phase.
+- `/api/v1/runtime/secrets` exposes a secret value instead of redacted
+  metadata.
 - `dispatch.failed` events rise above the k6 failure budget.
 - a product remains `DEGRADED` after its published health endpoint is healthy.
 - telemetry stops writing JSONL records or `/metrics` stops exposing counters.

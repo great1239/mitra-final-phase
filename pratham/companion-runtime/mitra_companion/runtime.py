@@ -41,8 +41,10 @@ from .interaction import (
 )
 from .lifecycle import RuntimeLifecycle
 from .observability import runtime_span
+from .production_logging import configure_production_logging, production_log
 from .proofs import DispatchProofBuilder
 from .source_scope import SourceScopeRegistry
+from .startup import RuntimeStartupManager
 from .store import RuntimeStore
 from .telemetry import RuntimeTelemetry
 from .transport import CapabilityTransport
@@ -93,6 +95,12 @@ class PersistentRuntimeSupervisor:
                     severity="error",
                     error=f"{type(exc).__name__}: {exc}",
                 )
+                production_log(
+                    self.runtime.production_logger,
+                    "runtime.supervisor_failed",
+                    runtime_instance_id=self.runtime.instance_id,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
 
     def should_run_maintenance(self) -> bool:
         now = time.monotonic()
@@ -114,6 +122,7 @@ class CompanionRuntime:
     ):
         self.settings = settings
         self.settings.prepare()
+        self.production_logger = configure_production_logging(settings)
         self.store = RuntimeStore(settings.database_path)
         self.lifecycle = RuntimeLifecycle(self.store)
         self.sessions = SessionRuntime(self.store)
@@ -146,6 +155,7 @@ class CompanionRuntime:
             settings.service_root / "contracts" / "source-scope-catalog.json"
         )
         self.supervisor = PersistentRuntimeSupervisor(self)
+        self.startup_manager = RuntimeStartupManager(self)
         self.accepting = False
 
     @property
@@ -195,6 +205,14 @@ class CompanionRuntime:
             state=self.lifecycle.state.value,
             accepting=self.accepting,
         )
+        production_log(
+            self.production_logger,
+            "runtime.started",
+            runtime_instance_id=self.instance_id,
+            state=self.lifecycle.state.value,
+            accepting=self.accepting,
+            process_id=os.getpid(),
+        )
         return self.status()
 
     def stop(self) -> dict[str, Any]:
@@ -215,6 +233,13 @@ class CompanionRuntime:
             )
         stopped = self.store.stop_runtime_instance(self.instance_id)
         self.telemetry.record_event(
+            "runtime.stopped",
+            runtime_instance_id=self.instance_id,
+            state=self.lifecycle.state.value,
+            accepting=self.accepting,
+        )
+        production_log(
+            self.production_logger,
             "runtime.stopped",
             runtime_instance_id=self.instance_id,
             state=self.lifecycle.state.value,
@@ -258,6 +283,10 @@ class CompanionRuntime:
                     self.settings.persistent_task_timeout_seconds
                 ),
             },
+            "production": {
+                "configuration": self.settings.production_summary(),
+                "startup": self.startup_manager.last_report(),
+            },
             "source_scope": self.source_scope_registry.summary(),
             "attached_products": [
                 item["product_id"] for item in self.attachments.list()
@@ -280,7 +309,31 @@ class CompanionRuntime:
             include_stopped=include_stopped
         )
 
-    def persistent_tick(self) -> dict[str, Any]:
+    def runtime_instance(self, instance_id: str) -> dict[str, Any]:
+        instance = self.store.get_runtime_instance(instance_id)
+        if instance is None:
+            raise ResourceNotFoundError(
+                f"Runtime instance not found: {instance_id}"
+            )
+        return instance
+
+    def startup_status(self) -> dict[str, Any]:
+        return self.startup_manager.last_report()
+
+    def graceful_restart(
+        self,
+        manifest_sources: Iterable[Any] = (),
+    ) -> dict[str, Any]:
+        return self.startup_manager.restart(manifest_sources)
+
+    def recover_runtime(self) -> dict[str, Any]:
+        return self.startup_manager.recover()
+
+    def persistent_tick(
+        self,
+        *,
+        run_maintenance: bool = True,
+    ) -> dict[str, Any]:
         if not self.accepting:
             return {"skipped": True, "reason": "runtime-not-accepting"}
         heartbeat = self._heartbeat()
@@ -294,16 +347,36 @@ class CompanionRuntime:
             recover_current_instance=False,
         )
         maintenance: dict[str, Any] | None = None
-        if self.supervisor.should_run_maintenance():
-            maintenance = asyncio.run(self.check_attachment_health())
+        if run_maintenance and self.supervisor.should_run_maintenance():
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                maintenance = asyncio.run(self.check_attachment_health())
+            else:
+                maintenance = {
+                    "skipped": True,
+                    "reason": "event-loop-active",
+                }
         if stale_instances:
             self.telemetry.record_event(
                 "runtime.stale_instances_marked",
                 stale_count=len(stale_instances),
             )
+            production_log(
+                self.production_logger,
+                "runtime.stale_instances_marked",
+                runtime_instance_id=self.instance_id,
+                stale_count=len(stale_instances),
+            )
         if recovered_tasks:
             self.telemetry.record_event(
                 "runtime.tasks_recovered",
+                recovered_count=len(recovered_tasks),
+            )
+            production_log(
+                self.production_logger,
+                "runtime.tasks_recovered",
+                runtime_instance_id=self.instance_id,
                 recovered_count=len(recovered_tasks),
             )
         return {

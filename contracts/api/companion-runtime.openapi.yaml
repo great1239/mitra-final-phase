@@ -40,6 +40,89 @@ paths:
       responses:
         "200":
           description: Runtime state and counts
+  /api/v1/runtime/startup:
+    get:
+      operationId: getRuntimeStartup
+      responses:
+        "200":
+          description: Last production startup-manager report and completed phases
+  /api/v1/runtime/restart:
+    post:
+      operationId: restartRuntime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Graceful runtime restart report
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/runtime/recovery:
+    post:
+      operationId: recoverRuntime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Runtime recovery pass for heartbeat, stale peers, and interrupted tasks
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/runtime/config:
+    get:
+      operationId: getRuntimeProductionConfig
+      responses:
+        "200":
+          description: Redacted production configuration summary
+  /api/v1/runtime/secrets:
+    get:
+      operationId: getRuntimeSecretsSummary
+      responses:
+        "200":
+          description: Redacted production secrets summary
+  /api/v1/runtime/instances:
+    get:
+      operationId: listRuntimeInstances
+      parameters:
+        - in: query
+          name: include_stopped
+          schema: {type: boolean, default: false}
+      responses:
+        "200":
+          description: Runtime instance heartbeat records
+  /api/v1/runtime/instances/reconcile:
+    post:
+      operationId: reconcileRuntimeInstances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Runtime recovery pass plus instance reconciliation
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/runtime/instances/{instance_id}:
+    get:
+      operationId: getRuntimeInstance
+      parameters:
+        - in: path
+          name: instance_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: One runtime instance heartbeat record
+        "404":
+          description: Runtime instance not found
   /api/v1/runtime/lifecycle:
     get:
       operationId: getRuntimeLifecycle

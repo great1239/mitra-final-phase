@@ -55,9 +55,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if start_runtime:
-            companion.start()
-            for source in sources:
-                companion.attach_many(source.load())
+            companion.startup_manager.start(sources)
         try:
             yield
         finally:
@@ -90,6 +88,10 @@ def create_app(
         attachments = companion.attachments.list()
         sessions = companion.store.list_sessions(limit=8)
         dispatches = companion.store.list_dispatches(limit=8)
+        instances = companion.runtime_instances(include_stopped=True)
+        startup = companion.startup_status()
+        production_config = runtime_settings.production_summary()
+        secrets = runtime_settings.secrets_summary()
         attachment_rows = "".join(
             "<tr>"
             f"<td><strong>{escape(item['manifest']['display_name'])}</strong>"
@@ -120,6 +122,23 @@ def create_app(
             "</tr>"
             for item in dispatches
         ) or "<tr><td colspan='4'>No dispatches yet</td></tr>"
+        instance_rows = "".join(
+            "<tr>"
+            f"<td><code>{escape(item['instance_id'])}</code></td>"
+            f"<td><span class='badge {item['state'].lower()}'>"
+            f"{escape(item['state'])}</span></td>"
+            f"<td>{escape(item['environment'])}</td>"
+            f"<td>{escape(item['last_heartbeat_at'])}</td>"
+            "</tr>"
+            for item in instances
+        ) or "<tr><td colspan='4'>No runtime instances</td></tr>"
+        startup_rows = "".join(
+            "<tr>"
+            f"<td>{escape(item['name'])}</td>"
+            f"<td>{escape(item['completed_at'])}</td>"
+            "</tr>"
+            for item in startup.get("phases", [])
+        ) or "<tr><td colspan='2'>Startup has not completed</td></tr>"
         counts = status["counts"]
         return f"""<!doctype html>
 <html lang="en">
@@ -196,6 +215,14 @@ def create_app(
       <div class="value">{counts['dispatches']}</div></div>
     <div class="card"><div class="label">Dispatch failures</div>
       <div class="value">{counts['failed_dispatches']}</div></div>
+    <div class="card"><div class="label">Runtime instances</div>
+      <div class="value">{status['active_runtime_instance_count']}</div></div>
+    <div class="card"><div class="label">Supervisor</div>
+      <div class="value">{'ON' if status['persistent_runtime']['supervisor_running'] else 'OFF'}</div></div>
+    <div class="card"><div class="label">Log level</div>
+      <div class="value">{escape(str(production_config['production_log_level']))}</div></div>
+    <div class="card"><div class="label">Secrets</div>
+      <div class="value">{len(secrets['secret_keys_configured'])}</div></div>
   </div>
   <div class="card section"><h2>Runtime execution flow</h2>
     <div class="flow"><strong>Client</strong> -> Session Runtime -> Context Runtime
@@ -212,6 +239,17 @@ def create_app(
   <div class="card section"><h2>Recent dispatches</h2>
     <table><thead><tr><th>Dispatch</th><th>Product</th><th>Intent</th>
       <th>Status</th></tr></thead><tbody>{dispatch_rows}</tbody></table></div>
+  <div class="card section"><h2>Runtime instances</h2>
+    <table><thead><tr><th>Instance</th><th>State</th><th>Environment</th>
+      <th>Heartbeat</th></tr></thead><tbody>{instance_rows}</tbody></table></div>
+  <div class="card section"><h2>Startup manager</h2>
+    <table><thead><tr><th>Phase</th><th>Completed</th></tr></thead>
+      <tbody>{startup_rows}</tbody></table></div>
+  <div class="card section"><h2>Production configuration</h2>
+    <div class="flow">Profile <strong>{escape(str(production_config['profile']))}</strong>
+      | Config sources {escape(', '.join(production_config['config_sources']))}
+      | Log {escape(str(production_config['production_log_path']))}
+      <br><small>{escape(str(secrets['redaction']))}</small></div></div>
   <div class="card section"><h2>Integration surfaces</h2>
     <div class="flow"><a href="/docs">OpenAPI explorer</a> &nbsp;|&nbsp;
       <a href="/api/v1/runtime/status">Runtime status</a> &nbsp;|&nbsp;
@@ -246,6 +284,32 @@ def create_app(
             opentelemetry=app.state.opentelemetry,
         )
 
+    @app.get("/api/v1/runtime/startup")
+    async def runtime_startup() -> dict:
+        return versioned_response(startup=companion.startup_status())
+
+    @app.post("/api/v1/runtime/restart")
+    async def runtime_restart(request: VersionedContract) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            restart=companion.graceful_restart(sources)
+        )
+
+    @app.post("/api/v1/runtime/recovery")
+    async def runtime_recovery(request: VersionedContract) -> dict:
+        validate_contract(request)
+        return versioned_response(recovery=companion.recover_runtime())
+
+    @app.get("/api/v1/runtime/config")
+    async def runtime_config() -> dict:
+        return versioned_response(
+            configuration=runtime_settings.production_summary()
+        )
+
+    @app.get("/api/v1/runtime/secrets")
+    async def runtime_secrets() -> dict:
+        return versioned_response(secrets=runtime_settings.secrets_summary())
+
     @app.get("/api/v1/runtime/instances")
     async def runtime_instances(
         include_stopped: bool = False,
@@ -254,6 +318,17 @@ def create_app(
             instances=companion.runtime_instances(
                 include_stopped=include_stopped,
             )
+        )
+
+    @app.post("/api/v1/runtime/instances/reconcile")
+    async def runtime_instances_reconcile(request: VersionedContract) -> dict:
+        validate_contract(request)
+        return versioned_response(recovery=companion.recover_runtime())
+
+    @app.get("/api/v1/runtime/instances/{instance_id}")
+    async def runtime_instance(instance_id: str) -> dict:
+        return versioned_response(
+            instance=companion.runtime_instance(instance_id)
         )
 
     @app.get("/api/v1/runtime/metrics")
