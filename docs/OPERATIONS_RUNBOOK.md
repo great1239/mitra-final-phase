@@ -45,6 +45,8 @@ Primary signals:
 - `/ready` must return HTTP 200.
 - `/api/v1/runtime/instances` should show every active runtime process or
   container with a recent `last_heartbeat_at`.
+- `/api/v1/runtime/status` should report `runtime_mode: persistent` and
+  `persistent_runtime.supervisor_running: true` for normal service processes.
 - `mitra_dispatch_failed_total` should stay within the SLO budget.
 - `mitra_dispatch_latency_ms_avg` and per-product latency must remain below
   the target in `docs/SLO_AND_CAPACITY.md`.
@@ -84,13 +86,21 @@ unique explicit value from the orchestrator.
 
 Validate:
 
+- each process reports persistent mode and a running supervisor.
 - `/api/v1/runtime/instances` lists both active runtime instances.
 - a session created through one instance can be read and dispatched through the
   other instance.
-- stopping one instance does not stop dispatch on the survivor.
+- if one process stops cleanly, the survivor continues dispatching.
+- if one process exits without a clean shutdown, the survivor marks the peer
+  stale after `MITRA_COMPANION_PERSISTENT_STALE_AFTER_SECONDS`.
+- after restart, any companion task left in `RUNNING` by the previous process is
+  failed with an interruption result instead of remaining indefinitely active.
 
 The automated coverage for this is
-`test_multiple_runtime_instances_share_state_routes_and_dispatch`.
+`test_multiple_runtime_instances_share_state_routes_and_dispatch`,
+`test_persistent_runtime_supervisor_refreshes_heartbeat`,
+`test_persistent_runtime_marks_stale_peer_instances`, and
+`test_persistent_runtime_recovers_interrupted_tasks_on_restart`.
 
 ## Rollback
 

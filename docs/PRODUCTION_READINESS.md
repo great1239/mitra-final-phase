@@ -11,6 +11,7 @@ product-specific code paths.
 | --- | --- | --- |
 | Container runs without root privileges | Met | `Dockerfile` creates and runs as `mitra`; Compose also drops Linux capabilities and enables `no-new-privileges`. |
 | Multiple runtime instances | Met | Runtime instances register unique IDs, heartbeat into shared state, expose `/api/v1/runtime/instances`, and share attachments, sessions, routes, and dispatches through persisted storage. |
+| Persistent runtime process | Met | Runtime startup enables a background supervisor by default for heartbeat refresh, stale peer cleanup, interrupted task recovery, and periodic attachment maintenance. |
 | Health and readiness probes | Met | Image and Compose healthchecks call `/ready`; API exposes `/health` and `/api/v1/runtime/status`. |
 | Restart and graceful shutdown posture | Met | Compose uses `restart: unless-stopped`, `init: true`, and `stop_grace_period: 30s`; runtime records lifecycle transitions. |
 | Writable surface is constrained | Met | Compose sets the service read-only with explicit `/data` volume and `/tmp` tmpfs. |
@@ -43,7 +44,10 @@ The runtime is not restricted to a single process. Each runtime process or
 container has a unique runtime instance ID and shares durable ecosystem state
 through the configured database path. A load balancer can route clients across
 instances while sessions, attachments, routes, and dispatch receipts remain
-available to every instance.
+available to every instance. It is also not a single-invocation runtime: normal
+service startup leaves the persistent supervisor running until shutdown, so the
+process keeps its heartbeat fresh, cleans stale peer records, and closes
+interrupted companion tasks after restart.
 
 The original PDF also contains a three-product target. If a third real BHIV
 product is supplied later, the runtime path is already production-ready:

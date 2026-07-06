@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import os
+import threading
 from collections.abc import Iterable
 from typing import Any
 from uuid import uuid4
@@ -37,6 +39,60 @@ from .store import RuntimeStore
 from .telemetry import RuntimeTelemetry
 from .transport import CapabilityTransport
 from .utils import utc_now
+
+
+class PersistentRuntimeSupervisor:
+    """Runs runtime maintenance while the service process is alive."""
+
+    def __init__(self, runtime: "CompanionRuntime"):
+        self.runtime = runtime
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._last_maintenance_at = 0.0
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def start(self) -> None:
+        if self.running:
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"mitra-runtime-supervisor-{self.runtime.instance_id}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2)
+        self._thread = None
+
+    def _run(self) -> None:
+        interval = max(
+            0.1,
+            self.runtime.settings.persistent_heartbeat_interval_seconds,
+        )
+        while not self._stop.wait(interval):
+            try:
+                self.runtime.persistent_tick()
+            except Exception as exc:
+                self.runtime.telemetry.record_event(
+                    "runtime.supervisor_failed",
+                    severity="error",
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+
+    def should_run_maintenance(self) -> bool:
+        now = time.monotonic()
+        interval = self.runtime.settings.persistent_maintenance_interval_seconds
+        if now - self._last_maintenance_at < interval:
+            return False
+        self._last_maintenance_at = now
+        return True
 
 
 class CompanionRuntime:
@@ -75,6 +131,7 @@ class CompanionRuntime:
             ai_analysis_url=settings.ai_analysis_url,
             ai_timeout_seconds=settings.ai_analysis_timeout_seconds,
         )
+        self.supervisor = PersistentRuntimeSupervisor(self)
         self.accepting = False
 
     @property
@@ -106,6 +163,18 @@ class CompanionRuntime:
             "Runtime storage and interfaces are ready",
         )
         self._heartbeat()
+        recovered_tasks = self.store.recover_interrupted_companion_tasks(
+            current_instance_id=self.instance_id,
+            stale_after_seconds=self.settings.persistent_task_timeout_seconds,
+            recover_current_instance=True,
+        )
+        if recovered_tasks:
+            self.telemetry.record_event(
+                "runtime.tasks_recovered",
+                recovered_count=len(recovered_tasks),
+            )
+        if self.settings.persistent_runtime_enabled:
+            self.supervisor.start()
         self.telemetry.record_event(
             "runtime.started",
             runtime_instance_id=self.instance_id,
@@ -115,6 +184,7 @@ class CompanionRuntime:
         return self.status()
 
     def stop(self) -> dict[str, Any]:
+        self.supervisor.stop()
         if self.lifecycle.state != RuntimeState.STOPPED:
             if self.lifecycle.state not in {
                 RuntimeState.DRAINING,
@@ -153,6 +223,27 @@ class CompanionRuntime:
             "current_instance": current_instance,
             "active_runtime_instance_count": len(instances),
             "active_runtime_instances": instances,
+            "runtime_mode": (
+                "persistent"
+                if self.settings.persistent_runtime_enabled
+                else "manual"
+            ),
+            "persistent_runtime": {
+                "enabled": self.settings.persistent_runtime_enabled,
+                "supervisor_running": self.supervisor.running,
+                "heartbeat_interval_seconds": (
+                    self.settings.persistent_heartbeat_interval_seconds
+                ),
+                "stale_after_seconds": (
+                    self.settings.persistent_stale_after_seconds
+                ),
+                "maintenance_interval_seconds": (
+                    self.settings.persistent_maintenance_interval_seconds
+                ),
+                "task_timeout_seconds": (
+                    self.settings.persistent_task_timeout_seconds
+                ),
+            },
             "attached_products": [
                 item["product_id"] for item in self.attachments.list()
             ],
@@ -166,9 +257,46 @@ class CompanionRuntime:
     ) -> list[dict[str, Any]]:
         if self.accepting:
             self._heartbeat()
+            self.store.mark_stale_runtime_instances(
+                current_instance_id=self.instance_id,
+                stale_after_seconds=self.settings.persistent_stale_after_seconds,
+            )
         return self.store.list_runtime_instances(
             include_stopped=include_stopped
         )
+
+    def persistent_tick(self) -> dict[str, Any]:
+        if not self.accepting:
+            return {"skipped": True, "reason": "runtime-not-accepting"}
+        heartbeat = self._heartbeat()
+        stale_instances = self.store.mark_stale_runtime_instances(
+            current_instance_id=self.instance_id,
+            stale_after_seconds=self.settings.persistent_stale_after_seconds,
+        )
+        recovered_tasks = self.store.recover_interrupted_companion_tasks(
+            current_instance_id=self.instance_id,
+            stale_after_seconds=self.settings.persistent_task_timeout_seconds,
+            recover_current_instance=False,
+        )
+        maintenance: dict[str, Any] | None = None
+        if self.supervisor.should_run_maintenance():
+            maintenance = asyncio.run(self.check_attachment_health())
+        if stale_instances:
+            self.telemetry.record_event(
+                "runtime.stale_instances_marked",
+                stale_count=len(stale_instances),
+            )
+        if recovered_tasks:
+            self.telemetry.record_event(
+                "runtime.tasks_recovered",
+                recovered_count=len(recovered_tasks),
+            )
+        return {
+            "heartbeat": heartbeat,
+            "stale_instances": stale_instances,
+            "recovered_tasks": recovered_tasks,
+            "maintenance": maintenance,
+        }
 
     def ecosystem_chain(self) -> dict[str, Any]:
         model = self._load_chain_contract()
@@ -527,6 +655,7 @@ class CompanionRuntime:
                             "message": "Capability execution started",
                         },
                         metadata={
+                            "runtime_instance_id": self.instance_id,
                             "product_id": candidate["product_id"],
                             "capability_id": candidate["capability_id"],
                             "intent_id": candidate["intent_id"],

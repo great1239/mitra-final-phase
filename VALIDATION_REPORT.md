@@ -6,7 +6,7 @@ Validated on July 6, 2026.
 
 | Check | Result |
 |---|---|
-| Unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, multi-instance runtime, runtime analysis, and Phase 1-7 conformance tests | `78 passed` |
+| Unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, persistent multi-instance runtime, runtime analysis, and Phase 1-7 conformance tests | `81 passed` |
 | Example manifests against JSON Schema 2020-12 | passed |
 | Two-product runtime simulation | passed |
 | Cross-product context isolation | passed |
@@ -29,6 +29,9 @@ Validated on July 6, 2026.
 | Deterministic intent registration/discovery | passed |
 | Runtime analysis assignment profile, product profile, protocol hints, and fit matrix | passed |
 | Automatic AI payload fallback after deterministic schema inference gap | passed |
+| Persistent runtime supervisor heartbeat | passed |
+| Stale runtime peer cleanup | passed |
+| Interrupted companion task recovery after restart | passed |
 | Exact capability lookup | passed |
 | Ambiguous intent fail-closed routing | passed |
 | Unexpected adapter exception normalization | passed |

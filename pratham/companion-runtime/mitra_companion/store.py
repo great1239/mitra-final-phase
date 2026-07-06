@@ -4,6 +4,7 @@ import json
 import sqlite3
 import threading
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -270,6 +271,43 @@ class RuntimeStore:
         with self.connection() as connection:
             rows = connection.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+    def mark_stale_runtime_instances(
+        self,
+        *,
+        current_instance_id: str,
+        stale_after_seconds: float,
+    ) -> list[dict[str, Any]]:
+        now = utc_now()
+        cutoff = (
+            datetime.now(UTC) - timedelta(seconds=stale_after_seconds)
+        ).isoformat()
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM runtime_instances
+                WHERE instance_id != ?
+                  AND state != ?
+                  AND last_heartbeat_at < ?
+                """,
+                (current_instance_id, RuntimeState.STOPPED.value, cutoff),
+            ).fetchall()
+            stale = [dict(row) for row in rows]
+            for row in stale:
+                connection.execute(
+                    """
+                    UPDATE runtime_instances
+                    SET state = ?, last_heartbeat_at = ?, stopped_at = ?
+                    WHERE instance_id = ?
+                    """,
+                    (
+                        RuntimeState.STOPPED.value,
+                        now,
+                        now,
+                        row["instance_id"],
+                    ),
+                )
+        return stale
 
     @staticmethod
     def _migrate_legacy_workspace_contexts(
@@ -1115,6 +1153,83 @@ class RuntimeStore:
         with self.connection() as connection:
             rows = connection.execute(query, params).fetchall()
         return [self._decode_companion_task(row) or {} for row in rows]
+
+    def recover_interrupted_companion_tasks(
+        self,
+        *,
+        current_instance_id: str,
+        stale_after_seconds: float,
+        recover_current_instance: bool,
+    ) -> list[dict[str, Any]]:
+        now = utc_now()
+        cutoff = (
+            datetime.now(UTC) - timedelta(seconds=stale_after_seconds)
+        ).isoformat()
+        recovered: list[dict[str, Any]] = []
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM companion_tasks
+                WHERE status = ?
+                """,
+                ("RUNNING",),
+            ).fetchall()
+            for row in rows:
+                task = self._decode_companion_task(row) or {}
+                metadata = task.get("metadata") or {}
+                task_instance = metadata.get("runtime_instance_id")
+                stale = str(task.get("updated_at") or "") < cutoff
+                current = task_instance == current_instance_id
+                if not stale and not (recover_current_instance and current):
+                    continue
+                notification = {
+                    "type": "execution_status",
+                    "message": "Capability execution interrupted",
+                }
+                result = {
+                    "error": "Runtime process ended before task completed",
+                    "runtime_instance_id": task_instance,
+                    "recovered_by_runtime_instance_id": current_instance_id,
+                }
+                connection.execute(
+                    """
+                    UPDATE companion_tasks
+                    SET status = ?, status_detail = ?, notification_json = ?,
+                        result_json = ?, updated_at = ?, finished_at = ?
+                    WHERE task_id = ?
+                    """,
+                    (
+                        "FAILED",
+                        "Runtime process ended before task completed",
+                        json.dumps(
+                            notification,
+                            sort_keys=True,
+                            ensure_ascii=False,
+                        ),
+                        json.dumps(
+                            result,
+                            sort_keys=True,
+                            ensure_ascii=False,
+                        ),
+                        now,
+                        now,
+                        task["task_id"],
+                    ),
+                )
+                recovered.append(
+                    {
+                        **task,
+                        "status": "FAILED",
+                        "status_detail": (
+                            "Runtime process ended before task completed"
+                        ),
+                        "notification": notification,
+                        "result": result,
+                        "updated_at": now,
+                        "finished_at": now,
+                    }
+                )
+        return recovered
 
     def counts(self) -> dict[str, int]:
         with self.connection() as connection:

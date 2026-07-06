@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -446,6 +447,132 @@ async def test_multiple_runtime_instances_share_state_routes_and_dispatch(
             first.stop()
         except KeyError:
             pass
+
+
+def test_persistent_runtime_supervisor_refreshes_heartbeat(tmp_path):
+    settings = RuntimeSettings(
+        service_root=ROOT,
+        data_root=tmp_path,
+        database_path=tmp_path / "persistent-runtime.db",
+        telemetry_log_path=tmp_path / "persistent-runtime.jsonl",
+        runtime_instance_id="persistent-runtime",
+        persistent_runtime_enabled=True,
+        persistent_heartbeat_interval_seconds=0.05,
+        persistent_stale_after_seconds=10.0,
+        persistent_maintenance_interval_seconds=1_000_000_000_000.0,
+        persistent_task_timeout_seconds=10.0,
+    )
+    runtime = CompanionRuntime(settings)
+    runtime.start()
+    try:
+        before = runtime.store.get_runtime_instance(
+            "persistent-runtime"
+        )["last_heartbeat_at"]
+        time.sleep(0.18)
+        after = runtime.store.get_runtime_instance(
+            "persistent-runtime"
+        )["last_heartbeat_at"]
+
+        status = runtime.status()
+        assert after > before
+        assert status["runtime_mode"] == "persistent"
+        assert status["persistent_runtime"]["enabled"] is True
+        assert status["persistent_runtime"]["supervisor_running"] is True
+    finally:
+        stopped = runtime.stop()
+        assert stopped["persistent_runtime"]["supervisor_running"] is False
+
+
+def test_persistent_runtime_marks_stale_peer_instances(tmp_path):
+    database_path = tmp_path / "stale-peer.db"
+    shared = {
+        "service_root": ROOT,
+        "data_root": tmp_path,
+        "database_path": database_path,
+        "persistent_runtime_enabled": False,
+        "persistent_stale_after_seconds": 0.01,
+        "persistent_maintenance_interval_seconds": 1_000_000_000_000.0,
+    }
+    owner = CompanionRuntime(
+        RuntimeSettings(
+            **shared,
+            telemetry_log_path=tmp_path / "owner.jsonl",
+            runtime_instance_id="runtime-owner",
+        )
+    )
+    peer = CompanionRuntime(
+        RuntimeSettings(
+            **shared,
+            telemetry_log_path=tmp_path / "peer.jsonl",
+            runtime_instance_id="runtime-peer",
+        )
+    )
+    owner.start()
+    peer.start()
+    try:
+        time.sleep(0.03)
+        tick = owner.persistent_tick()
+
+        assert {
+            item["instance_id"] for item in tick["stale_instances"]
+        } == {"runtime-peer"}
+        assert {
+            item["instance_id"] for item in owner.runtime_instances()
+        } == {"runtime-owner"}
+        peer_record = owner.store.get_runtime_instance("runtime-peer")
+        assert peer_record["state"] == "STOPPED"
+    finally:
+        owner.stop()
+        peer.stop()
+
+
+def test_persistent_runtime_recovers_interrupted_tasks_on_restart(tmp_path):
+    settings = RuntimeSettings(
+        service_root=ROOT,
+        data_root=tmp_path,
+        database_path=tmp_path / "task-recovery.db",
+        telemetry_log_path=tmp_path / "task-recovery.jsonl",
+        runtime_instance_id="task-recovery-runtime",
+        persistent_runtime_enabled=False,
+        persistent_task_timeout_seconds=60.0,
+    )
+    crashed = CompanionRuntime(settings)
+    crashed.start()
+    session = crashed.sessions.create(
+        actor_id="task-recovery-user",
+        client_type="embedded",
+        workspace_id="task-recovery-space",
+        product_id=None,
+    )
+    crashed.store.create_companion_task(
+        task_id="task-interrupted",
+        session_id=session["session_id"],
+        kind="capability_execution",
+        status="RUNNING",
+        status_detail="Dispatching selected published capability",
+        notification={
+            "type": "execution_status",
+            "message": "Capability execution started",
+        },
+        metadata={"runtime_instance_id": "task-recovery-runtime"},
+    )
+
+    restarted = CompanionRuntime(settings)
+    restarted.start()
+    try:
+        recovered = restarted.store.get_companion_task("task-interrupted")
+        assert recovered["status"] == "FAILED"
+        assert recovered["notification"]["message"] == (
+            "Capability execution interrupted"
+        )
+        assert recovered["result"] == {
+            "error": "Runtime process ended before task completed",
+            "runtime_instance_id": "task-recovery-runtime",
+            "recovered_by_runtime_instance_id": "task-recovery-runtime",
+        }
+        assert recovered["finished_at"] is not None
+    finally:
+        restarted.stop()
 
 
 def test_observability_api_exposes_metrics_telemetry_and_attachment_health(

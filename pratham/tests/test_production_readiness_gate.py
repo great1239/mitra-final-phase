@@ -31,18 +31,28 @@ def test_container_deployment_has_production_safety_controls():
 
 
 def test_operations_documents_and_environment_template_are_present():
-    assert "MITRA_COMPANION_UVICORN_WORKERS=2" in _read(
-        "deploy/production.env.example"
-    )
-    assert "MITRA_COMPANION_INSTANCE_ID" in _read(
-        "deploy/production.env.example"
+    production_env = _read("deploy/production.env.example")
+    assert "MITRA_COMPANION_UVICORN_WORKERS=2" in production_env
+    assert "MITRA_COMPANION_INSTANCE_ID" in production_env
+    assert "MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true" in production_env
+    assert "MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS=5" in (
+        production_env
     )
     assert "Failure Response" in _read("docs/OPERATIONS_RUNBOOK.md")
     assert "Multi-Instance Validation" in _read("docs/OPERATIONS_RUNBOOK.md")
+    assert "persistent_runtime.supervisor_running" in _read(
+        "docs/OPERATIONS_RUNBOOK.md"
+    )
     assert "Rollback" in _read("docs/OPERATIONS_RUNBOOK.md")
     assert "Dispatch success" in _read("docs/SLO_AND_CAPACITY.md")
     assert "Multi-instance continuity" in _read("docs/SLO_AND_CAPACITY.md")
+    assert "Persistent heartbeat freshness" in _read(
+        "docs/SLO_AND_CAPACITY.md"
+    )
     assert "Multiple runtime instances" in _read(
+        "docs/PRODUCTION_READINESS.md"
+    )
+    assert "Persistent runtime process" in _read(
         "docs/PRODUCTION_READINESS.md"
     )
     assert "Automated production-readiness gate" in _read(
@@ -60,11 +70,27 @@ def test_runtime_instances_are_first_class_production_surface():
     assert "heartbeat_runtime_instance" in _read(
         "pratham/companion-runtime/mitra_companion/store.py"
     )
+    assert "mark_stale_runtime_instances" in _read(
+        "pratham/companion-runtime/mitra_companion/store.py"
+    )
+    assert "recover_interrupted_companion_tasks" in _read(
+        "pratham/companion-runtime/mitra_companion/store.py"
+    )
+    assert "PersistentRuntimeSupervisor" in _read(
+        "pratham/companion-runtime/mitra_companion/runtime.py"
+    )
+    assert "persistent_tick" in _read(
+        "pratham/companion-runtime/mitra_companion/runtime.py"
+    )
     assert "/api/v1/runtime/instances" in _read(
         "pratham/companion-runtime/mitra_companion/api.py"
     )
     assert (
         "test_multiple_runtime_instances_share_state_routes_and_dispatch"
+        in _read("pratham/tests/test_production_hardening.py")
+    )
+    assert (
+        "test_persistent_runtime_supervisor_refreshes_heartbeat"
         in _read("pratham/tests/test_production_hardening.py")
     )
 

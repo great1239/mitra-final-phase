@@ -7,7 +7,8 @@ runtime validation into a useful companion execution layer.
 
 Implemented runtime scope:
 
-- persistent runtime lifecycle, health, metrics, telemetry, and attachment state;
+- persistent runtime lifecycle, supervisor heartbeat, stale peer cleanup,
+  interrupted task recovery, health, metrics, telemetry, and attachment state;
 - manifest-driven capability discovery, routing, execution, and history;
 - bounded companion message layer with memory, summarization, tool selection,
   clarification, execution status, task notifications, and NDJSON streaming;
@@ -54,6 +55,7 @@ The unrelated public/fork repos `composiocode` and
 | Execute real functions | `/api/v1/intents/dispatch`, `/api/v1/companion/messages` |
 | Conversation memory | durable `companion_messages` and session context memory |
 | Session continuity | durable sessions plus companion memory endpoint |
+| Persistent runtime process | supervisor heartbeat, stale peer cleanup, interrupted task recovery |
 | Clarification handling | schema-required field prompts before dispatch |
 | Multi-step execution status | durable `companion_tasks` records and notifications |
 | Response streaming | `/api/v1/companion/messages/stream` NDJSON events |
@@ -66,7 +68,9 @@ The unrelated public/fork repos `composiocode` and
 
 ## Verification
 
-- Full collected suite: 78 tests.
+- Full collected suite: 81 tests.
 - Full pytest run: passed.
-- New focused tests: `pratham/tests/test_companion_interaction.py` and `pratham/tests/test_runtime_analysis.py`.
+- New focused tests: `pratham/tests/test_companion_interaction.py`,
+  `pratham/tests/test_runtime_analysis.py`, and persistent-runtime coverage in
+  `pratham/tests/test_production_hardening.py`.
 - Static contract catalog updated and validated by existing contract tests.

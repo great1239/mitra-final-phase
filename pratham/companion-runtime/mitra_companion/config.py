@@ -35,6 +35,11 @@ class RuntimeSettings:
     ai_resolver_timeout_seconds: float = 8.0
     ai_analysis_url: str | None = None
     ai_analysis_timeout_seconds: float = 8.0
+    persistent_runtime_enabled: bool = True
+    persistent_heartbeat_interval_seconds: float = 5.0
+    persistent_stale_after_seconds: float = 30.0
+    persistent_maintenance_interval_seconds: float = 60.0
+    persistent_task_timeout_seconds: float = 300.0
 
     @classmethod
     def from_environment(cls) -> "RuntimeSettings":
@@ -111,6 +116,36 @@ class RuntimeSettings:
             ),
             ai_analysis_timeout_seconds=float(
                 os.getenv("MITRA_COMPANION_AI_ANALYSIS_TIMEOUT_SECONDS", "8")
+            ),
+            persistent_runtime_enabled=(
+                os.getenv("MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED", "true")
+                .strip()
+                .lower()
+                in _TRUE_VALUES
+            ),
+            persistent_heartbeat_interval_seconds=float(
+                os.getenv(
+                    "MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS",
+                    "5",
+                )
+            ),
+            persistent_stale_after_seconds=float(
+                os.getenv(
+                    "MITRA_COMPANION_PERSISTENT_STALE_AFTER_SECONDS",
+                    "30",
+                )
+            ),
+            persistent_maintenance_interval_seconds=float(
+                os.getenv(
+                    "MITRA_COMPANION_PERSISTENT_MAINTENANCE_INTERVAL_SECONDS",
+                    "60",
+                )
+            ),
+            persistent_task_timeout_seconds=float(
+                os.getenv(
+                    "MITRA_COMPANION_PERSISTENT_TASK_TIMEOUT_SECONDS",
+                    "300",
+                )
             ),
         )
 

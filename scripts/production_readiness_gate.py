@@ -59,10 +59,18 @@ def main() -> int:
         "deploy/production.env.example": [
             "MITRA_COMPANION_UVICORN_WORKERS=2",
             "MITRA_COMPANION_INSTANCE_ID",
+            "MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true",
+            "MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS=5",
+            "MITRA_COMPANION_PERSISTENT_STALE_AFTER_SECONDS=30",
         ],
         "pratham/companion-runtime/mitra_companion/config.py": [
             "runtime_instance_id",
             "MITRA_COMPANION_INSTANCE_ID",
+            "persistent_runtime_enabled",
+        ],
+        "pratham/companion-runtime/mitra_companion/runtime.py": [
+            "PersistentRuntimeSupervisor",
+            "persistent_tick",
         ],
         "pratham/companion-runtime/mitra_companion/api.py": [
             "/api/v1/runtime/instances",
@@ -70,6 +78,8 @@ def main() -> int:
         "pratham/companion-runtime/mitra_companion/store.py": [
             "runtime_instances",
             "heartbeat_runtime_instance",
+            "mark_stale_runtime_instances",
+            "recover_interrupted_companion_tasks",
         ],
         "scripts/load/k6_companion_runtime.js": [
             "ramping-vus",
@@ -84,6 +94,7 @@ def main() -> int:
             "Monitor",
             "Failure Response",
             "Restart Validation",
+            "persistent_runtime.supervisor_running",
             "Rollback",
         ],
         "docs/SLO_AND_CAPACITY.md": [
@@ -91,10 +102,12 @@ def main() -> int:
             "Dispatch latency",
             "Attachment recovery",
             "Restart recovery",
+            "Persistent heartbeat freshness",
         ],
         "docs/PRODUCTION_READINESS.md": [
             "Container runs without root privileges",
             "Multiple runtime instances",
+            "Persistent runtime process",
             "Automated production-readiness gate",
             "Production Acceptance Boundary",
         ],

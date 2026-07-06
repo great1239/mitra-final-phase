@@ -15,7 +15,10 @@ The runtime owns session continuity, context partitions and transfer, explicit
 intent routing, product capability attachment, bounded companion interaction,
 lifecycle state, versioned integration APIs, structured telemetry, runtime
 metrics, attachment health monitoring, recovery validation, and runtime
-analysis for assignment-to-product matching. It
+analysis for assignment-to-product matching. It runs as a persistent service
+process by default: each live runtime instance keeps heartbeating, marks stale
+peer instances, recovers interrupted companion tasks after restart, and runs
+periodic attachment maintenance instead of behaving as a one-shot invocation. It
 intentionally does not implement product conversation design, governance,
 safety, knowledge, domain intelligence, evidence, replay, certification, or
 product-specific business logic.
@@ -64,6 +67,7 @@ Open:
 - health: `http://localhost:8090/health`
 - metrics: `http://localhost:8090/metrics`
 - runtime analysis: `POST http://localhost:8090/api/v1/runtime/analysis`
+- runtime instances: `GET http://localhost:8090/api/v1/runtime/instances`
 - OpenTelemetry Collector Prometheus exporter: `http://localhost:8889/metrics`
 
 Load any directory of published attachment manifests:
@@ -96,9 +100,12 @@ mitra-companion serve --port 8090
 8. The runtime command chain is published through
    `GET /api/v1/runtime/chain` and loaded from
    `contracts/runtime-command-chain.json`.
-9. A dispatch loads only the context scopes declared by that capability.
-10. The transport registry invokes the adapter named by the published manifest.
-11. Cross-product work requires an explicit transfer. Product context is never
+9. The persistent supervisor refreshes the current runtime heartbeat, removes
+   stale peer instances from the active set, recovers interrupted tasks, and
+   triggers periodic attachment health maintenance.
+10. A dispatch loads only the context scopes declared by that capability.
+11. The transport registry invokes the adapter named by the published manifest.
+12. Cross-product work requires an explicit transfer. Product context is never
    copied into the target product; only caller-supplied portable context enters
    the handoff partition.
 
@@ -119,7 +126,9 @@ The live companion suite also covers natural selection, schema-driven payload
 inference, clarification handling, execution tasks, memory persistence, and
 contracted streaming surfaces. The runtime analysis suite covers assignment
 profiling, product profiling, communication hints, fit-matrix scoring,
-automatic AI payload repair, and the standalone analysis API.
+automatic AI payload repair, and the standalone analysis API. Persistent
+runtime coverage verifies the supervisor heartbeat, stale peer cleanup, and
+interrupted task recovery after restart.
 
 ## Key documents
 

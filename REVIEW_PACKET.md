@@ -45,6 +45,7 @@ source session
 |---|---|
 | Working Companion Runtime | FastAPI application and `CompanionRuntime` composition root |
 | Runtime lifecycle/state | durable transition journal and lifecycle API |
+| Persistent runtime process | supervisor heartbeat, stale peer cleanup, interrupted task recovery, and periodic attachment maintenance |
 | Context loading/updates | four context partitions with optimistic revisions |
 | Session continuity | durable sessions and hashed resume tokens |
 | Workspace continuity | actor/workspace partition shared across sessions and client types |
@@ -76,9 +77,9 @@ source session
 
 ## Verification
 
-- Automated suite: `78 passed`
+- Automated suite: `81 passed`
 - Companion interaction and runtime analysis tests: `7 passed`
-- Focused BHIV, hardening, contract, and production-readiness suite: `15 passed`
+- Focused BHIV, hardening, contract, and production-readiness suite: `18 passed`
 - Two products attached through published manifests
 - Two accessible BHIV products attach through published manifests: UniGuru in `uniguru_ai` and Samruddhi in `trade-bot-main`
 - Two sessions spanning an explicit cross-product transfer
@@ -98,6 +99,7 @@ source session
 - Production k6 load profile runs UniGuru and Samruddhi attachment, session creation, context loading, routing, dispatch, and threshold validation
 - Production-readiness gate passes and verifies non-root container execution, healthchecks, restart policy, restricted writable surfaces, resource limits, log rotation, runbook, SLOs, and required evidence files
 - Multi-instance validation proves one runtime instance can consume attachments and sessions created by another instance, and the survivor continues dispatching after the first instance stops
+- Persistent runtime validation proves the supervisor refreshes heartbeat without traffic, marks stale peers stopped, and recovers interrupted companion tasks after restart
 - Attachment health monitoring validates published product health endpoints and restores degraded products after healthy checks
 - Restart validation proves BHIV attachments, sessions, and routing survive runtime recreation
 - Concurrency validation completes 30 concurrent BHIV dispatches with metrics and JSONL telemetry
