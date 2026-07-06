@@ -25,7 +25,10 @@ a one-shot invocation.
 It also imports useful generic systems from earlier submissions: manifest-backed
 capability catalogs, public contract summaries, semantic-version dependency
 reports, source-scope catalogs, seven-phase dispatch checkpoints, and portable
-dispatch proof bundles. It
+dispatch proof bundles. Attached products can also share information through a
+product-neutral exchange mailbox: a source product publishes a versioned
+envelope, target products read their inbox, and each target acknowledges
+receipt or consumption without Mitra merging product-private state. It
 intentionally does not implement product conversation design, governance,
 safety, knowledge, domain intelligence, evidence, replay, certification, or
 product-specific business logic.
@@ -82,6 +85,9 @@ Open:
 - source scope: `GET http://localhost:8090/api/v1/runtime/source-scope`
 - capability catalog: `GET http://localhost:8090/api/v1/runtime/capability-catalog`
 - runtime instances: `GET http://localhost:8090/api/v1/runtime/instances`
+- product connect: `POST http://localhost:8090/api/v1/products/connect`
+- product exchange: `POST http://localhost:8090/api/v1/product-exchanges`
+- product inbox: `GET http://localhost:8090/api/v1/products/{product_id}/exchange-inbox`
 - OpenTelemetry Collector Prometheus exporter: `http://localhost:8889/metrics`
 
 Load any directory of published attachment manifests:
@@ -97,46 +103,52 @@ mitra-companion serve --port 8090
 2. Context is stored in session, actor/workspace, session/product, and handoff
    partitions.
 3. The active product submits a versioned capability manifest.
-4. The router materializes deterministic registrations and discovers only
+4. Products can connect through `POST /api/v1/products/connect`, which is a
+   product-facing alias for the same manifest attachment contract.
+5. The router materializes deterministic registrations and discovers only
    explicit registered intent IDs.
-5. A runtime analysis pass builds an assignment profile, user expectation,
+6. A runtime analysis pass builds an assignment profile, user expectation,
    attached-product profiles, communication/adapter hints, and a fit matrix
    across all discovered capabilities.
-6. A companion message can rank published capabilities, ask clarifying
+7. A companion message can rank published capabilities, ask clarifying
    questions for missing schema fields, preserve memory, and dispatch only
    selected registered intents. When deterministic matching, payload inference,
    or dispatch readiness is weak, ambiguous, or incomplete, the analyzer and
    resolver automatically call configured AI endpoints before asking the user.
-7. Each companion response includes a product-neutral `outcome` describing what
+8. Each companion response includes a product-neutral `outcome` describing what
    the customer appears to want, plus manifest/schema-derived capability
    understanding so sparse BHIV products can still be routed without runtime
    product branches.
-8. The runtime command chain is published through
+9. Attached products share information through `POST /api/v1/product-exchanges`.
+   Targets read `GET /api/v1/products/{product_id}/exchange-inbox` and
+   acknowledge with `POST /api/v1/product-exchanges/{exchange_id}/ack`.
+10. The runtime command chain is published through
    `GET /api/v1/runtime/chain` and loaded from
    `contracts/runtime-command-chain.json`.
-9. The previous-submission source scope is published through
+11. The previous-submission source scope is published through
    `GET /api/v1/runtime/source-scope` and loaded from
    `contracts/source-scope-catalog.json`.
-10. The startup manager records production configuration, process startup,
+12. The startup manager records production configuration, process startup,
    manifest-source loading, and persistent-supervisor checks.
-11. The persistent supervisor refreshes the current runtime heartbeat, removes
+13. The persistent supervisor refreshes the current runtime heartbeat, removes
    stale peer instances from the active set, recovers interrupted tasks, and
    triggers periodic attachment health maintenance.
-12. Production configuration can load from an env file; AI and observability
+14. Production configuration can load from an env file; AI and observability
    endpoints can be supplied by mounted secret files and are only exposed as
    redacted metadata through runtime APIs.
-13. The capability catalog validates manifest-declared product/capability
+15. The capability catalog validates manifest-declared product/capability
    dependencies and summarizes contract registrations without product branches.
-14. A dispatch loads only the context scopes declared by that capability.
-15. The transport registry invokes the adapter named by the published manifest.
-16. Dispatch phases are checkpointed as a seven-step product-neutral journal:
+16. A dispatch loads only the context scopes declared by that capability.
+17. The transport registry invokes the adapter named by the published manifest.
+18. Dispatch phases are checkpointed as a seven-step product-neutral journal:
    request accepted, route selected, payload validated, context loaded,
    transport dispatched, receipt persisted, and terminal completion/failure.
-17. Each durable dispatch receipt can produce a portable proof bundle at
+19. Each durable dispatch receipt can produce a portable proof bundle at
    `GET /api/v1/dispatches/{dispatch_id}/proof`.
-18. Cross-product work requires an explicit transfer. Product context is never
+20. Cross-product work requires an explicit transfer or product exchange.
+   Product context is never
    copied into the target product; only caller-supplied portable context enters
-   the handoff partition.
+   the handoff partition or exchange envelope.
 
 ## Verify
 
@@ -160,9 +172,10 @@ runtime coverage verifies the supervisor heartbeat, stale peer cleanup, and
 interrupted task recovery after restart. Production-mode coverage verifies
 env-file configuration loading, secret-file redaction, startup-manager reports,
 operator restart/recovery endpoints, runtime instance reconciliation, and JSONL
-process logging. Reuse coverage verifies manifest dependency validation,
-source-scope catalog exposure, dispatch checkpoint phases, and proof-bundle
-hashing.
+process logging. Product-exchange coverage verifies product connection,
+durable exchange inboxes, acknowledgements, and schema validation. Reuse
+coverage verifies manifest dependency validation, source-scope catalog
+exposure, dispatch checkpoint phases, and proof-bundle hashing.
 
 ## Key documents
 

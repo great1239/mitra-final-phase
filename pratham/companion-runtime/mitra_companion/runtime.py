@@ -28,11 +28,18 @@ from .contracts import (
     CompanionMessageRequest,
     ContextTransferRequest,
     IntentDispatchRequest,
+    ProductExchangeAckRequest,
+    ProductExchangeRequest,
     ProductAttachmentManifest,
     RuntimeAnalysisRequest,
 )
 from .dependency_registry import CapabilityDependencyRegistry
-from .errors import IntentRoutingError, ResourceNotFoundError, TransportError
+from .errors import (
+    IntentRoutingError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+    TransportError,
+)
 from .interaction import (
     NaturalIntentResolver,
     build_capability_understanding,
@@ -494,6 +501,14 @@ class CompanionRuntime:
             "intent_registration_count": 0,
         }
 
+    def _require_exchange_product(self, product_id: str) -> dict[str, Any]:
+        attachment = self.attachments.get(product_id)
+        if attachment["state"] == AttachmentState.DETACHED.value:
+            raise ResourceConflictError(
+                f"Detached product cannot use runtime exchange: {product_id}"
+            )
+        return attachment
+
     def transfer_context(
         self,
         source_session_id: str,
@@ -513,6 +528,124 @@ class CompanionRuntime:
             request.portable_context,
         )
         return {**transfer, "context": context}
+
+    def create_product_exchange(
+        self,
+        request: ProductExchangeRequest,
+    ) -> dict[str, Any]:
+        if not self.accepting:
+            raise RuntimeError("Runtime is not accepting product exchanges")
+        self._require_exchange_product(request.source_product_id)
+        target_product_ids = list(dict.fromkeys(request.target_product_ids))
+        if len(target_product_ids) != len(request.target_product_ids):
+            raise ResourceConflictError(
+                "Duplicate target product IDs are not allowed"
+            )
+        if request.source_product_id in target_product_ids:
+            raise ResourceConflictError(
+                "Source product cannot target itself in an exchange"
+            )
+        for product_id in target_product_ids:
+            self._require_exchange_product(product_id)
+        if request.session_id is not None:
+            self.sessions.get(request.session_id)
+        exchange = self.store.create_product_exchange(
+            exchange_id=f"exchange_{uuid4().hex}",
+            source_product_id=request.source_product_id,
+            target_product_ids=target_product_ids,
+            session_id=request.session_id,
+            workspace_id=request.workspace_id,
+            exchange_type=request.exchange_type,
+            classification=request.classification,
+            subject=request.subject,
+            payload=request.payload,
+            schema_ref=request.schema_ref,
+            metadata=request.metadata,
+            correlation_id=request.correlation_id,
+            ttl_seconds=request.ttl_seconds,
+        )
+        self.telemetry.record_event(
+            "product_exchange.created",
+            exchange_id=exchange["exchange_id"],
+            source_product_id=request.source_product_id,
+            target_count=len(target_product_ids),
+            exchange_type=request.exchange_type,
+        )
+        production_log(
+            self.production_logger,
+            "product_exchange.created",
+            runtime_instance_id=self.instance_id,
+            exchange_id=exchange["exchange_id"],
+            source_product_id=request.source_product_id,
+            target_count=len(target_product_ids),
+        )
+        return exchange
+
+    def product_exchanges(
+        self,
+        *,
+        source_product_id: str | None = None,
+        target_product_id: str | None = None,
+        session_id: str | None = None,
+        status: str | None = None,
+        include_expired: bool = False,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        if source_product_id is not None:
+            self._require_exchange_product(source_product_id)
+        if target_product_id is not None:
+            self._require_exchange_product(target_product_id)
+        if session_id is not None:
+            self.sessions.get(session_id)
+        return self.store.list_product_exchanges(
+            source_product_id=source_product_id,
+            target_product_id=target_product_id,
+            session_id=session_id,
+            status=status,
+            include_expired=include_expired,
+            limit=limit,
+        )
+
+    def get_product_exchange(self, exchange_id: str) -> dict[str, Any]:
+        exchange = self.store.get_product_exchange(exchange_id)
+        if exchange is None:
+            raise ResourceNotFoundError(
+                f"Product exchange not found: {exchange_id}"
+            )
+        return exchange
+
+    def record_product_exchange_receipt(
+        self,
+        exchange_id: str,
+        request: ProductExchangeAckRequest,
+    ) -> dict[str, Any]:
+        self._require_exchange_product(request.product_id)
+        exchange = self.store.record_product_exchange_receipt(
+            exchange_id=exchange_id,
+            product_id=request.product_id,
+            status=request.status,
+            note=request.note,
+            metadata=request.metadata,
+        )
+        if not exchange:
+            raise ResourceConflictError(
+                "Product is not a target for this exchange"
+            )
+        self.telemetry.record_event(
+            "product_exchange.acknowledged",
+            exchange_id=exchange_id,
+            product_id=request.product_id,
+            status=request.status,
+        )
+        production_log(
+            self.production_logger,
+            "product_exchange.acknowledged",
+            runtime_instance_id=self.instance_id,
+            exchange_id=exchange_id,
+            product_id=request.product_id,
+            status=request.status,
+        )
+        return exchange
 
     async def dispatch(
         self,

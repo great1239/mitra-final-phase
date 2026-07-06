@@ -111,6 +111,12 @@ def test_runtime_instances_are_first_class_production_surface():
     assert "persistent_tick" in _read(
         "pratham/companion-runtime/mitra_companion/runtime.py"
     )
+    assert "create_product_exchange" in _read(
+        "pratham/companion-runtime/mitra_companion/runtime.py"
+    )
+    assert "record_product_exchange_receipt" in _read(
+        "pratham/companion-runtime/mitra_companion/runtime.py"
+    )
     assert "RuntimeStartupManager" in _read(
         "pratham/companion-runtime/mitra_companion/runtime.py"
     )
@@ -139,6 +145,15 @@ def test_runtime_instances_are_first_class_production_surface():
         "pratham/companion-runtime/mitra_companion/api.py"
     )
     assert "/api/v1/runtime/instances" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/products/connect" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/product-exchanges" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
+    assert "/api/v1/products/{product_id}/exchange-inbox" in _read(
         "pratham/companion-runtime/mitra_companion/api.py"
     )
     assert "/api/v1/runtime/capability-catalog" in _read(

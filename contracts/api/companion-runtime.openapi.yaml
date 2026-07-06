@@ -434,6 +434,35 @@ paths:
                     type: array
                     items:
                       $ref: ../schemas/attachment-record.schema.json
+  /api/v1/products/connect:
+    post:
+      operationId: connectProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - schema_version
+                - contract_version
+                - runtime_version
+                - compatibility_version
+                - manifest
+              properties:
+                schema_version: {const: 1.0.0}
+                contract_version: {const: 1.0.0}
+                runtime_version: {const: 1.0.0}
+                compatibility_version: {const: mitra-companion-1}
+                manifest:
+                  $ref: ../schemas/product-attachment.schema.json
+      responses:
+        "201":
+          description: Product connected through the published attachment manifest
+        "409":
+          description: Product ID already has a different active manifest
+        "422":
+          description: Invalid or incompatible manifest
   /api/v1/attachments/health:
     post:
       operationId: checkAllAttachmentHealth
@@ -481,6 +510,105 @@ paths:
           description: Active health check for one attached product with recovery validation
         "404":
           description: Product not found
+  /api/v1/product-exchanges:
+    post:
+      operationId: createProductExchange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-exchange.schema.json
+      responses:
+        "201":
+          description: Product-to-product exchange envelope created
+        "404":
+          description: Source, target, or session not found
+        "409":
+          description: Invalid exchange relationship
+        "422":
+          description: Invalid or incompatible contract
+    get:
+      operationId: listProductExchanges
+      parameters:
+        - in: query
+          name: source_product_id
+          schema: {type: string}
+        - in: query
+          name: target_product_id
+          schema: {type: string}
+        - in: query
+          name: session_id
+          schema: {type: string}
+        - in: query
+          name: status
+          schema:
+            enum: [PENDING, RECEIVED, CONSUMED, REJECTED]
+        - in: query
+          name: include_expired
+          schema: {type: boolean, default: false}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+      responses:
+        "200":
+          description: Product exchange envelopes
+  /api/v1/products/{product_id}/exchange-inbox:
+    get:
+      operationId: getProductExchangeInbox
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+        - in: query
+          name: status
+          schema:
+            enum: [PENDING, RECEIVED, CONSUMED, REJECTED]
+        - in: query
+          name: include_expired
+          schema: {type: boolean, default: false}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+      responses:
+        "200":
+          description: Target product inbox of exchange envelopes
+        "404":
+          description: Product not found
+  /api/v1/product-exchanges/{exchange_id}:
+    get:
+      operationId: getProductExchange
+      parameters:
+        - in: path
+          name: exchange_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Product exchange envelope
+        "404":
+          description: Product exchange not found
+  /api/v1/product-exchanges/{exchange_id}/ack:
+    post:
+      operationId: acknowledgeProductExchange
+      parameters:
+        - in: path
+          name: exchange_id
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/product-exchange-ack.schema.json
+      responses:
+        "200":
+          description: Product exchange acknowledgement recorded
+        "404":
+          description: Product exchange or product not found
+        "409":
+          description: Product is not a target for this exchange
+        "422":
+          description: Invalid or incompatible contract
   /api/v1/intents:
     get:
       operationId: discoverIntents

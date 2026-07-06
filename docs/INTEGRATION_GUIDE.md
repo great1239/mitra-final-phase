@@ -12,10 +12,10 @@ from `contracts/examples/product-atlas.json`,
 The manifest requests routing metadata only. It cannot grant authority or add
 hidden runtime code.
 
-## 2. Attach
+## 2. Connect Or Attach
 
 ```http
-POST /api/v1/attachments
+POST /api/v1/products/connect
 Content-Type: application/json
 
 {
@@ -27,8 +27,9 @@ Content-Type: application/json
 }
 ```
 
-Registration is idempotent for an identical active manifest. A different
-manifest under the same product ID returns `409`.
+`POST /api/v1/products/connect` and `POST /api/v1/attachments` use the same
+manifest contract. Registration is idempotent for an identical active manifest.
+A different manifest under the same product ID returns `409`.
 
 Detached records are omitted from the default list. Use
 `GET /api/v1/attachments?include_detached=true` when an integration console
@@ -71,7 +72,36 @@ The transport `mode` is an adapter key, not a product classification. HTTP
 relative endpoints are resolved against `base_url`; other protocols define
 their target rules in their adapters. Adapters return a JSON object.
 
-## 6. Transfer
+## 6. Share With Another Product
+
+Use `/api/v1/product-exchanges` when one attached product needs to share a
+specific context, event, artifact, status, or handoff payload with another
+attached product.
+
+```http
+POST /api/v1/product-exchanges
+Content-Type: application/json
+
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime_version": "1.0.0",
+  "compatibility_version": "mitra-companion-1",
+  "source_product_id": "source-product",
+  "target_product_ids": ["target-product"],
+  "exchange_type": "context",
+  "subject": "portable customer context",
+  "payload": {"customer_goal": "show my market prediction"}
+}
+```
+
+Targets fetch their inbox with
+`GET /api/v1/products/{product_id}/exchange-inbox` and acknowledge with
+`POST /api/v1/product-exchanges/{exchange_id}/ack`. The runtime stores only
+the explicit exchange payload and acknowledgement state; product-private
+context is not copied.
+
+## 7. Transfer
 
 Cross-product calls are blocked. Use `/sessions/{id}/transfer` to create a
 target session and supply a minimal `portable_context`. Product-private context

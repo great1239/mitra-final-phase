@@ -321,6 +321,31 @@
         "test future product compatibility"
       ],
       "boundary": "contract-only"
+    },
+    {
+      "feature_id": "attached-product-exchange-mailbox",
+      "source_submission_ids": [
+        "companion-runtime-foundations",
+        "ecosystem-runtime-hardening"
+      ],
+      "implemented_in": [
+        "mitra_companion.contracts.ProductExchangeRequest",
+        "mitra_companion.contracts.ProductExchangeAckRequest",
+        "mitra_companion.store.create_product_exchange",
+        "mitra_companion.runtime.CompanionRuntime.create_product_exchange",
+        "/api/v1/products/connect",
+        "/api/v1/product-exchanges",
+        "/api/v1/products/{product_id}/exchange-inbox",
+        "/api/v1/product-exchanges/{exchange_id}/ack"
+      ],
+      "runtime_surface": "connected product exchange mailbox",
+      "used_for": [
+        "let attached products share explicit payloads",
+        "persist target product inboxes",
+        "record receipt, consumption, or rejection acknowledgement",
+        "avoid implicit product-private context copying"
+      ],
+      "boundary": "contract-only"
     }
   ],
   "external_systems": [
@@ -375,6 +400,7 @@
     "Validate manifest schema and attachment health endpoint.",
     "Register capabilities and intents without runtime code changes.",
     "Use runtime analysis to match customer expectation to capability fit.",
+    "Use product exchanges for explicit attached-product information sharing.",
     "Dispatch only through the manifest transport adapter.",
     "Expose dispatch phases and proof bundle for downstream authority or review systems."
   ]

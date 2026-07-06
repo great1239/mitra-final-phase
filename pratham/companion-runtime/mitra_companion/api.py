@@ -21,6 +21,8 @@ from .contracts import (
     ContextTransferRequest,
     ContextUpdateRequest,
     IntentDispatchRequest,
+    ProductExchangeAckRequest,
+    ProductExchangeRequest,
     RuntimeAnalysisRequest,
     SessionCreateRequest,
     SessionResumeRequest,
@@ -215,6 +217,8 @@ def create_app(
       <div class="value">{counts['dispatches']}</div></div>
     <div class="card"><div class="label">Dispatch failures</div>
       <div class="value">{counts['failed_dispatches']}</div></div>
+    <div class="card"><div class="label">Product exchanges</div>
+      <div class="value">{counts['product_exchanges']}</div></div>
     <div class="card"><div class="label">Runtime instances</div>
       <div class="value">{status['active_runtime_instance_count']}</div></div>
     <div class="card"><div class="label">Supervisor</div>
@@ -566,6 +570,13 @@ def create_app(
             attachment=companion.attach(request.manifest)
         )
 
+    @app.post("/api/v1/products/connect", status_code=201)
+    async def connect_product(request: AttachmentRequest) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            connection=companion.attach(request.manifest)
+        )
+
     @app.get("/api/v1/attachments")
     async def list_attachments(
         include_detached: bool = False,
@@ -598,6 +609,70 @@ def create_app(
     async def detach_product(product_id: str) -> dict:
         return versioned_response(
             attachment=companion.detach(product_id)
+        )
+
+    @app.post("/api/v1/product-exchanges", status_code=201)
+    async def create_product_exchange(
+        request: ProductExchangeRequest,
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            exchange=companion.create_product_exchange(request)
+        )
+
+    @app.get("/api/v1/product-exchanges")
+    async def list_product_exchanges(
+        source_product_id: str | None = None,
+        target_product_id: str | None = None,
+        session_id: str | None = None,
+        status: str | None = None,
+        include_expired: bool = False,
+        limit: int = Query(default=100, ge=1, le=1000),
+    ) -> dict:
+        return versioned_response(
+            exchanges=companion.product_exchanges(
+                source_product_id=source_product_id,
+                target_product_id=target_product_id,
+                session_id=session_id,
+                status=status,
+                include_expired=include_expired,
+                limit=limit,
+            )
+        )
+
+    @app.get("/api/v1/products/{product_id}/exchange-inbox")
+    async def product_exchange_inbox(
+        product_id: str,
+        status: str | None = None,
+        include_expired: bool = False,
+        limit: int = Query(default=100, ge=1, le=1000),
+    ) -> dict:
+        return versioned_response(
+            exchanges=companion.product_exchanges(
+                target_product_id=product_id,
+                status=status,
+                include_expired=include_expired,
+                limit=limit,
+            )
+        )
+
+    @app.get("/api/v1/product-exchanges/{exchange_id}")
+    async def get_product_exchange(exchange_id: str) -> dict:
+        return versioned_response(
+            exchange=companion.get_product_exchange(exchange_id)
+        )
+
+    @app.post("/api/v1/product-exchanges/{exchange_id}/ack")
+    async def record_product_exchange_receipt(
+        exchange_id: str,
+        request: ProductExchangeAckRequest,
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            exchange=companion.record_product_exchange_receipt(
+                exchange_id,
+                request,
+            )
         )
 
     @app.get("/api/v1/intents")

@@ -105,6 +105,34 @@ class ContextTransferRequest(VersionedContract):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProductExchangeRequest(VersionedContract):
+    source_product_id: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    target_product_ids: list[str] = Field(min_length=1, max_length=50)
+    session_id: str | None = Field(default=None, min_length=1)
+    workspace_id: str | None = Field(default=None, min_length=1, max_length=200)
+    exchange_type: Literal[
+        "context",
+        "event",
+        "artifact",
+        "status",
+        "handoff",
+    ] = "context"
+    classification: Literal["public", "internal", "confidential"] = "internal"
+    subject: str = Field(min_length=1, max_length=240)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    schema_ref: str | None = Field(default=None, min_length=1, max_length=500)
+    ttl_seconds: int | None = Field(default=None, gt=0, le=2_592_000)
+    correlation_id: str | None = Field(default=None, max_length=200)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProductExchangeAckRequest(VersionedContract):
+    product_id: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    status: Literal["RECEIVED", "CONSUMED", "REJECTED"] = "RECEIVED"
+    note: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class IntentDispatchRequest(VersionedContract):
     session_id: str = Field(min_length=1)
     intent_id: str = Field(pattern=r"^[a-z][a-z0-9_.-]{2,95}$")

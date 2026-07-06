@@ -55,6 +55,31 @@ sequenceDiagram
 No product-specific code path is added to the Companion Runtime. New manifest
 registries and new transports are plugged in through adapter ports.
 
+## Product exchange mailbox
+
+```mermaid
+sequenceDiagram
+  participant A as Source Product
+  participant API as Companion API
+  participant DB as Runtime Store
+  participant B as Target Product
+
+  A->>API: POST /api/v1/product-exchanges
+  API->>API: Validate source and targets are connected products
+  API->>DB: Store product-neutral exchange envelope
+  API-->>A: Exchange ID and target delivery state
+  B->>API: GET /api/v1/products/{product_id}/exchange-inbox
+  API->>DB: Load pending exchange envelopes for target
+  API-->>B: Explicit payloads only
+  B->>API: POST /api/v1/product-exchanges/{exchange_id}/ack
+  API->>DB: Store RECEIVED, CONSUMED, or REJECTED acknowledgement
+  API-->>B: Updated exchange record
+```
+
+This is the product-to-product information-sharing surface. It is not hidden
+shared memory and it does not copy private product context. Only the explicit
+exchange payload is shared.
+
 ## Context transfer
 
 ```mermaid

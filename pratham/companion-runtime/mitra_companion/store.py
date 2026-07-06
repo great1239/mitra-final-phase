@@ -158,6 +158,40 @@ class RuntimeStore:
                     FOREIGN KEY(target_session_id) REFERENCES sessions(session_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS product_exchanges (
+                    exchange_id TEXT PRIMARY KEY,
+                    source_product_id TEXT NOT NULL,
+                    session_id TEXT,
+                    workspace_id TEXT,
+                    exchange_type TEXT NOT NULL,
+                    classification TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    schema_ref TEXT,
+                    metadata_json TEXT NOT NULL,
+                    correlation_id TEXT,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_product_exchanges_source
+                    ON product_exchanges(source_product_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_product_exchanges_session
+                    ON product_exchanges(session_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS product_exchange_targets (
+                    exchange_id TEXT NOT NULL,
+                    target_product_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    acknowledged_at TEXT,
+                    acknowledgement_note TEXT,
+                    acknowledgement_metadata_json TEXT NOT NULL,
+                    PRIMARY KEY(exchange_id, target_product_id),
+                    FOREIGN KEY(exchange_id)
+                        REFERENCES product_exchanges(exchange_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_product_exchange_targets_target
+                    ON product_exchange_targets(target_product_id, status);
+
                 CREATE TABLE IF NOT EXISTS companion_messages (
                     turn_id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -1146,6 +1180,205 @@ class RuntimeStore:
             "created_at": created_at,
         }
 
+    def create_product_exchange(
+        self,
+        *,
+        exchange_id: str,
+        source_product_id: str,
+        target_product_ids: list[str],
+        session_id: str | None,
+        workspace_id: str | None,
+        exchange_type: str,
+        classification: str,
+        subject: str,
+        payload: dict[str, Any],
+        schema_ref: str | None,
+        metadata: dict[str, Any],
+        correlation_id: str | None,
+        ttl_seconds: int | None,
+    ) -> dict[str, Any]:
+        created_at = utc_now()
+        expires_at = (
+            (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat()
+            if ttl_seconds is not None
+            else None
+        )
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO product_exchanges(
+                    exchange_id, source_product_id, session_id, workspace_id,
+                    exchange_type, classification, subject, payload_json,
+                    schema_ref, metadata_json, correlation_id, created_at,
+                    expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    exchange_id,
+                    source_product_id,
+                    session_id,
+                    workspace_id,
+                    exchange_type,
+                    classification,
+                    subject,
+                    json.dumps(payload, sort_keys=True, ensure_ascii=False),
+                    schema_ref,
+                    json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+                    correlation_id,
+                    created_at,
+                    expires_at,
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO product_exchange_targets(
+                    exchange_id, target_product_id, status,
+                    acknowledged_at, acknowledgement_note,
+                    acknowledgement_metadata_json
+                ) VALUES (?, ?, 'PENDING', NULL, NULL, '{}')
+                """,
+                [
+                    (exchange_id, product_id)
+                    for product_id in target_product_ids
+                ],
+            )
+        return self.get_product_exchange(exchange_id) or {}
+
+    def get_product_exchange(
+        self,
+        exchange_id: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM product_exchanges
+                WHERE exchange_id = ?
+                """,
+                (exchange_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            targets = connection.execute(
+                """
+                SELECT * FROM product_exchange_targets
+                WHERE exchange_id = ?
+                ORDER BY target_product_id
+                """,
+                (exchange_id,),
+            ).fetchall()
+        return self._decode_product_exchange(row, targets)
+
+    def list_product_exchanges(
+        self,
+        *,
+        source_product_id: str | None = None,
+        target_product_id: str | None = None,
+        session_id: str | None = None,
+        status: str | None = None,
+        include_expired: bool = False,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        join_targets = target_product_id is not None or status is not None
+        if join_targets:
+            query = """
+                SELECT DISTINCT exchange.exchange_id
+                FROM product_exchanges AS exchange
+                JOIN product_exchange_targets AS target
+                  ON target.exchange_id = exchange.exchange_id
+            """
+        else:
+            query = """
+                SELECT exchange.exchange_id
+                FROM product_exchanges AS exchange
+            """
+        if source_product_id is not None:
+            clauses.append("exchange.source_product_id = ?")
+            params.append(source_product_id)
+        if target_product_id is not None:
+            clauses.append("target.target_product_id = ?")
+            params.append(target_product_id)
+        if session_id is not None:
+            clauses.append("exchange.session_id = ?")
+            params.append(session_id)
+        if status is not None:
+            clauses.append("target.status = ?")
+            params.append(status)
+        if not include_expired:
+            clauses.append(
+                "(exchange.expires_at IS NULL OR exchange.expires_at > ?)"
+            )
+            params.append(datetime.now(UTC).isoformat())
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY exchange.created_at DESC LIMIT ?"
+        params.append(limit)
+        with self.connection() as connection:
+            rows = connection.execute(query, tuple(params)).fetchall()
+        return [
+            exchange
+            for row in rows
+            if (
+                exchange := self.get_product_exchange(row["exchange_id"])
+            )
+            is not None
+        ]
+
+    def record_product_exchange_receipt(
+        self,
+        *,
+        exchange_id: str,
+        product_id: str,
+        status: str,
+        note: str | None,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        acknowledged_at = utc_now()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE product_exchange_targets
+                SET status = ?,
+                    acknowledged_at = ?,
+                    acknowledgement_note = ?,
+                    acknowledgement_metadata_json = ?
+                WHERE exchange_id = ? AND target_product_id = ?
+                """,
+                (
+                    status,
+                    acknowledged_at,
+                    note,
+                    json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+                    exchange_id,
+                    product_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                return {}
+        return self.get_product_exchange(exchange_id) or {}
+
+    @staticmethod
+    def _decode_product_exchange(
+        row: sqlite3.Row,
+        targets: list[sqlite3.Row],
+    ) -> dict[str, Any]:
+        data = dict(row)
+        data["payload"] = json.loads(data.pop("payload_json"))
+        data["metadata"] = json.loads(data.pop("metadata_json"))
+        decoded_targets: list[dict[str, Any]] = []
+        for target in targets:
+            target_data = dict(target)
+            target_data["acknowledgement_metadata"] = json.loads(
+                target_data.pop("acknowledgement_metadata_json")
+            )
+            decoded_targets.append(target_data)
+        data["target_product_ids"] = [
+            item["target_product_id"] for item in decoded_targets
+        ]
+        data["targets"] = decoded_targets
+        return data
+
     def record_companion_message(
         self,
         *,
@@ -1443,9 +1676,13 @@ class RuntimeStore:
             failures = connection.execute(
                 "SELECT COUNT(*) AS count FROM dispatches WHERE status = 'FAILED'"
             ).fetchone()["count"]
+            product_exchanges = connection.execute(
+                "SELECT COUNT(*) AS count FROM product_exchanges"
+            ).fetchone()["count"]
         return {
             "sessions": sessions,
             "attachments": attachments,
             "dispatches": dispatches,
             "failed_dispatches": failures,
+            "product_exchanges": product_exchanges,
         }

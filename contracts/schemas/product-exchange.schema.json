@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/product-exchange/1.0.0",
+  "title": "Product Exchange Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime_version",
+    "compatibility_version",
+    "source_product_id",
+    "target_product_ids",
+    "subject"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime_version": {"const": "1.0.0"},
+    "compatibility_version": {"const": "mitra-companion-1"},
+    "source_product_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "target_product_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{2,63}$"
+      }
+    },
+    "session_id": {"type": ["string", "null"], "minLength": 1},
+    "workspace_id": {"type": ["string", "null"], "minLength": 1},
+    "exchange_type": {
+      "enum": ["context", "event", "artifact", "status", "handoff"],
+      "default": "context"
+    },
+    "classification": {
+      "enum": ["public", "internal", "confidential"],
+      "default": "internal"
+    },
+    "subject": {"type": "string", "minLength": 1, "maxLength": 240},
+    "payload": {"type": "object"},
+    "schema_ref": {"type": ["string", "null"], "minLength": 1},
+    "ttl_seconds": {
+      "type": ["integer", "null"],
+      "exclusiveMinimum": 0,
+      "maximum": 2592000
+    },
+    "correlation_id": {"type": ["string", "null"], "maxLength": 200},
+    "metadata": {"type": "object"}
+  }
+}

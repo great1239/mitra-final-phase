@@ -11,6 +11,7 @@ the runtime.
 | FastAPI production deployment | Docker Compose runs the FastAPI app through `mitra-companion serve`, Uvicorn workers, proxy headers, production environment settings, and `/ready` healthchecks. |
 | Container hardening | Docker runs as a non-root `mitra` user; Compose uses a read-only filesystem, explicit `/data` and `/tmp` write surfaces, dropped capabilities, `no-new-privileges`, restart policy, and resource bounds. |
 | Multi-instance runtime support | Every process/container registers a runtime instance ID, heartbeats into shared storage, exposes `/api/v1/runtime/instances`, and can consume persisted attachments, sessions, routes, and dispatches created by another instance. |
+| Attached-product information sharing | Connected products use `/api/v1/product-exchanges` and `/api/v1/products/{product_id}/exchange-inbox` as a durable mailbox with acknowledgement state. |
 | Runtime startup manager | FastAPI lifespan uses `RuntimeStartupManager` to load production configuration, start the runtime process, attach configured manifest sources, and verify the persistent supervisor. `GET /api/v1/runtime/startup` exposes the latest phase report. |
 | Persistent runtime supervisor | The runtime starts a background supervisor by default. It refreshes heartbeats, marks stale peers as stopped, recovers interrupted companion tasks, and runs periodic attachment maintenance while the service process remains alive. |
 | Graceful restart and recovery controls | `POST /api/v1/runtime/restart`, `POST /api/v1/runtime/recovery`, and `POST /api/v1/runtime/instances/reconcile` run controlled restart/recovery paths without changing product code. |
@@ -36,6 +37,7 @@ the runtime.
 | FastAPI production deployment | `Dockerfile`, `docker-compose.yml`, `mitra_companion/cli.py`, `/ready` healthcheck |
 | Production container posture | non-root user, read-only filesystem, restart policy, resource limits, dropped capabilities, log rotation |
 | Persistent multi-instance scaling | generated/configured `MITRA_COMPANION_INSTANCE_ID`, persistent supervisor heartbeat, stale peer cleanup, interrupted task recovery, SQLite WAL shared state, `/api/v1/runtime/instances`, `/api/v1/runtime/instances/reconcile`, `test_multiple_runtime_instances_share_state_routes_and_dispatch` |
+| Product-to-product exchange | `ProductExchangeRequest`, `ProductExchangeAckRequest`, `product_exchanges`, `product_exchange_targets`, `/api/v1/product-exchanges`, `/api/v1/products/{product_id}/exchange-inbox`, `test_product_exchange_api_contract` |
 | Production startup and restart | `RuntimeStartupManager`, `/api/v1/runtime/startup`, `/api/v1/runtime/restart`, `/api/v1/runtime/recovery`, `test_runtime_operations_api_exposes_production_mode` |
 | Production configuration and secrets | `MITRA_COMPANION_ENV_FILE`, `MITRA_COMPANION_CONFIG_PROFILE`, `MITRA_COMPANION_SECRETS_DIR`, `*_FILE` secret inputs, `/api/v1/runtime/config`, `/api/v1/runtime/secrets`, `test_production_configuration_loads_env_file_and_secret_files` |
 | Production process logging | `mitra_companion.production_logging`, `MITRA_COMPANION_LOG_PATH`, `MITRA_COMPANION_LOG_LEVEL`, `MITRA_COMPANION_LOG_TO_STDOUT`, `test_production_logging_writes_process_events` |
@@ -59,6 +61,8 @@ the runtime.
 | `test_persistent_runtime_supervisor_refreshes_heartbeat` | A started runtime remains alive as a persistent service loop and refreshes its heartbeat without an external request. |
 | `test_persistent_runtime_marks_stale_peer_instances` | A surviving runtime marks a peer with an expired heartbeat as stopped. |
 | `test_persistent_runtime_recovers_interrupted_tasks_on_restart` | Restart with the same runtime instance ID fails a previously running companion task with a durable recovery record. |
+| `test_product_exchange_runtime_persists_inbox_and_acknowledgement` | Source product creates a durable exchange envelope; target product reads inbox and records consumption. |
+| `test_product_exchange_api_contract` | Product connection, exchange creation, target inbox, and acknowledgement work through public APIs. |
 | `test_production_configuration_loads_env_file_and_secret_files` | Production config loads from an env file and secret files while API summaries redact secret values. |
 | `test_runtime_operations_api_exposes_production_mode` | Startup, restart, recovery, redacted config/secrets, and instance reconciliation APIs are live. |
 | `test_production_logging_writes_process_events` | Runtime start, recovery, and stop emit JSONL production process logs. |

@@ -15,6 +15,7 @@ flowchart LR
   Context["Context Runtime"]
   Router["Intent Router"]
   Attach["Attachment Runtime"]
+  Exchange["Product Exchange Mailbox"]
   Ports["Published Adapter Ports"]
   Transport["Transport Adapter Registry"]
   Sources["Manifest Source Adapters"]
@@ -27,6 +28,9 @@ flowchart LR
   API --> Router
   Sources --> Attach
   Attach --> Router
+  API --> Exchange
+  Exchange --> ProductA
+  Exchange --> ProductB
   Context --> Router
   Router --> Ports
   Ports --> Transport
@@ -43,6 +47,7 @@ flowchart LR
 | Context Runtime | partition loading, revisions, merge order, transfer handoff | knowledge retrieval or inference |
 | Intent Router | manifest-derived registration, discovery, capability lookup, explicit product/route selection | natural-language understanding |
 | Attachment Runtime | manifest validation, attach/degrade/detach state | capability implementation |
+| Product Exchange Mailbox | explicit product-to-product envelopes, target inboxes, acknowledgements | automatic merging of product-private context |
 | Adapter ports | manifest discovery and transport interfaces | hidden product implementation |
 | Transport registry | adapter lookup by published mode | product-specific routing branches |
 
@@ -55,6 +60,7 @@ transactions for context revisions. It stores:
 - sessions and hashed resume tokens;
 - session/workspace/product/handoff context partitions;
 - product attachment manifests and state;
+- product exchange envelopes and acknowledgement state;
 - dispatch request/response receipts;
 - context transfer receipts.
 
@@ -119,6 +125,20 @@ manifest-source adapter. A new transport protocol is added by registering a
 `TransportAdapter`; a new manifest registry is added by registering a
 `ManifestSourceAdapter`. The runtime does not add product-specific branches for
 either case.
+
+Products can also use `POST /api/v1/products/connect`, a product-facing alias
+for attachment. Once connected, products share explicit information through the
+exchange mailbox:
+
+1. Source product creates `POST /api/v1/product-exchanges`.
+2. Target product reads `GET /api/v1/products/{product_id}/exchange-inbox`.
+3. Target product records receipt, consumption, or rejection with
+   `POST /api/v1/product-exchanges/{exchange_id}/ack`.
+
+The exchange mailbox is durable and product-neutral. The runtime stores the
+envelope payload and target acknowledgement state; it does not infer authority
+or merge private product context unless the source placed that data explicitly
+inside the exchange payload.
 
 Attachment records have three states:
 

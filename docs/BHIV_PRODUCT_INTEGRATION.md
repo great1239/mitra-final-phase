@@ -20,7 +20,7 @@ stored in `trade-bot-main`.
 | Runtime telemetry | `pratham/companion-runtime/mitra_companion/telemetry.py` | Emits structured JSONL events and in-process metrics without product branches. |
 | Runtime analysis | `pratham/companion-runtime/mitra_companion/analysis.py` | Builds assignment profiles, product capability profiles, communication hints, and fit matrices before routing. |
 | Manifest source adapter | `pratham/companion-runtime/mitra_companion/manifest_sources.py` | Loads published product manifests from `MITRA_COMPANION_MANIFEST_DIRECTORY`. |
-| HTTP routing | `pratham/companion-runtime/mitra_companion/api.py` | Exposes attachment, session creation, context loading, intent discovery, dispatch, metrics, telemetry, and attachment health routes. |
+| HTTP routing | `pratham/companion-runtime/mitra_companion/api.py` | Exposes product connection, attachment, session creation, context loading, intent discovery, product exchange, dispatch, metrics, telemetry, and attachment health routes. |
 | Runtime orchestration | `pratham/companion-runtime/mitra_companion/runtime.py` | Composes lifecycle, sessions, context, attachments, router, dispatch, health checks, recovery, and telemetry. |
 | Attachment runtime | `pratham/attachment-runtime/mitra_attachment/runtime.py` | Validates and stores product manifests. |
 | Session runtime | `pratham/session-runtime/mitra_session/runtime.py` | Creates durable product-scoped sessions. |
@@ -50,6 +50,7 @@ correlation, and contract version.
 | Metrics and telemetry | `test_bhiv_dispatch_concurrency_metrics_and_structured_log` verifies dispatch counters, per-product latency metrics, and JSONL structured events. |
 | Assignment-to-product matching | `test_runtime_analysis_matches_assignment_to_attached_product` verifies assignment context, customer expectation, product profile, protocol hints, and fit matrix scoring. |
 | Automatic AI fallback | `test_ai_analysis_payload_is_used_when_deterministic_payload_is_missing` verifies AI is called when deterministic payload inference cannot make the selected capability dispatch-ready. |
+| Product exchange mailbox | `test_product_exchange_api_contract` verifies product connection, exchange creation, target inbox retrieval, and acknowledgement through public APIs. |
 | Restart validation | `test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes` proves attachments, sessions, and routing survive runtime recreation. |
 | Recovery validation | `test_attachment_health_monitoring_and_recovery_validation` simulates HTTP failure, degradation, health recovery, and resumed dispatch. |
 
@@ -67,10 +68,81 @@ For this assignment, UniGuru and Samruddhi/trade-bot are used as the
 independent BHIV products that consume the Mitra Companion Runtime. The
 expected ecosystem outcome is met for this clarified scope: multiple
 independent BHIV products attach, create sessions, load context, route intents,
-dispatch, and produce responses through published contracts only.
+dispatch, share explicit exchange envelopes, acknowledge target inbox items,
+and produce responses through published contracts only.
 
 The original PDF also contains a line requesting at least three real BHIV
 product integrations. No third real BHIV product folder or published manifest
 is present in this workspace. A third product can be attached later by
 publishing another manifest; no runtime code path needs a product-specific
 change.
+
+## Product Connection And Information Sharing
+
+Every BHIV product connects with the same public manifest contract:
+
+```http
+POST /api/v1/products/connect
+Content-Type: application/json
+
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime_version": "1.0.0",
+  "compatibility_version": "mitra-companion-1",
+  "manifest": { "...": "product-owned manifest" }
+}
+```
+
+That route is a product-facing alias for attachment. It validates the manifest,
+stores the attachment, and materializes the product's declared capabilities and
+intent registrations. Products do not need runtime code changes.
+
+For product-to-product sharing, use the exchange mailbox:
+
+```http
+POST /api/v1/product-exchanges
+Content-Type: application/json
+
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime_version": "1.0.0",
+  "compatibility_version": "mitra-companion-1",
+  "source_product_id": "source-product",
+  "target_product_ids": ["target-product"],
+  "exchange_type": "context",
+  "classification": "internal",
+  "subject": "portable customer context",
+  "payload": {
+    "customer_goal": "show my market prediction",
+    "handoff_reference": "case-42"
+  }
+}
+```
+
+The target product reads its inbox:
+
+```http
+GET /api/v1/products/target-product/exchange-inbox?status=PENDING
+```
+
+After loading or rejecting the envelope, the target acknowledges it:
+
+```http
+POST /api/v1/product-exchanges/{exchange_id}/ack
+Content-Type: application/json
+
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime_version": "1.0.0",
+  "compatibility_version": "mitra-companion-1",
+  "product_id": "target-product",
+  "status": "CONSUMED"
+}
+```
+
+The runtime stores the envelope, target delivery state, acknowledgement, and
+optional session/workspace/correlation metadata. It does not merge private
+product context automatically; only the explicit `payload` is shared.

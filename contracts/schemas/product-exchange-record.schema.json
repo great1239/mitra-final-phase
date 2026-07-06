@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/product-exchange-record/1.0.0",
+  "title": "Product Exchange Record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "exchange_id",
+    "source_product_id",
+    "target_product_ids",
+    "targets",
+    "exchange_type",
+    "classification",
+    "subject",
+    "payload",
+    "metadata",
+    "created_at"
+  ],
+  "properties": {
+    "exchange_id": {"type": "string", "minLength": 1},
+    "source_product_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "target_product_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{2,63}$"
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["target_product_id", "status"],
+        "properties": {
+          "target_product_id": {"type": "string"},
+          "status": {
+            "enum": ["PENDING", "RECEIVED", "CONSUMED", "REJECTED"]
+          },
+          "acknowledged_at": {"type": ["string", "null"]},
+          "acknowledgement_note": {"type": ["string", "null"]},
+          "acknowledgement_metadata": {"type": "object"}
+        }
+      }
+    },
+    "session_id": {"type": ["string", "null"]},
+    "workspace_id": {"type": ["string", "null"]},
+    "exchange_type": {
+      "enum": ["context", "event", "artifact", "status", "handoff"]
+    },
+    "classification": {"enum": ["public", "internal", "confidential"]},
+    "subject": {"type": "string"},
+    "payload": {"type": "object"},
+    "schema_ref": {"type": ["string", "null"]},
+    "metadata": {"type": "object"},
+    "correlation_id": {"type": ["string", "null"]},
+    "created_at": {"type": "string"},
+    "expires_at": {"type": ["string", "null"]}
+  }
+}

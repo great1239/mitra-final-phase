@@ -53,9 +53,14 @@
       "/api/v1/sessions/{session_id}/context",
       "/api/v1/sessions/{session_id}/transfer",
       "/api/v1/attachments",
+      "/api/v1/products/connect",
       "/api/v1/attachments/health",
       "/api/v1/attachments/{product_id}",
       "/api/v1/attachments/{product_id}/health",
+      "/api/v1/product-exchanges",
+      "/api/v1/products/{product_id}/exchange-inbox",
+      "/api/v1/product-exchanges/{exchange_id}",
+      "/api/v1/product-exchanges/{exchange_id}/ack",
       "/api/v1/intents",
       "/api/v1/products/{product_id}/intent-registrations",
       "/api/v1/capabilities",
@@ -96,6 +101,21 @@
     {
       "id": "context-transfer",
       "path": "contracts/schemas/context-transfer.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "product-exchange",
+      "path": "contracts/schemas/product-exchange.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "product-exchange-ack",
+      "path": "contracts/schemas/product-exchange-ack.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "product-exchange-record",
+      "path": "contracts/schemas/product-exchange-record.schema.json",
       "version": "1.0.0"
     },
     {
