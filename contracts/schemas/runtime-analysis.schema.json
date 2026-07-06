@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bhiv.example/contracts/mitra/companion-message.schema.json",
-  "title": "Companion Message Request",
+  "$id": "https://bhiv.example/contracts/mitra/runtime-analysis.schema.json",
+  "title": "Runtime Analysis Request",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,13 +17,6 @@
     "runtime_version": {"const": "1.0.0"},
     "compatibility_version": {"const": "mitra-companion-1"},
     "session_id": {"type": ["string", "null"], "minLength": 1},
-    "actor_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200},
-    "client_type": {
-      "type": "string",
-      "enum": ["standalone", "embedded", "mobile", "xr", "robotics"],
-      "default": "standalone"
-    },
-    "workspace_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 200},
     "product_id": {
       "type": ["string", "null"],
       "pattern": "^[a-z][a-z0-9-]{2,63}$"
@@ -39,7 +32,6 @@
       "maxLength": 12000
     },
     "payload": {"type": "object", "default": {}},
-    "auto_dispatch": {"type": "boolean", "default": true},
     "allow_ai_fallback": {"type": "boolean", "default": true},
     "metadata": {"type": "object", "default": {}}
   }

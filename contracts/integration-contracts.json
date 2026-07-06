@@ -28,6 +28,7 @@
       "/api/v1/runtime/status",
       "/api/v1/runtime/lifecycle",
       "/api/v1/runtime/chain",
+      "/api/v1/runtime/analysis",
       "/api/v1/companion/messages",
       "/api/v1/companion/messages/stream",
       "/api/v1/companion/sessions/{session_id}/memory",
@@ -93,6 +94,11 @@
     {
       "id": "companion-message",
       "path": "contracts/schemas/companion-message.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "runtime-analysis",
+      "path": "contracts/schemas/runtime-analysis.schema.json",
       "version": "1.0.0"
     },
     {

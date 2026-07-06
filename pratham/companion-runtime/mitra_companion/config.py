@@ -33,6 +33,8 @@ class RuntimeSettings:
     deterministic_intent_threshold: float = 0.28
     ai_resolver_url: str | None = None
     ai_resolver_timeout_seconds: float = 8.0
+    ai_analysis_url: str | None = None
+    ai_analysis_timeout_seconds: float = 8.0
 
     @classmethod
     def from_environment(cls) -> "RuntimeSettings":
@@ -102,6 +104,13 @@ class RuntimeSettings:
             ai_resolver_url=os.getenv("MITRA_COMPANION_AI_RESOLVER_URL"),
             ai_resolver_timeout_seconds=float(
                 os.getenv("MITRA_COMPANION_AI_RESOLVER_TIMEOUT_SECONDS", "8")
+            ),
+            ai_analysis_url=os.getenv(
+                "MITRA_COMPANION_AI_ANALYSIS_URL",
+                os.getenv("MITRA_COMPANION_AI_RESOLVER_URL"),
+            ),
+            ai_analysis_timeout_seconds=float(
+                os.getenv("MITRA_COMPANION_AI_ANALYSIS_TIMEOUT_SECONDS", "8")
             ),
         )
 

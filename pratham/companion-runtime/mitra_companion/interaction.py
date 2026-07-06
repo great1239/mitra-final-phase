@@ -415,6 +415,7 @@ class NaturalIntentResolver:
         memory: dict[str, Any],
         metrics: dict[str, Any],
         allow_ai_fallback: bool,
+        runtime_analysis: dict[str, Any] | None = None,
         product_id: str | None = None,
         capability_id: str | None = None,
     ) -> dict[str, Any]:
@@ -428,6 +429,7 @@ class NaturalIntentResolver:
             product_id=product_id,
             capability_id=capability_id,
             outcome=outcome,
+            runtime_analysis=runtime_analysis,
         )
         deterministic = self._decide(
             message=message,
@@ -461,6 +463,7 @@ class NaturalIntentResolver:
         product_id: str | None,
         capability_id: str | None,
         outcome: dict[str, Any],
+        runtime_analysis: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         message_tokens = _tokens(message)
         outcome_tokens = _tokens(outcome.get("required_result", ""))
@@ -468,6 +471,15 @@ class NaturalIntentResolver:
         active_product = session.get("active_product_id")
         last_selection = memory.get("last_selection") or {}
         latency_by_product = metrics.get("dispatch_latency_by_product") or {}
+        preferred = (runtime_analysis or {}).get("recommended_candidate") or {}
+        fit_lookup = {
+            (
+                item.get("product_id"),
+                item.get("capability_id"),
+                item.get("intent_id"),
+            ): item
+            for item in (runtime_analysis or {}).get("fit_matrix", [])
+        }
 
         for candidate in candidates:
             candidate_tokens = _tokens(_candidate_text(candidate))
@@ -504,6 +516,20 @@ class NaturalIntentResolver:
                 score += 0.18
             if candidate.get("attachment_state") != "ATTACHED":
                 score -= 0.5
+            identity = (
+                candidate["product_id"],
+                candidate["capability_id"],
+                candidate["intent_id"],
+            )
+            fit = fit_lookup.get(identity) or {}
+            if fit:
+                score += min(float(fit.get("confidence") or 0) * 0.18, 0.18)
+            if identity == (
+                preferred.get("product_id"),
+                preferred.get("capability_id"),
+                preferred.get("intent_id"),
+            ):
+                score += 0.16
 
             latency_summary = latency_by_product.get(candidate["product_id"]) or {}
             avg_latency = latency_summary.get("avg")
@@ -770,6 +796,7 @@ def summarize_memory(
     payload: dict[str, Any] | None,
     missing_fields: list[dict[str, Any]] | None,
     outcome: dict[str, Any] | None = None,
+    runtime_analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slots = dict(previous.get("slots") or {})
     for key, value in (payload or {}).items():
@@ -806,6 +833,17 @@ def summarize_memory(
             f"{last_selection['capability_id']}/"
             f"{last_selection['intent_id']}"
         )
+    compact_analysis = None
+    if runtime_analysis:
+        compact_analysis = {
+            "status": runtime_analysis.get("status"),
+            "resolver": runtime_analysis.get("resolver"),
+            "recommended_candidate": runtime_analysis.get(
+                "recommended_candidate"
+            ),
+            "confidence": runtime_analysis.get("confidence"),
+            "gap_count": len(runtime_analysis.get("gaps") or []),
+        }
     short_summary = " | ".join(part for part in summary_parts if part)
     if len(short_summary) > 1000:
         short_summary = short_summary[-1000:]
@@ -817,6 +855,7 @@ def summarize_memory(
         "last_assistant_message": assistant_message,
         "last_status": status,
         "last_outcome": outcome or previous.get("last_outcome"),
+        "last_analysis": compact_analysis or previous.get("last_analysis"),
         "last_selection": last_selection,
         "open_clarification": missing_fields or [],
         "slots": slots,

@@ -11,6 +11,8 @@ Implemented runtime scope:
 - manifest-driven capability discovery, routing, execution, and history;
 - bounded companion message layer with memory, summarization, tool selection,
   clarification, execution status, task notifications, and NDJSON streaming;
+- runtime analysis layer that profiles assignment text, user expectation,
+  attached products, communication hints, and capability fit before routing;
 - optional vendor-neutral AI resolver fallback when deterministic selection is
   not confident;
 - UniGuru and Samruddhi/trade-bot attachment through published manifests only;
@@ -47,6 +49,7 @@ The unrelated public/fork repos `composiocode` and
 | Discover capabilities | `/api/v1/capabilities`, `/api/v1/intents` |
 | Natural selection | `mitra_companion.interaction.NaturalIntentResolver` |
 | Customer asks expressed naturally | `outcome` object on companion responses |
+| Assignment-to-capability matching | `/api/v1/runtime/analysis`, `analysis` object on companion responses |
 | Unknown/sparse BHIV products | manifest/schema/metadata-derived capability understanding |
 | Execute real functions | `/api/v1/intents/dispatch`, `/api/v1/companion/messages` |
 | Conversation memory | durable `companion_messages` and session context memory |
@@ -54,8 +57,8 @@ The unrelated public/fork repos `composiocode` and
 | Clarification handling | schema-required field prompts before dispatch |
 | Multi-step execution status | durable `companion_tasks` records and notifications |
 | Response streaming | `/api/v1/companion/messages/stream` NDJSON events |
-| Runtime intelligence | ranking, recommendation, cost, latency, retry metadata |
-| AI fallback | `MITRA_COMPANION_AI_RESOLVER_URL` optional resolver contract |
+| Runtime intelligence | fit matrix, ranking, recommendation, cost, latency, retry metadata |
+| AI fallback | `MITRA_COMPANION_AI_RESOLVER_URL` and `MITRA_COMPANION_AI_ANALYSIS_URL` optional contracts |
 | Command chain | `/api/v1/runtime/chain` with `contracts/runtime-command-chain.json` |
 | Health and metrics | `/health`, `/ready`, `/metrics`, `/api/v1/runtime/metrics` |
 | Recovery | attachment health check and degraded-to-attached restoration |
@@ -63,7 +66,7 @@ The unrelated public/fork repos `composiocode` and
 
 ## Verification
 
-- Full collected suite: 75 tests.
+- Full collected suite: 77 tests.
 - Full pytest run: passed.
-- New focused tests: `pratham/tests/test_companion_interaction.py`.
+- New focused tests: `pratham/tests/test_companion_interaction.py` and `pratham/tests/test_runtime_analysis.py`.
 - Static contract catalog updated and validated by existing contract tests.

@@ -9,6 +9,7 @@ from .contracts import (
     ContextTransferRequest,
     IntentDispatchRequest,
     ProductAttachmentManifest,
+    RuntimeAnalysisRequest,
 )
 
 
@@ -221,6 +222,11 @@ class CompanionRuntimeInterface(
     async def companion_message(
         self,
         request: CompanionMessageRequest,
+    ) -> dict[str, Any]: ...
+
+    async def analyze_runtime(
+        self,
+        request: RuntimeAnalysisRequest,
     ) -> dict[str, Any]: ...
 
     def companion_memory(

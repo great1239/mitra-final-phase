@@ -1,7 +1,11 @@
-# Mitra Companion Runtime - Phase V
+# Mitra Live Runtime Sprint
 
-Production-oriented, reusable execution layer for every future Mitra
-experience:
+Production activation layer for Mitra's companion runtime, built on the Phase V
+foundations but scoped as its own sprint. It lets Mitra understand a customer
+request, inspect attached BHIV product manifests, compare user expectation
+against product capability, and route only through published runtime contracts.
+
+The runtime supports:
 
 - standalone Mitra;
 - Mitra embedded in BHIV products;
@@ -10,7 +14,8 @@ experience:
 The runtime owns session continuity, context partitions and transfer, explicit
 intent routing, product capability attachment, bounded companion interaction,
 lifecycle state, versioned integration APIs, structured telemetry, runtime
-metrics, attachment health monitoring, and recovery validation. It
+metrics, attachment health monitoring, recovery validation, and runtime
+analysis for assignment-to-product matching. It
 intentionally does not implement product conversation design, governance,
 safety, knowledge, domain intelligence, evidence, replay, certification, or
 product-specific business logic.
@@ -58,6 +63,7 @@ Open:
 - API explorer: `http://localhost:8090/docs`
 - health: `http://localhost:8090/health`
 - metrics: `http://localhost:8090/metrics`
+- runtime analysis: `POST http://localhost:8090/api/v1/runtime/analysis`
 - OpenTelemetry Collector Prometheus exporter: `http://localhost:8889/metrics`
 
 Load any directory of published attachment manifests:
@@ -75,19 +81,23 @@ mitra-companion serve --port 8090
 3. The active product submits a versioned capability manifest.
 4. The router materializes deterministic registrations and discovers only
    explicit registered intent IDs.
-5. A companion message can rank published capabilities, ask clarifying
+5. A runtime analysis pass builds an assignment profile, user expectation,
+   attached-product profiles, communication/adapter hints, and a fit matrix
+   across all discovered capabilities.
+6. A companion message can rank published capabilities, ask clarifying
    questions for missing schema fields, preserve memory, and dispatch only
-   selected registered intents.
-6. Each companion response includes a product-neutral `outcome` describing what
+   selected registered intents. When deterministic matching is weak or
+   ambiguous, the analyzer and resolver can call configured AI endpoints.
+7. Each companion response includes a product-neutral `outcome` describing what
    the customer appears to want, plus manifest/schema-derived capability
    understanding so sparse BHIV products can still be routed without runtime
    product branches.
-7. The runtime command chain is published through
+8. The runtime command chain is published through
    `GET /api/v1/runtime/chain` and loaded from
    `contracts/runtime-command-chain.json`.
-8. A dispatch loads only the context scopes declared by that capability.
-9. The transport registry invokes the adapter named by the published manifest.
-10. Cross-product work requires an explicit transfer. Product context is never
+9. A dispatch loads only the context scopes declared by that capability.
+10. The transport registry invokes the adapter named by the published manifest.
+11. Cross-product work requires an explicit transfer. Product context is never
    copied into the target product; only caller-supplied portable context enters
    the handoff partition.
 
@@ -106,7 +116,9 @@ BHIV product integration, structured telemetry, metrics, health checks,
 recovery validation, restart validation, and concurrency validation.
 The live companion suite also covers natural selection, schema-driven payload
 inference, clarification handling, execution tasks, memory persistence, and
-contracted streaming surfaces.
+contracted streaming surfaces. The runtime analysis suite covers assignment
+profiling, product profiling, communication hints, fit-matrix scoring, and the
+standalone analysis API.
 
 ## Key documents
 

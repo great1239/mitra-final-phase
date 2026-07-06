@@ -140,8 +140,26 @@ class CompanionMessageRequest(VersionedContract):
         pattern=r"^[a-z][a-z0-9-]{2,63}$",
     )
     message: str = Field(min_length=1, max_length=4000)
+    assignment: str | None = Field(default=None, min_length=1, max_length=12000)
     payload: dict[str, Any] = Field(default_factory=dict)
     auto_dispatch: bool = True
+    allow_ai_fallback: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuntimeAnalysisRequest(VersionedContract):
+    session_id: str | None = Field(default=None, min_length=1)
+    product_id: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9-]{2,63}$",
+    )
+    capability_id: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9-]{2,63}$",
+    )
+    message: str = Field(min_length=1, max_length=4000)
+    assignment: str | None = Field(default=None, min_length=1, max_length=12000)
+    payload: dict[str, Any] = Field(default_factory=dict)
     allow_ai_fallback: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
 

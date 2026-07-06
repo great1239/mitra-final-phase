@@ -1,12 +1,12 @@
 # Validation Report
 
-Validated on June 30, 2026.
+Validated on July 6, 2026.
 
 ## Automated verification
 
 | Check | Result |
 |---|---|
-| Unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, multi-instance runtime, and Phase 1-7 conformance tests | `71 passed` |
+| Unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, multi-instance runtime, runtime analysis, and Phase 1-7 conformance tests | `77 passed` |
 | Example manifests against JSON Schema 2020-12 | passed |
 | Two-product runtime simulation | passed |
 | Cross-product context isolation | passed |
@@ -20,13 +20,14 @@ Validated on June 30, 2026.
 | Forbidden subsystem symbol/import/API scan | passed |
 | Phase 1 runtime interface catalog | 7 interfaces, 0 schema errors |
 | Phase 1 runtime state machine | 6 runtime states, 14 transitions, 0 schema errors |
-| OpenAPI surface | 20 published paths |
+| OpenAPI surface | 31 published paths |
 | Durable session resume after runtime recreation | passed |
 | Durable session and context continuity after runtime recreation | passed |
 | Actor-scoped workspace isolation | passed |
 | Session/product context isolation | passed |
 | Selective capability context loading | passed |
 | Deterministic intent registration/discovery | passed |
+| Runtime analysis assignment profile, product profile, protocol hints, and fit matrix | passed |
 | Exact capability lookup | passed |
 | Ambiguous intent fail-closed routing | passed |
 | Unexpected adapter exception normalization | passed |
@@ -47,7 +48,7 @@ Validated on June 30, 2026.
 | Multi-instance runtime continuity | passed |
 | Python wheel build and isolated install | passed |
 | All five implementation packages import from built artifact | passed |
-| OpenAPI YAML parse | OpenAPI `3.1.0`, 20 paths |
+| OpenAPI YAML parse | OpenAPI `3.1.0`, 31 paths |
 | Demo video decode | H.264 MP4, 1440x1080, 30 fps, 17 seconds |
 
 ## Live evidence

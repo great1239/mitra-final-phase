@@ -56,6 +56,20 @@ paths:
       responses:
         "200":
           description: Runtime-readable Mitra and BHIV command-chain model
+  /api/v1/runtime/analysis:
+    post:
+      operationId: createRuntimeAnalysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/runtime-analysis.schema.json
+      responses:
+        "200":
+          description: Assignment, user expectation, product profile, and capability fit analysis
+        "422":
+          description: Invalid or incompatible contract
   /api/v1/companion/messages:
     post:
       operationId: createCompanionMessage

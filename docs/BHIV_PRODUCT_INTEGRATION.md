@@ -18,6 +18,7 @@ stored in `trade-bot-main`.
 | Adapter ports | `pratham/companion-runtime/mitra_companion/ports.py` | Defines `TransportAdapter` and `ManifestSourceAdapter` so products attach without runtime branches. |
 | HTTP and loopback adapters | `pratham/companion-runtime/mitra_companion/transport.py` | Selects transport by manifest `dispatch.mode`; supports native HTTP payload projection through `dispatch.options.request_body`. |
 | Runtime telemetry | `pratham/companion-runtime/mitra_companion/telemetry.py` | Emits structured JSONL events and in-process metrics without product branches. |
+| Runtime analysis | `pratham/companion-runtime/mitra_companion/analysis.py` | Builds assignment profiles, product capability profiles, communication hints, and fit matrices before routing. |
 | Manifest source adapter | `pratham/companion-runtime/mitra_companion/manifest_sources.py` | Loads published product manifests from `MITRA_COMPANION_MANIFEST_DIRECTORY`. |
 | HTTP routing | `pratham/companion-runtime/mitra_companion/api.py` | Exposes attachment, session creation, context loading, intent discovery, dispatch, metrics, telemetry, and attachment health routes. |
 | Runtime orchestration | `pratham/companion-runtime/mitra_companion/runtime.py` | Composes lifecycle, sessions, context, attachments, router, dispatch, health checks, recovery, and telemetry. |
@@ -47,6 +48,7 @@ correlation, and contract version.
 | Native product dispatch | UniGuru receives `POST /runtime/execute`; Samruddhi receives `POST /tools/predict`. |
 | Health monitoring | UniGuru publishes `GET /health`; Samruddhi publishes `GET /tools/health`; both are checked through the generic attachment health monitor. |
 | Metrics and telemetry | `test_bhiv_dispatch_concurrency_metrics_and_structured_log` verifies dispatch counters, per-product latency metrics, and JSONL structured events. |
+| Assignment-to-product matching | `test_runtime_analysis_matches_assignment_to_attached_product` verifies assignment context, customer expectation, product profile, protocol hints, and fit matrix scoring. |
 | Restart validation | `test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes` proves attachments, sessions, and routing survive runtime recreation. |
 | Recovery validation | `test_attachment_health_monitoring_and_recovery_validation` simulates HTTP failure, degradation, health recovery, and resumed dispatch. |
 
@@ -55,7 +57,8 @@ correlation, and contract version.
 No runtime source contains UniGuru or Samruddhi specific branches. The only
 product-specific files are the two manifests under `contracts/examples/` and
 the focused integration tests that prove the manifests can drive the generic
-runtime.
+runtime. The runtime analysis layer reads the same published manifests and
+runtime registrations; it does not need product-specific source imports.
 
 ## Assignment Product Scope
 

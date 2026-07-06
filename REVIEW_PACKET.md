@@ -53,6 +53,7 @@ source session
 | Intent dispatch/capability lookup/product routing | exact capability APIs, explicit router, durable dispatch |
 | Conversational companion layer | `/api/v1/companion/messages`, memory, clarification, task notifications, streaming |
 | Customer outcome extraction | Product-neutral `outcome` response derived from user message, memory, symbols, and constraints |
+| Assignment analysis | `/api/v1/runtime/analysis` profiles assignment text, user expectation, linked products, communication hints, and capability fit before dispatch |
 | Unknown BHIV capability understanding | Manifest/schema/metadata-derived capability understanding with sparse-manifest test coverage |
 | Command-chain understanding | `/api/v1/runtime/chain` loads `contracts/runtime-command-chain.json` without hardcoded runtime product names |
 | Runtime intelligence | capability ranking, recommendations, cost/latency metadata, retry strategy, optional AI resolver |
@@ -75,8 +76,8 @@ source session
 
 ## Verification
 
-- Automated suite: `75 passed`
-- Companion interaction tests: `4 passed`
+- Automated suite: `77 passed`
+- Companion interaction and runtime analysis tests: `6 passed`
 - Focused BHIV, hardening, contract, and production-readiness suite: `15 passed`
 - Two products attached through published manifests
 - Two accessible BHIV products attach through published manifests: UniGuru in `uniguru_ai` and Samruddhi in `trade-bot-main`
@@ -89,6 +90,7 @@ source session
 - Remote transport failure persisted and degraded safely
 - Runtime implementation contains no example or ecosystem product names
 - Runtime implementation contains no BHIV product-specific branches; native product payloads are selected by manifest transport options
+- Runtime analysis verifies assignment-to-product fit without dispatch and is included in companion message responses
 - Structured telemetry emits `dispatch.completed`, `dispatch.failed`, `attachment.health_checked`, and `attachment.recovery_validated` events
 - Structured logs include timestamp, service, environment, severity, event type, product, dispatch, latency, health, and recovery fields
 - Runtime metrics expose dispatch counters, per-product latency, health checks, and recovery counters through `/api/v1/runtime/metrics` and `/metrics`
@@ -121,12 +123,14 @@ source session
 ## Key files
 
 - `pratham/companion-runtime/mitra_companion/runtime.py`
+- `pratham/companion-runtime/mitra_companion/analysis.py`
 - `pratham/context-runtime/mitra_context/runtime.py`
 - `pratham/intent-router/mitra_intent/runtime.py`
 - `pratham/session-runtime/mitra_session/runtime.py`
 - `pratham/attachment-runtime/mitra_attachment/runtime.py`
 - `contracts/api/companion-runtime.openapi.yaml`
 - `contracts/schemas/product-attachment.schema.json`
+- `contracts/schemas/runtime-analysis.schema.json`
 - `contracts/context-runtime-policy.json`
 - `contracts/schemas/context-view.schema.json`
 - `contracts/intent-router-policy.json`
@@ -151,6 +155,7 @@ source session
 - `scripts/production_readiness_gate.py`
 - `scripts/load/k6_companion_runtime.js`
 - `pratham/tests/test_bhiv_product_integration.py`
+- `pratham/tests/test_runtime_analysis.py`
 - `pratham/tests/test_production_hardening.py`
 - `pratham/tests/test_production_readiness_gate.py`
 - `pratham/tests/test_phase4_product_attachment_runtime.py`

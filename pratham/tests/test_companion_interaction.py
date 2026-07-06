@@ -107,6 +107,10 @@ async def test_companion_message_selects_executes_and_persists_memory(
         )
 
         assert result["status"] == "COMPLETED"
+        assert result["analysis"]["status"] == "matched"
+        assert result["analysis"]["recommended_candidate"]["intent_id"] == (
+            "tradebot.predict"
+        )
         assert result["outcome"]["requested_action"] == "predict"
         assert "market" in result["outcome"]["target_terms"]
         assert result["selection"]["candidate"]["intent_id"] == "tradebot.predict"
@@ -130,6 +134,9 @@ async def test_companion_message_selects_executes_and_persists_memory(
             context["merged"]["companion_memory"]["last_status"]
             == "COMPLETED"
         )
+        assert context["merged"]["companion_memory"]["last_analysis"][
+            "recommended_candidate"
+        ]["intent_id"] == "tradebot.predict"
     finally:
         runtime.stop()
 

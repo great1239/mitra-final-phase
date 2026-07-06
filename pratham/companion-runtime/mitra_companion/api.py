@@ -21,6 +21,7 @@ from .contracts import (
     ContextTransferRequest,
     ContextUpdateRequest,
     IntentDispatchRequest,
+    RuntimeAnalysisRequest,
     SessionCreateRequest,
     SessionResumeRequest,
     VersionedContract,
@@ -279,6 +280,13 @@ def create_app(
     @app.get("/api/v1/runtime/chain")
     async def runtime_chain() -> dict:
         return versioned_response(chain=companion.ecosystem_chain())
+
+    @app.post("/api/v1/runtime/analysis")
+    async def runtime_analysis(request: RuntimeAnalysisRequest) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            **await companion.analyze_runtime(request)
+        )
 
     @app.post("/api/v1/companion/messages")
     async def companion_message(request: CompanionMessageRequest) -> dict:

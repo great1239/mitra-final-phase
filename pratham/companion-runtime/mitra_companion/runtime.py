@@ -14,6 +14,7 @@ from mitra_context import ContextRuntime
 from mitra_intent import IntentRouter
 from mitra_session import SessionRuntime
 
+from .analysis import RuntimeAnalyzer
 from .config import RuntimeSettings
 from .constants import AttachmentState, DispatchStatus, RuntimeState
 from .contracts import (
@@ -21,6 +22,7 @@ from .contracts import (
     ContextTransferRequest,
     IntentDispatchRequest,
     ProductAttachmentManifest,
+    RuntimeAnalysisRequest,
 )
 from .errors import IntentRoutingError, ResourceNotFoundError, TransportError
 from .interaction import (
@@ -67,6 +69,11 @@ class CompanionRuntime:
             threshold=settings.deterministic_intent_threshold,
             ai_resolver_url=settings.ai_resolver_url,
             ai_timeout_seconds=settings.ai_resolver_timeout_seconds,
+        )
+        self.analyzer = RuntimeAnalyzer(
+            threshold=settings.deterministic_intent_threshold,
+            ai_analysis_url=settings.ai_analysis_url,
+            ai_timeout_seconds=settings.ai_analysis_timeout_seconds,
         )
         self.accepting = False
 
@@ -438,6 +445,17 @@ class CompanionRuntime:
             capability_id=request.capability_id,
             available_only=False,
         )
+        runtime_analysis = await self.analyzer.analyze(
+            message=request.message,
+            assignment=request.assignment,
+            metadata=request.metadata,
+            explicit_payload=request.payload,
+            candidates=candidates,
+            session=session,
+            memory=memory_before,
+            metrics=self.metrics_snapshot(),
+            allow_ai_fallback=request.allow_ai_fallback,
+        )
         selection = await self.intent_resolver.select(
             message=request.message,
             candidates=candidates,
@@ -445,6 +463,7 @@ class CompanionRuntime:
             memory=memory_before,
             metrics=self.metrics_snapshot(),
             allow_ai_fallback=request.allow_ai_fallback,
+            runtime_analysis=runtime_analysis,
             product_id=candidate_product,
             capability_id=request.capability_id,
         )
@@ -575,6 +594,7 @@ class CompanionRuntime:
             payload=final_payload,
             missing_fields=missing_fields,
             outcome=outcome,
+            runtime_analysis=runtime_analysis,
         )
         assistant_turn = self.store.record_companion_message(
             turn_id=f"turn_{uuid4().hex}",
@@ -585,6 +605,7 @@ class CompanionRuntime:
             summary=memory_after,
             metadata={
                 "selection": selection,
+                "analysis": runtime_analysis,
                 "dispatch_id": (
                     dispatch_result["dispatch"]["dispatch_id"]
                     if dispatch_result
@@ -609,6 +630,7 @@ class CompanionRuntime:
                 "content": assistant_text,
             },
             "memory": memory_after,
+            "analysis": runtime_analysis,
             "outcome": outcome,
             "selection": selection,
             "payload": final_payload,
@@ -624,6 +646,44 @@ class CompanionRuntime:
                 if task and task.get("notification")
                 else []
             ),
+        }
+
+    async def analyze_runtime(
+        self,
+        request: RuntimeAnalysisRequest,
+    ) -> dict[str, Any]:
+        if not self.accepting:
+            raise RuntimeError("Runtime is not accepting analysis requests")
+        session = (
+            self.sessions.get(request.session_id)
+            if request.session_id
+            else {}
+        )
+        memory = (
+            self.store.latest_companion_summary(request.session_id)
+            if request.session_id
+            else {}
+        )
+        candidates = self.router.discover(
+            product_id=request.product_id
+            or session.get("active_product_id"),
+            capability_id=request.capability_id,
+            available_only=False,
+        )
+        analysis = await self.analyzer.analyze(
+            message=request.message,
+            assignment=request.assignment,
+            metadata=request.metadata,
+            explicit_payload=request.payload,
+            candidates=candidates,
+            session=session,
+            memory=memory,
+            metrics=self.metrics_snapshot(),
+            allow_ai_fallback=request.allow_ai_fallback,
+        )
+        return {
+            "analysis": analysis,
+            "candidate_count": len(candidates),
         }
 
     def companion_memory(
