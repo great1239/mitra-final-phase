@@ -492,6 +492,7 @@ class CompanionRuntime:
                 payload_result = build_payload_from_message(
                     message=request.message,
                     explicit_payload={
+                        **(runtime_analysis.get("ai_payload_hints") or {}),
                         **(selection.get("ai_payload") or {}),
                         **request.payload,
                     },

@@ -86,8 +86,9 @@ mitra-companion serve --port 8090
    across all discovered capabilities.
 6. A companion message can rank published capabilities, ask clarifying
    questions for missing schema fields, preserve memory, and dispatch only
-   selected registered intents. When deterministic matching is weak or
-   ambiguous, the analyzer and resolver can call configured AI endpoints.
+   selected registered intents. When deterministic matching, payload inference,
+   or dispatch readiness is weak, ambiguous, or incomplete, the analyzer and
+   resolver automatically call configured AI endpoints before asking the user.
 7. Each companion response includes a product-neutral `outcome` describing what
    the customer appears to want, plus manifest/schema-derived capability
    understanding so sparse BHIV products can still be routed without runtime
@@ -117,8 +118,8 @@ recovery validation, restart validation, and concurrency validation.
 The live companion suite also covers natural selection, schema-driven payload
 inference, clarification handling, execution tasks, memory persistence, and
 contracted streaming surfaces. The runtime analysis suite covers assignment
-profiling, product profiling, communication hints, fit-matrix scoring, and the
-standalone analysis API.
+profiling, product profiling, communication hints, fit-matrix scoring,
+automatic AI payload repair, and the standalone analysis API.
 
 ## Key documents
 

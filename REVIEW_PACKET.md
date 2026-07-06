@@ -56,7 +56,7 @@ source session
 | Assignment analysis | `/api/v1/runtime/analysis` profiles assignment text, user expectation, linked products, communication hints, and capability fit before dispatch |
 | Unknown BHIV capability understanding | Manifest/schema/metadata-derived capability understanding with sparse-manifest test coverage |
 | Command-chain understanding | `/api/v1/runtime/chain` loads `contracts/runtime-command-chain.json` without hardcoded runtime product names |
-| Runtime intelligence | capability ranking, recommendations, cost/latency metadata, retry strategy, optional AI resolver |
+| Runtime intelligence | capability ranking, fit matrix, recommendations, cost/latency metadata, retry strategy, and automatic AI fallback when deterministic matching or payload inference is incomplete |
 | Products attach without runtime modification | manifest examples attach through the same API |
 | Product self-attachment | `product-echo.json` attaches through `POST /api/v1/attachments` |
 | Stable/versioned APIs | OpenAPI 3.1 and version fields on mutations |
@@ -76,8 +76,8 @@ source session
 
 ## Verification
 
-- Automated suite: `77 passed`
-- Companion interaction and runtime analysis tests: `6 passed`
+- Automated suite: `78 passed`
+- Companion interaction and runtime analysis tests: `7 passed`
 - Focused BHIV, hardening, contract, and production-readiness suite: `15 passed`
 - Two products attached through published manifests
 - Two accessible BHIV products attach through published manifests: UniGuru in `uniguru_ai` and Samruddhi in `trade-bot-main`

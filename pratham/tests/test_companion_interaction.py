@@ -195,6 +195,68 @@ async def test_companion_understands_sparse_attached_bhiv_capability(
     )
 
 
+@pytest.mark.asyncio
+async def test_ai_analysis_payload_is_used_when_deterministic_payload_is_missing(
+    runtime,
+    monkeypatch,
+):
+    calls: list[dict[str, Any]] = []
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "product_id": "market-bridge",
+                "capability_id": "market-prediction",
+                "intent_id": "predict.market",
+                "confidence": 0.91,
+                "reason": "AI inferred the missing market symbol from context.",
+                "payload": {"symbols": ["INFY"]},
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, *args: Any, **kwargs: Any):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            return None
+
+        async def post(self, url: str, json: dict[str, Any]):
+            calls.append(json)
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        "mitra_companion.analysis.httpx.AsyncClient",
+        FakeAsyncClient,
+    )
+    runtime.analyzer.ai_analysis_url = "https://ai.example/runtime-analysis"
+    runtime.attach(_sparse_market_manifest())
+
+    result = await runtime.companion_message(
+        CompanionMessageRequest(
+            actor_id="auto-ai-user",
+            client_type="standalone",
+            workspace_id="auto-ai-space",
+            message="Show my market prediction",
+        )
+    )
+
+    assert calls
+    assert calls[0]["fallback_trigger"]["gaps"] == [
+        {"kind": "missing-inputs", "fields": ["symbols"]}
+    ]
+    assert result["analysis"]["ai_status"] == "used"
+    assert result["analysis"]["ai_payload_hints"] == {"symbols": ["INFY"]}
+    assert result["status"] == "COMPLETED"
+    assert result["payload"] == {"symbols": ["INFY"]}
+    assert result["dispatch"]["status"] == "COMPLETED"
+
+
 def test_companion_api_exposes_message_memory_task_and_stream(
     settings_factory,
 ):

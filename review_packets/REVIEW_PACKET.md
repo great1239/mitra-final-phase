@@ -13,8 +13,8 @@ Implemented runtime scope:
   clarification, execution status, task notifications, and NDJSON streaming;
 - runtime analysis layer that profiles assignment text, user expectation,
   attached products, communication hints, and capability fit before routing;
-- optional vendor-neutral AI resolver fallback when deterministic selection is
-  not confident;
+- automatic vendor-neutral AI fallback when deterministic selection, payload
+  inference, or dispatch readiness is incomplete;
 - UniGuru and Samruddhi/trade-bot attachment through published manifests only;
 - reviewable contracts, tests, and evidence artifacts.
 
@@ -58,7 +58,7 @@ The unrelated public/fork repos `composiocode` and
 | Multi-step execution status | durable `companion_tasks` records and notifications |
 | Response streaming | `/api/v1/companion/messages/stream` NDJSON events |
 | Runtime intelligence | fit matrix, ranking, recommendation, cost, latency, retry metadata |
-| AI fallback | `MITRA_COMPANION_AI_RESOLVER_URL` and `MITRA_COMPANION_AI_ANALYSIS_URL` optional contracts |
+| AI fallback | automatic resolver/analysis calls through `MITRA_COMPANION_AI_RESOLVER_URL` and `MITRA_COMPANION_AI_ANALYSIS_URL` |
 | Command chain | `/api/v1/runtime/chain` with `contracts/runtime-command-chain.json` |
 | Health and metrics | `/health`, `/ready`, `/metrics`, `/api/v1/runtime/metrics` |
 | Recovery | attachment health check and degraded-to-attached restoration |
@@ -66,7 +66,7 @@ The unrelated public/fork repos `composiocode` and
 
 ## Verification
 
-- Full collected suite: 77 tests.
+- Full collected suite: 78 tests.
 - Full pytest run: passed.
 - New focused tests: `pratham/tests/test_companion_interaction.py` and `pratham/tests/test_runtime_analysis.py`.
 - Static contract catalog updated and validated by existing contract tests.

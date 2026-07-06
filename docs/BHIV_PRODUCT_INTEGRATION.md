@@ -49,6 +49,7 @@ correlation, and contract version.
 | Health monitoring | UniGuru publishes `GET /health`; Samruddhi publishes `GET /tools/health`; both are checked through the generic attachment health monitor. |
 | Metrics and telemetry | `test_bhiv_dispatch_concurrency_metrics_and_structured_log` verifies dispatch counters, per-product latency metrics, and JSONL structured events. |
 | Assignment-to-product matching | `test_runtime_analysis_matches_assignment_to_attached_product` verifies assignment context, customer expectation, product profile, protocol hints, and fit matrix scoring. |
+| Automatic AI fallback | `test_ai_analysis_payload_is_used_when_deterministic_payload_is_missing` verifies AI is called when deterministic payload inference cannot make the selected capability dispatch-ready. |
 | Restart validation | `test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes` proves attachments, sessions, and routing survive runtime recreation. |
 | Recovery validation | `test_attachment_health_monitoring_and_recovery_validation` simulates HTTP failure, degradation, health recovery, and resumed dispatch. |
 

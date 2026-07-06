@@ -137,6 +137,7 @@ class RuntimeAnalyzer:
         if (
             deterministic["status"] == "matched"
             and deterministic.get("margin", 0.0) >= 0.08
+            and not deterministic["gaps"]
         ):
             analysis["ai_status"] = "skipped-deterministic-match"
             return analysis
@@ -457,6 +458,7 @@ class RuntimeAnalyzer:
                     json={
                         "contract": "mitra-runtime-analysis-v1",
                         "message": message,
+                        "fallback_trigger": self._fallback_trigger(fit_matrix),
                         "assignment_profile": assignment_profile,
                         "user_expectation": user_expectation,
                         "product_profiles": product_profiles,
@@ -472,6 +474,26 @@ class RuntimeAnalyzer:
                 "reason": "ai review endpoint failed or returned invalid JSON",
             }
         return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _fallback_trigger(fit_matrix: list[dict[str, Any]]) -> dict[str, Any]:
+        if not fit_matrix:
+            return {
+                "reason": "no-candidates",
+                "top_candidate": None,
+                "gaps": [{"kind": "no-candidates"}],
+            }
+        top = fit_matrix[0]
+        return {
+            "reason": "deterministic-path-not-dispatch-ready",
+            "top_candidate": {
+                "product_id": top["product_id"],
+                "capability_id": top["capability_id"],
+                "intent_id": top["intent_id"],
+                "confidence": top["confidence"],
+            },
+            "gaps": top.get("gaps", []),
+        }
 
     def _merge_ai_result(
         self,
