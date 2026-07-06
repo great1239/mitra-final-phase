@@ -16,7 +16,7 @@ Implemented runtime scope:
   attached products, communication hints, and capability fit before routing;
 - automatic vendor-neutral AI fallback when deterministic selection, payload
   inference, or dispatch readiness is incomplete;
-- previous-submission reuse surfaces: capability catalog, public contract
+- previous-submission reuse surfaces: source-scope catalog, capability catalog, public contract
   summaries, semantic-version dependency checks, seven-phase dispatch journal,
   and portable dispatch proof bundles;
 - UniGuru and Samruddhi/trade-bot attachment through published manifests only;
@@ -55,7 +55,7 @@ The unrelated public/fork repos `composiocode` and
 | Customer asks expressed naturally | `outcome` object on companion responses |
 | Assignment-to-capability matching | `/api/v1/runtime/analysis`, `analysis` object on companion responses |
 | Unknown/sparse BHIV products | manifest/schema/metadata-derived capability understanding |
-| Previous submission reuse | `/api/v1/runtime/capability-catalog`, `/api/v1/dispatches/{dispatch_id}/phases`, and `/api/v1/dispatches/{dispatch_id}/proof` |
+| Previous submission reuse | `/api/v1/runtime/source-scope`, `/api/v1/runtime/capability-catalog`, `/api/v1/dispatches/{dispatch_id}/phases`, and `/api/v1/dispatches/{dispatch_id}/proof` |
 | Execute real functions | `/api/v1/intents/dispatch`, `/api/v1/companion/messages` |
 | Conversation memory | durable `companion_messages` and session context memory |
 | Session continuity | durable sessions plus companion memory endpoint |
@@ -72,11 +72,9 @@ The unrelated public/fork repos `composiocode` and
 
 ## Verification
 
-- Full collected suite before reuse extension: 81 tests.
-- Full pytest run before reuse extension: passed.
-- Current reuse extension static checks: `py_compile` passed on changed
-  runtime/test modules and `git diff --check` passed; focused pytest was
-  blocked by the environment approval usage limit.
+- Full collected suite: 84 tests.
+- Full pytest run: passed.
+- Current reuse extension focused validation: 11 tests passed.
 - New focused tests: `pratham/tests/test_companion_interaction.py`,
   `pratham/tests/test_runtime_analysis.py`, and persistent-runtime coverage in
   `pratham/tests/test_production_hardening.py`.

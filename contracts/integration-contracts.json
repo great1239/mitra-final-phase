@@ -28,6 +28,7 @@
       "/api/v1/runtime/status",
       "/api/v1/runtime/lifecycle",
       "/api/v1/runtime/chain",
+      "/api/v1/runtime/source-scope",
       "/api/v1/runtime/capability-catalog",
       "/api/v1/runtime/analysis",
       "/api/v1/companion/messages",
@@ -102,6 +103,11 @@
     {
       "id": "runtime-analysis",
       "path": "contracts/schemas/runtime-analysis.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "source-scope-catalog",
+      "path": "contracts/schemas/source-scope-catalog.schema.json",
       "version": "1.0.0"
     },
     {
@@ -191,6 +197,10 @@
     {
       "name": "runtime command chain model",
       "path": "contracts/runtime-command-chain.json"
+    },
+    {
+      "name": "previous submission source scope catalog",
+      "path": "contracts/source-scope-catalog.json"
     }
   ]
 }

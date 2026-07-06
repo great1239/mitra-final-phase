@@ -281,6 +281,10 @@ def create_app(
     async def runtime_chain() -> dict:
         return versioned_response(chain=companion.ecosystem_chain())
 
+    @app.get("/api/v1/runtime/source-scope")
+    async def runtime_source_scope() -> dict:
+        return versioned_response(source_scope=companion.source_scope())
+
     @app.get("/api/v1/runtime/capability-catalog")
     async def runtime_capability_catalog() -> dict:
         return versioned_response(catalog=companion.capability_catalog())

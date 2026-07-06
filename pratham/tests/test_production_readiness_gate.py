@@ -62,6 +62,7 @@ def test_operations_documents_and_environment_template_are_present():
     assert "Phase IV durable execution checkpoints" in reuse_doc
     assert "Commercial Foundation public contract registry" in reuse_doc
     assert "Runtime proof-bundle producer" in reuse_doc
+    assert "Source scope and prior-submission feature catalog" in reuse_doc
 
 
 def test_runtime_instances_are_first_class_production_surface():
@@ -98,6 +99,9 @@ def test_runtime_instances_are_first_class_production_surface():
     assert "/api/v1/runtime/capability-catalog" in _read(
         "pratham/companion-runtime/mitra_companion/api.py"
     )
+    assert "/api/v1/runtime/source-scope" in _read(
+        "pratham/companion-runtime/mitra_companion/api.py"
+    )
     assert "/api/v1/dispatches/{dispatch_id}/proof" in _read(
         "pratham/companion-runtime/mitra_companion/api.py"
     )
@@ -106,6 +110,12 @@ def test_runtime_instances_are_first_class_production_surface():
     )
     assert "DispatchProofBuilder" in _read(
         "pratham/companion-runtime/mitra_companion/proofs.py"
+    )
+    assert "SourceScopeRegistry" in _read(
+        "pratham/companion-runtime/mitra_companion/source_scope.py"
+    )
+    assert "source-scope-catalog" in _read(
+        "contracts/integration-contracts.json"
     )
     assert (
         "test_multiple_runtime_instances_share_state_routes_and_dispatch"

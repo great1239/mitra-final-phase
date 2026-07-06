@@ -42,6 +42,7 @@ from .interaction import (
 from .lifecycle import RuntimeLifecycle
 from .observability import runtime_span
 from .proofs import DispatchProofBuilder
+from .source_scope import SourceScopeRegistry
 from .store import RuntimeStore
 from .telemetry import RuntimeTelemetry
 from .transport import CapabilityTransport
@@ -140,6 +141,9 @@ class CompanionRuntime:
         )
         self.proofs = DispatchProofBuilder(
             runtime_instance_id=settings.runtime_instance_id,
+        )
+        self.source_scope_registry = SourceScopeRegistry(
+            settings.service_root / "contracts" / "source-scope-catalog.json"
         )
         self.supervisor = PersistentRuntimeSupervisor(self)
         self.accepting = False
@@ -254,6 +258,7 @@ class CompanionRuntime:
                     self.settings.persistent_task_timeout_seconds
                 ),
             },
+            "source_scope": self.source_scope_registry.summary(),
             "attached_products": [
                 item["product_id"] for item in self.attachments.list()
             ],
@@ -316,7 +321,11 @@ class CompanionRuntime:
             **catalog,
             "dispatch_phase_model": list(DISPATCH_PHASE_MODEL),
             "proof_bundle_model": "mitra-dispatch-proof-v1",
+            "source_scope": self.source_scope_registry.summary(),
         }
+
+    def source_scope(self) -> dict[str, Any]:
+        return self.source_scope_registry.catalog()
 
     def ecosystem_chain(self) -> dict[str, Any]:
         model = self._load_chain_contract()
@@ -330,6 +339,7 @@ class CompanionRuntime:
                 build_capability_understanding(candidate)
                 for candidate in candidates
             ],
+            "source_scope": self.source_scope_registry.summary(),
         }
 
     def _load_chain_contract(self) -> dict[str, Any]:
@@ -723,6 +733,9 @@ class CompanionRuntime:
             metrics=self.metrics_snapshot(),
             allow_ai_fallback=request.allow_ai_fallback,
         )
+        runtime_analysis["previous_submission_scope"] = (
+            self.source_scope_registry.analysis_hints()
+        )
         selection = await self.intent_resolver.select(
             message=request.message,
             candidates=candidates,
@@ -949,6 +962,9 @@ class CompanionRuntime:
             memory=memory,
             metrics=self.metrics_snapshot(),
             allow_ai_fallback=request.allow_ai_fallback,
+        )
+        analysis["previous_submission_scope"] = (
+            self.source_scope_registry.analysis_hints()
         )
         return {
             "analysis": analysis,

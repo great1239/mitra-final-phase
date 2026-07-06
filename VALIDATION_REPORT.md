@@ -6,8 +6,8 @@ Validated on July 6, 2026.
 
 | Check | Result |
 |---|---|
-| Last full unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, persistent multi-instance runtime, runtime analysis, and Phase 1-7 conformance test run | `81 passed` |
-| Current previous-submission reuse extension static validation | `py_compile` passed for changed runtime/test modules; `git diff --check` passed |
+| Unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, persistent multi-instance runtime, runtime analysis, previous-submission reuse, and Phase 1-7 conformance tests | `84 passed` |
+| Current previous-submission reuse extension focused validation | `11 passed` |
 | Example manifests against JSON Schema 2020-12 | passed |
 | Two-product runtime simulation | passed |
 | Cross-product context isolation | passed |
@@ -21,7 +21,7 @@ Validated on July 6, 2026.
 | Forbidden subsystem symbol/import/API scan | passed |
 | Phase 1 runtime interface catalog | 7 interfaces, 0 schema errors |
 | Phase 1 runtime state machine | 6 runtime states, 14 transitions, 0 schema errors |
-| OpenAPI surface | 34 published paths |
+| OpenAPI surface | 35 published paths |
 | Durable session resume after runtime recreation | passed |
 | Durable session and context continuity after runtime recreation | passed |
 | Actor-scoped workspace isolation | passed |
@@ -33,7 +33,7 @@ Validated on July 6, 2026.
 | Persistent runtime supervisor heartbeat | passed |
 | Stale runtime peer cleanup | passed |
 | Interrupted companion task recovery after restart | passed |
-| Previous submission reuse: seven-phase dispatch journal, capability catalog, public contract summary, and proof bundle | static validation passed; focused pytest blocked by environment approval usage limit |
+| Previous submission reuse: source-scope catalog, seven-phase dispatch journal, capability catalog, public contract summary, and proof bundle | passed |
 | Exact capability lookup | passed |
 | Ambiguous intent fail-closed routing | passed |
 | Unexpected adapter exception normalization | passed |
@@ -54,7 +54,7 @@ Validated on July 6, 2026.
 | Multi-instance runtime continuity | passed |
 | Python wheel build and isolated install | passed |
 | All five implementation packages import from built artifact | passed |
-| OpenAPI YAML parse | OpenAPI `3.1.0`, 34 paths |
+| OpenAPI YAML parse | OpenAPI `3.1.0`, 35 paths |
 | Demo video decode | H.264 MP4, 1440x1080, 30 fps, 17 seconds |
 
 ## Live evidence

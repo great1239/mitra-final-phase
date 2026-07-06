@@ -56,6 +56,12 @@ paths:
       responses:
         "200":
           description: Runtime-readable Mitra and BHIV command-chain model
+  /api/v1/runtime/source-scope:
+    get:
+      operationId: getRuntimeSourceScope
+      responses:
+        "200":
+          description: Previous-submission feature import and external-system boundary catalog
   /api/v1/runtime/capability-catalog:
     get:
       operationId: getRuntimeCapabilityCatalog

@@ -12,6 +12,7 @@ moving downstream authority or product-specific business logic into Mitra.
 | Commercial Foundation public contract registry | Manifest metadata can declare `public_contracts` for APIs, events, permissions, UI routes, and UI slots; the runtime catalog summarizes publishers, consumers, permissions, and conflicts. | Mitra reports registrations; product manifests remain the source of truth. |
 | Runtime proof-bundle producer | `GET /api/v1/dispatches/{dispatch_id}/proof` returns canonical request/response hashes, phase journal, lineage nodes, reconstruction hints, and handover steps. | Mitra emits dispatch proof; external systems decide any downstream validation. |
 | Operational gateway negative-path discipline | Failed product transport records failed dispatch phases and a durable failed dispatch receipt. | Failures stay contained to the affected attachment and dispatch. |
+| Source scope and prior-submission feature catalog | `contracts/source-scope-catalog.json`, `SourceScopeRegistry`, and `GET /api/v1/runtime/source-scope` expose which useful systems were imported, adapted, or left external. | Mitra can understand previous submissions without absorbing downstream authority or product logic. |
 
 ## Not Copied Into Mitra
 
@@ -28,6 +29,8 @@ manifests, adapters, or later consumers:
 
 Runtime coverage now includes:
 
+- source-scope catalog validation and API exposure;
+- runtime status and analysis hints for imported prior-submission systems;
 - dispatch phase journal creation for successful and failed dispatches;
 - dispatch proof bundle hashes and lineage nodes;
 - manifest dependency validation through the capability catalog;

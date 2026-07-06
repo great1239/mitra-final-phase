@@ -1,0 +1,368 @@
+{
+  "schema_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "runtime_version": "1.0.0",
+  "compatibility_version": "mitra-companion-1",
+  "catalog_version": "2026-07-06",
+  "purpose": "Runtime-readable map of useful systems and features copied, adapted, or externalized from previous submissions into the Mitra Live Runtime Sprint.",
+  "selection_policy": {
+    "import_when": [
+      "The feature is generic runtime infrastructure.",
+      "The feature improves product discovery, routing, persistence, telemetry, proof, recovery, or operator review.",
+      "The feature can be driven by published manifests, schemas, APIs, or durable runtime receipts."
+    ],
+    "externalize_when": [
+      "The feature is a product-owned capability implementation.",
+      "The feature is a downstream authority, validation, provenance, convergence, or review system.",
+      "The feature requires independent business data, governance posture, or product-specific execution rules."
+    ],
+    "never_import": [
+      "Product-specific branches inside the Mitra runtime.",
+      "Authority or review decisions that belong after Mitra has routed the product response.",
+      "Evidence or provenance internals that can be represented as portable dispatch proofs or downstream handoff contracts."
+    ]
+  },
+  "previous_submissions": [
+    {
+      "submission_id": "companion-runtime-foundations",
+      "local_folder": "Companion-Runtime-Foundations",
+      "useful_systems": [
+        "session runtime",
+        "context runtime",
+        "intent router",
+        "attachment runtime",
+        "lifecycle state machine",
+        "versioned integration contracts"
+      ],
+      "copied_or_mapped_features": [
+        "durable sessions and resume tokens",
+        "partitioned context and transfer",
+        "manifest-driven attachment",
+        "explicit intent routing",
+        "OpenAPI and JSON Schema contract catalog"
+      ],
+      "externalized_systems": []
+    },
+    {
+      "submission_id": "phase-iv-runtime-foundation",
+      "local_folder": "Mitra-Phase-IV-Runtime-Foundation",
+      "useful_systems": [
+        "continuous runtime operation",
+        "startup validation",
+        "failure simulation evidence",
+        "container deployment verification"
+      ],
+      "copied_or_mapped_features": [
+        "persistent runtime supervisor",
+        "runtime instance heartbeat",
+        "stale peer cleanup",
+        "interrupted task recovery",
+        "operational runbook validation"
+      ],
+      "externalized_systems": []
+    },
+    {
+      "submission_id": "ecosystem-runtime-hardening",
+      "local_folder": "Ecosystem-Runtime-Hardening-Assignment",
+      "useful_systems": [
+        "production deployment profile",
+        "health and readiness probes",
+        "structured telemetry",
+        "metrics and tracing",
+        "load testing"
+      ],
+      "copied_or_mapped_features": [
+        "Docker Compose production posture",
+        "OpenTelemetry and Prometheus surfaces",
+        "attachment health monitoring",
+        "recovery validation",
+        "k6 load profile"
+      ],
+      "externalized_systems": []
+    },
+    {
+      "submission_id": "commercial-platform-foundation",
+      "local_folder": "Commercial-Platform-Architecture-and-Runtime-Foundation",
+      "useful_systems": [
+        "capability manifests",
+        "dependency manifests",
+        "runtime boot sequence",
+        "interface manifests",
+        "platform architecture manifest"
+      ],
+      "copied_or_mapped_features": [
+        "runtime capability catalog",
+        "capability dependency graph",
+        "contract-first product intake",
+        "future-product manifest checklist"
+      ],
+      "externalized_systems": [
+        "commercial pricing logic",
+        "commercial data models",
+        "product-specific workflows"
+      ]
+    },
+    {
+      "submission_id": "runtime-evidence-producer",
+      "local_folder": "Runtime-Evidence-Producer",
+      "useful_systems": [
+        "canonical proof schema",
+        "execution receipt hashing",
+        "lineage bundle",
+        "consumer handoff"
+      ],
+      "copied_or_mapped_features": [
+        "dispatch phase journal",
+        "portable dispatch proof bundle",
+        "request, context, response, and phase hashes",
+        "lineage nodes for runtime and attached product boundaries"
+      ],
+      "externalized_systems": [
+        "downstream evidence production authority",
+        "reviewer decision logic"
+      ]
+    },
+    {
+      "submission_id": "constitutional-runtime-convergence",
+      "local_folder": "constitutional-runtime-convergence-sprint",
+      "useful_systems": [
+        "command-chain model",
+        "handoff trace",
+        "downstream authority ordering"
+      ],
+      "copied_or_mapped_features": [
+        "runtime command-chain contract",
+        "Mitra-to-product-to-downstream boundary model",
+        "trace handoff vocabulary"
+      ],
+      "externalized_systems": [
+        "TANTRA",
+        "SHAKTI",
+        "MDU",
+        "TMS",
+        "Parikshak"
+      ]
+    },
+    {
+      "submission_id": "shakti-and-parikshak-systems",
+      "local_folder": "Shakti-GC-Infra; Parikshak-system",
+      "useful_systems": [
+        "validation authority consumer",
+        "review readiness consumer"
+      ],
+      "copied_or_mapped_features": [
+        "external capability relationship",
+        "proof handoff expectation",
+        "post-Mitra execution boundary"
+      ],
+      "externalized_systems": [
+        "SHAKTI constitutional validation internals",
+        "Parikshak review readiness internals"
+      ]
+    },
+    {
+      "submission_id": "accessible-bhiv-product-fixtures",
+      "local_folder": "uniguru_ai; trade-bot-main",
+      "useful_systems": [
+        "real product health endpoints",
+        "real product dispatch endpoints",
+        "native product request bodies"
+      ],
+      "copied_or_mapped_features": [
+        "UniGuru product manifest",
+        "Samruddhi trade-bot product manifest",
+        "native HTTP payload projection",
+        "contract and integration tests"
+      ],
+      "externalized_systems": [
+        "UniGuru teaching logic",
+        "Samruddhi market prediction logic"
+      ]
+    }
+  ],
+  "runtime_imports": [
+    {
+      "feature_id": "durable-session-context-routing-foundation",
+      "source_submission_ids": ["companion-runtime-foundations"],
+      "implemented_in": [
+        "pratham/session-runtime",
+        "pratham/context-runtime",
+        "pratham/intent-router",
+        "pratham/attachment-runtime",
+        "pratham/companion-runtime"
+      ],
+      "runtime_surface": "sessions, contexts, attachments, intents, dispatch",
+      "used_for": [
+        "preserve customer continuity",
+        "load least required context",
+        "route only explicit registered capabilities"
+      ],
+      "boundary": "internal-runtime"
+    },
+    {
+      "feature_id": "persistent-production-runtime",
+      "source_submission_ids": [
+        "phase-iv-runtime-foundation",
+        "ecosystem-runtime-hardening"
+      ],
+      "implemented_in": [
+        "mitra_companion.runtime.PersistentRuntimeSupervisor",
+        "mitra_companion.store.mark_stale_runtime_instances",
+        "mitra_companion.store.recover_interrupted_companion_tasks"
+      ],
+      "runtime_surface": "runtime status, instance heartbeat, persistent tick",
+      "used_for": [
+        "keep Mitra alive as a service process",
+        "recover interrupted tasks",
+        "clean stale runtime peers"
+      ],
+      "boundary": "internal-runtime"
+    },
+    {
+      "feature_id": "capability-dependency-catalog",
+      "source_submission_ids": [
+        "commercial-platform-foundation",
+        "companion-runtime-foundations"
+      ],
+      "implemented_in": [
+        "mitra_companion.dependency_registry.CapabilityDependencyRegistry",
+        "/api/v1/runtime/capability-catalog"
+      ],
+      "runtime_surface": "runtime capability catalog",
+      "used_for": [
+        "understand attached product dependencies",
+        "review capability inputs and dispatch targets",
+        "prepare future product intake"
+      ],
+      "boundary": "contract-only"
+    },
+    {
+      "feature_id": "assignment-and-product-fit-analysis",
+      "source_submission_ids": [
+        "commercial-platform-foundation",
+        "companion-runtime-foundations"
+      ],
+      "implemented_in": [
+        "mitra_companion.analysis.RuntimeAnalyzer",
+        "/api/v1/runtime/analysis",
+        "/api/v1/companion/messages"
+      ],
+      "runtime_surface": "runtime analysis and companion message analysis",
+      "used_for": [
+        "contextualize assignment text",
+        "extract customer expectation",
+        "match expectation to attached capability"
+      ],
+      "boundary": "internal-runtime"
+    },
+    {
+      "feature_id": "dispatch-proof-and-phase-journal",
+      "source_submission_ids": [
+        "runtime-evidence-producer",
+        "phase-iv-runtime-foundation"
+      ],
+      "implemented_in": [
+        "mitra_companion.proofs.DispatchProofBuilder",
+        "mitra_companion.store.dispatch_phases",
+        "/api/v1/dispatches/{dispatch_id}/phases",
+        "/api/v1/dispatches/{dispatch_id}/proof"
+      ],
+      "runtime_surface": "dispatch proof and phase APIs",
+      "used_for": [
+        "make every product dispatch reviewable",
+        "handoff portable proof to downstream systems",
+        "avoid importing downstream evidence authority logic"
+      ],
+      "boundary": "contract-only"
+    },
+    {
+      "feature_id": "downstream-command-chain-understanding",
+      "source_submission_ids": [
+        "constitutional-runtime-convergence",
+        "shakti-and-parikshak-systems"
+      ],
+      "implemented_in": [
+        "contracts/runtime-command-chain.json",
+        "/api/v1/runtime/chain"
+      ],
+      "runtime_surface": "runtime command-chain model",
+      "used_for": [
+        "know what happens after Mitra routes product execution",
+        "keep authority and review systems outside Mitra",
+        "prepare proof handoff without hardcoding downstream internals"
+      ],
+      "boundary": "external-capability"
+    },
+    {
+      "feature_id": "real-product-contract-fixtures",
+      "source_submission_ids": ["accessible-bhiv-product-fixtures"],
+      "implemented_in": [
+        "contracts/examples/product-uniguru-runtime.json",
+        "contracts/examples/product-trade-bot-main.json",
+        "pratham/tests/test_bhiv_product_integration.py"
+      ],
+      "runtime_surface": "manifest-driven product attachment",
+      "used_for": [
+        "prove Mitra can attach independent products",
+        "prove native product dispatch over generic transport",
+        "test future product compatibility"
+      ],
+      "boundary": "contract-only"
+    }
+  ],
+  "external_systems": [
+    {
+      "system_id": "TANTRA",
+      "source_submission_ids": [
+        "constitutional-runtime-convergence",
+        "TANTRA-Evidence-Consumer-Integration-Sprint",
+        "tantra-evidence-integration"
+      ],
+      "runtime_relationship": "downstream trace chain coordinator after Mitra has routed product execution",
+      "integration_method": "consume dispatch proof, phase journal, or published product response handoff",
+      "not_copied_reason": "Trace orchestration belongs after Mitra's product routing boundary."
+    },
+    {
+      "system_id": "SHAKTI",
+      "source_submission_ids": [
+        "Shakti-GC-Infra",
+        "SHAKTI-TANTRA-Operationalization-Sprint"
+      ],
+      "runtime_relationship": "downstream validation authority",
+      "integration_method": "consume portable proof bundle or attach as a published external capability",
+      "not_copied_reason": "Validation decisions and constitutional posture are authority-system responsibilities."
+    },
+    {
+      "system_id": "MDU",
+      "source_submission_ids": ["constitutional-runtime-convergence"],
+      "runtime_relationship": "downstream lineage and provenance registry",
+      "integration_method": "consume dispatch lineage and hashes from proof bundle",
+      "not_copied_reason": "Artifact registry and provenance lookup are separate from Mitra's companion execution role."
+    },
+    {
+      "system_id": "TMS",
+      "source_submission_ids": ["constitutional-runtime-convergence"],
+      "runtime_relationship": "downstream convergence monitor",
+      "integration_method": "consume trace status and proof handoff after product execution",
+      "not_copied_reason": "Convergence status is evaluated after Mitra's routing and product response."
+    },
+    {
+      "system_id": "Parikshak",
+      "source_submission_ids": [
+        "Parikshak-system",
+        "constitutional-runtime-convergence"
+      ],
+      "runtime_relationship": "downstream review readiness consumer",
+      "integration_method": "consume proof bundle, phase summary, and downstream authority outputs",
+      "not_copied_reason": "Review readiness is a consumer of Mitra outputs, not Mitra's internal runtime responsibility."
+    }
+  ],
+  "future_product_intake": [
+    "Find or request the product's published capability manifest.",
+    "Validate manifest schema and attachment health endpoint.",
+    "Register capabilities and intents without runtime code changes.",
+    "Use runtime analysis to match customer expectation to capability fit.",
+    "Dispatch only through the manifest transport adapter.",
+    "Expose dispatch phases and proof bundle for downstream authority or review systems."
+  ]
+}

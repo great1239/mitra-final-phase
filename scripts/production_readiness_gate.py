@@ -29,6 +29,8 @@ def main() -> int:
         "docs/PRODUCTION_HARDENING.md",
         "docs/PRODUCTION_TACTICS.md",
         "docs/PREVIOUS_SUBMISSION_REUSE.md",
+        "contracts/schemas/source-scope-catalog.schema.json",
+        "contracts/source-scope-catalog.json",
         "scripts/load/k6_companion_runtime.js",
         "evidence/load-testing-report.md",
         "evidence/failure-recovery-report.md",
@@ -72,12 +74,20 @@ def main() -> int:
         "pratham/companion-runtime/mitra_companion/runtime.py": [
             "PersistentRuntimeSupervisor",
             "persistent_tick",
+            "source_scope_registry",
             "DISPATCH_PHASE_MODEL",
         ],
         "pratham/companion-runtime/mitra_companion/api.py": [
             "/api/v1/runtime/instances",
             "/api/v1/runtime/capability-catalog",
+            "/api/v1/runtime/source-scope",
             "/api/v1/dispatches/{dispatch_id}/proof",
+        ],
+        "contracts/source-scope-catalog.json": [
+            "persistent-production-runtime",
+            "dispatch-proof-and-phase-journal",
+            "downstream-command-chain-understanding",
+            "future_product_intake",
         ],
         "pratham/companion-runtime/mitra_companion/store.py": [
             "runtime_instances",
