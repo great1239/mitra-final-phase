@@ -31,6 +31,7 @@ critical code entry points.
 12. [Frontend compatibility connector](12-frontend-connector.md)
 13. [Samruddhi product attachments](13-samruddhi-product-attachments.md)
 14. [Samruddhi validation and docs](14-samruddhi-validation-docs.md)
+15. [Validation report consolidation](15-validation-report-consolidation.md)
 
 ## Reviewer Path
 

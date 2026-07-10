@@ -25,15 +25,36 @@ This directory currently includes two real BHIV product manifests:
   - repository: `https://github.com/VJY123VJY/uniguru_ai`
   - base URL: `https://uni-guru.in`
   - dispatch: `POST /ask`
+  - fallback dispatch: `POST /new_rag` when `/ask` returns UniGuru's
+    safe-fallback invalid-response signature
   - health: `GET /health`
   - runtime secret required for dispatch:
     `MITRA_PRODUCT_UNIGURU_BEARER_TOKEN`
+  - runtime secret required for fallback dispatch:
+    `MITRA_PRODUCT_UNIGURU_RAG_TOKEN`
 
 - `product-samruddhi-trade-bot.json`
   - repository: `https://github.com/harshapawar136/trade-bot-main`
   - base URL: `https://trade-bot-api.onrender.com`
   - dispatch: `POST /tools/predict`, `POST /tools/analyze`
   - health: `GET /tools/health`
+  - response contract: rejects HTTP 200 prediction/analyze payloads when any
+    `predictions[]` item contains an `error` field.
 
 Both manifests require JSON health responses through `metadata.health_contract`.
 A frontend fallback page, even with HTTP 200, is reported as unhealthy.
+
+`metadata.health_contract.translator` handles product-neutral non-linear
+health behavior before contract validation:
+
+- UniGuru is allowed to follow a published `/health` redirect before checking
+  the final JSON response.
+- Trade Bot's Render "service suspended" HTML page is normalized into an
+  explicit unhealthy response so operators see the downstream state clearly.
+- Trade Bot prediction/analyze calls that return product execution errors
+  inside a JSON success payload are treated as failed dispatches by the
+  manifest response schema.
+
+The translator never marks a suspended service healthy; it only converts odd
+transport responses into reviewable health facts before the normal contract
+check runs.

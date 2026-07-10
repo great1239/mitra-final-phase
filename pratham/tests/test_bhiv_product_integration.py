@@ -12,6 +12,7 @@ from mitra_companion.contracts import (
     IntentDispatchRequest,
     ProductAttachmentManifest,
 )
+from mitra_companion.errors import TransportError
 from mitra_companion.runtime import CompanionRuntime
 from mitra_companion.transport import CapabilityTransport
 
@@ -21,6 +22,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _manifest(name: str) -> ProductAttachmentManifest:
     path = ROOT / "contracts" / "examples" / name
+    return ProductAttachmentManifest.model_validate_json(
+        path.read_text(encoding="utf-8")
+    )
+
+
+def _production_manifest(name: str) -> ProductAttachmentManifest:
+    path = ROOT / "contracts" / "production" / name
     return ProductAttachmentManifest.model_validate_json(
         path.read_text(encoding="utf-8")
     )
@@ -328,6 +336,151 @@ async def test_http_adapter_applies_manifest_headers_and_bearer_token_env(
 
 
 @pytest.mark.asyncio
+async def test_uniguru_manifest_retries_published_rag_endpoint_on_safe_fallback(
+    settings_factory,
+    monkeypatch,
+):
+    monkeypatch.setenv("MITRA_PRODUCT_UNIGURU_RAG_TOKEN", "rag-secret")
+    received: list[dict[str, Any]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8") or "{}")
+        received.append(
+            {
+                "path": request.url.path,
+                "payload": payload,
+                "authorization": request.headers.get("Authorization"),
+                "caller": request.headers.get("X-Caller-Name"),
+            }
+        )
+        if request.url.path == "/ask":
+            return httpx.Response(
+                200,
+                json={
+                    "decision": "reject",
+                    "answer": "Knowledge not found in verified ontology.",
+                    "verification_status": "FAILED",
+                    "reason": "/ask recovered from invalid response payload type.",
+                },
+            )
+        if request.url.path == "/new_rag":
+            assert payload == {"domain": "general", "query": "What is ahimsa?"}
+            assert request.headers["Authorization"] == "Bearer rag-secret"
+            return httpx.Response(
+                200,
+                json={
+                    "query": "What is ahimsa?",
+                    "domain": "general",
+                    "signals_used": [{"signal_id": "sig-1"}],
+                    "knowledge_ids": ["kosha-ahimsa"],
+                    "confidence": 91.0,
+                    "reasoning_trace": ["deterministic_synthesis"],
+                    "final_answer": "Ahimsa means non-violence.",
+                },
+            )
+        return httpx.Response(404, json={"error": request.url.path})
+
+    transport = CapabilityTransport(
+        default_timeout_seconds=0.2,
+        http_transport=httpx.MockTransport(handler),
+    )
+    settings: RuntimeSettings = settings_factory()
+    runtime = CompanionRuntime(settings=settings, transport=transport)
+    runtime.start()
+    try:
+        manifest_data = _production_manifest(
+            "product-samruddhi-uniguru.json"
+        ).model_dump(mode="json")
+        manifest_data["base_url"] = "https://uniguru-fallback.invalid"
+        manifest_data["metadata"]["production_bootstrap"] = False
+        runtime.attach(ProductAttachmentManifest.model_validate(manifest_data))
+        session = runtime.sessions.create(
+            actor_id="uniguru-user",
+            client_type="embedded",
+            workspace_id="learning-workspace",
+            product_id="samruddhi-uniguru",
+        )
+        result = await runtime.dispatch(
+            IntentDispatchRequest(
+                session_id=session["session_id"],
+                intent_id="samruddhi.uniguru.ask",
+                payload={
+                    "query": "What is ahimsa?",
+                    "context": {"caller": "bhiv-assistant"},
+                    "allow_web": False,
+                },
+            )
+        )
+        response = result["dispatch"]["response"]
+        assert response["decision"] == "accept"
+        assert response["verification_status"] == "PARTIAL"
+        assert response["answer"] == "Ahimsa means non-violence."
+        assert response["fallback_source"] == "uniguru.new_rag"
+        assert response["primary_response"]["verification_status"] == "FAILED"
+        assert response["dispatch_fallback"]["applied"] is True
+        assert [item["path"] for item in received] == ["/ask", "/new_rag"]
+        assert received[0]["caller"] == "bhiv-assistant"
+    finally:
+        runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_tradebot_manifest_rejects_prediction_error_payload(
+    settings_factory,
+):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/tools/predict":
+            return httpx.Response(
+                200,
+                json={
+                    "metadata": {"count": 1, "horizon": "intraday"},
+                    "predictions": [
+                        {
+                            "symbol": "AAPL",
+                            "horizon": "intraday",
+                            "error": "Training failed: mixed timezone input",
+                        }
+                    ],
+                },
+            )
+        return httpx.Response(404, json={"error": request.url.path})
+
+    transport = CapabilityTransport(
+        default_timeout_seconds=0.2,
+        http_transport=httpx.MockTransport(handler),
+    )
+    settings: RuntimeSettings = settings_factory()
+    runtime = CompanionRuntime(settings=settings, transport=transport)
+    runtime.start()
+    try:
+        manifest_data = _production_manifest(
+            "product-samruddhi-trade-bot.json"
+        ).model_dump(mode="json")
+        manifest_data["base_url"] = "https://tradebot-error.invalid"
+        manifest_data["metadata"]["production_bootstrap"] = False
+        runtime.attach(ProductAttachmentManifest.model_validate(manifest_data))
+        session = runtime.sessions.create(
+            actor_id="tradebot-user",
+            client_type="embedded",
+            workspace_id="market-workspace",
+            product_id="samruddhi-trade-bot",
+        )
+        with pytest.raises(TransportError) as exc_info:
+            await runtime.dispatch(
+                IntentDispatchRequest(
+                    session_id=session["session_id"],
+                    intent_id="samruddhi.tradebot.predict",
+                    payload={"symbols": ["AAPL"], "horizon": "intraday"},
+                )
+            )
+        assert "response schema" in str(exc_info.value)
+        attachment = runtime.attachments.get("samruddhi-trade-bot")
+        assert attachment["state"] == "DEGRADED"
+    finally:
+        runtime.stop()
+
+
+@pytest.mark.asyncio
 async def test_manifest_health_contract_rejects_frontend_html_fallback(
     settings_factory,
 ):
@@ -392,6 +545,194 @@ async def test_manifest_health_contract_rejects_frontend_html_fallback(
             "enabled": True,
             "valid": False,
             "reason": "Health endpoint did not return JSON",
+        }
+        assert check["attachment"]["state"] == "DEGRADED"
+    finally:
+        runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_manifest_health_translator_follows_declared_redirect(
+    settings_factory,
+):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == "https://uniguru-health.invalid/health":
+            return httpx.Response(
+                301,
+                headers={
+                    "location": "https://www.uniguru-health.invalid/health"
+                },
+            )
+        assert str(request.url) == "https://www.uniguru-health.invalid/health"
+        return httpx.Response(
+            200,
+            json={"status": "ok", "service": "uniguru-live-reasoning"},
+            headers={"content-type": "application/json"},
+        )
+
+    settings: RuntimeSettings = settings_factory()
+    transport = CapabilityTransport(
+        default_timeout_seconds=0.2,
+        http_transport=httpx.MockTransport(handler),
+    )
+    runtime = CompanionRuntime(settings, transport=transport)
+    runtime.start()
+    try:
+        manifest = ProductAttachmentManifest.model_validate(
+            {
+                "product_id": "redirect-health-product",
+                "display_name": "Redirect Health Product",
+                "product_version": "1.0.0",
+                "contract_version": "1.0.0",
+                "attachment_mode": "remote",
+                "base_url": "https://uniguru-health.invalid",
+                "health_endpoint": "/health",
+                "metadata": {
+                    "health_contract": {
+                        "required_format": "json",
+                        "expected_content_type": "application/json",
+                        "status_field": "status",
+                        "healthy_status_values": ["ok", "healthy"],
+                        "translator": {"follow_redirects": True},
+                    }
+                },
+                "capabilities": [
+                    {
+                        "capability_id": "redirect-capability",
+                        "description": "Redirect health fixture",
+                        "context_scopes": ["session"],
+                        "intents": [
+                            {
+                                "intent_id": "redirect.execute",
+                                "description": "Unused fixture intent",
+                                "input_schema": {"type": "object"},
+                                "dispatch": {
+                                    "mode": "http",
+                                    "endpoint": "/execute",
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        runtime.attach(manifest)
+        health = await runtime.check_attachment_health(
+            "redirect-health-product"
+        )
+        check = health["checks"][0]
+        assert check["health"]["status"] == "healthy"
+        assert check["health"]["final_endpoint"] == (
+            "https://www.uniguru-health.invalid/health"
+        )
+        assert check["health"]["redirect_chain"] == [
+            {
+                "status_code": 301,
+                "url": "https://uniguru-health.invalid/health",
+                "location": "https://www.uniguru-health.invalid/health",
+            }
+        ]
+        assert check["health"]["health_translation"] == {
+            "enabled": True,
+            "applied": False,
+        }
+        assert check["attachment"]["state"] == "ATTACHED"
+    finally:
+        runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_manifest_health_translator_normalizes_service_suspended_page(
+    settings_factory,
+):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/tools/health"
+        return httpx.Response(
+            503,
+            text=(
+                "<html><body>This service has been suspended.</body></html>"
+            ),
+            headers={"content-type": "text/html; charset=utf-8"},
+        )
+
+    settings: RuntimeSettings = settings_factory()
+    transport = CapabilityTransport(
+        default_timeout_seconds=0.2,
+        http_transport=httpx.MockTransport(handler),
+    )
+    runtime = CompanionRuntime(settings, transport=transport)
+    runtime.start()
+    try:
+        manifest = ProductAttachmentManifest.model_validate(
+            {
+                "product_id": "suspended-health-product",
+                "display_name": "Suspended Health Product",
+                "product_version": "1.0.0",
+                "contract_version": "1.0.0",
+                "attachment_mode": "remote",
+                "base_url": "https://suspended-health.invalid",
+                "health_endpoint": "/tools/health",
+                "metadata": {
+                    "health_contract": {
+                        "required_format": "json",
+                        "expected_content_type": "application/json",
+                        "status_field": "status",
+                        "healthy_status_values": ["ok", "healthy"],
+                        "translator": {
+                            "body_contains": [
+                                {
+                                    "contains": "service has been suspended",
+                                    "status": "unhealthy",
+                                    "reason": (
+                                        "Downstream service is suspended"
+                                    ),
+                                }
+                            ]
+                        },
+                    }
+                },
+                "capabilities": [
+                    {
+                        "capability_id": "suspended-capability",
+                        "description": "Suspended health fixture",
+                        "context_scopes": ["session"],
+                        "intents": [
+                            {
+                                "intent_id": "suspended.execute",
+                                "description": "Unused fixture intent",
+                                "input_schema": {"type": "object"},
+                                "dispatch": {
+                                    "mode": "http",
+                                    "endpoint": "/execute",
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        runtime.attach(manifest)
+        health = await runtime.check_attachment_health(
+            "suspended-health-product"
+        )
+        check = health["checks"][0]
+        assert check["health"]["status"] == "unhealthy"
+        assert check["health"]["response"] == {
+            "status": "unhealthy",
+            "reason": "Downstream service is suspended",
+        }
+        assert check["health"]["health_translation"] == {
+            "enabled": True,
+            "applied": True,
+            "rule": "body_contains",
+            "matched": "service has been suspended",
+            "source_content_type": "text/html; charset=utf-8",
+            "source_status_code": 503,
+        }
+        assert check["health"]["raw_response"] == {
+            "body": (
+                "<html><body>This service has been suspended.</body></html>"
+            )
         }
         assert check["attachment"]["state"] == "DEGRADED"
     finally:

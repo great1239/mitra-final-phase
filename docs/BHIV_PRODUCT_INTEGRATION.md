@@ -95,8 +95,8 @@ GET /api/v1/runtime/integrations
 
 | Product | Manifest | Transport |
 | --- | --- | --- |
-| UniGuru | `contracts/examples/product-uniguru-runtime.json`; production bootstrap `contracts/production/product-samruddhi-uniguru.json` | `POST /ask`, health `GET /health`; dispatch uses `MITRA_PRODUCT_UNIGURU_BEARER_TOKEN` when configured |
-| Samruddhi/trade-bot | `contracts/examples/product-trade-bot-main.json`; production bootstrap `contracts/production/product-samruddhi-trade-bot.json` | `POST /tools/predict`, `POST /tools/analyze`, health `GET /tools/health` |
+| UniGuru | `contracts/examples/product-uniguru-runtime.json`; production bootstrap `contracts/production/product-samruddhi-uniguru.json` | `POST /ask`, fallback `POST /new_rag` for UniGuru's documented safe-fallback response, health `GET /health`; dispatch uses `MITRA_PRODUCT_UNIGURU_BEARER_TOKEN` and fallback uses `MITRA_PRODUCT_UNIGURU_RAG_TOKEN` when configured |
+| Samruddhi/trade-bot | `contracts/examples/product-trade-bot-main.json`; production bootstrap `contracts/production/product-samruddhi-trade-bot.json` | `POST /tools/predict`, `POST /tools/analyze`, health `GET /tools/health`; HTTP 200 payloads with `predictions[].error` are rejected as failed product execution |
 | Bucket Insight | `contracts/examples/product-bucket-insight.json` | manifest contract |
 | PRANA Runtime | `contracts/examples/product-prana-runtime.json` | manifest contract |
 | Karma Ledger | `contracts/examples/product-karma-ledger.json` | manifest contract |
@@ -111,6 +111,12 @@ with `metadata.production_bootstrap: true`.
 
 Both use generic HTTP transport with native payload projection through
 `dispatch.options.request_body`.
+
+Production manifests may declare `metadata.health_contract.translator` for
+non-linear product health behavior. The translator is product-neutral: it can
+follow declared health redirects and normalize known text/HTML responses into
+reviewable health facts before the normal JSON contract check runs. It does
+not convert a suspended or failed downstream service into healthy state.
 
 ## Verification
 

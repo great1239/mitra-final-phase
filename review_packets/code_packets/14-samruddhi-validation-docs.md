@@ -8,12 +8,14 @@
 published manifest and transport contracts.
 
 **Why modified:** Added regression coverage for manifest-provided auth
-headers, secret-backed Bearer tokens, and strict health contracts that reject
-HTML fallback pages.
+headers, secret-backed Bearer tokens, strict health contracts that reject HTML
+fallback pages, and manifest-declared health translation for redirects and
+service-suspended pages.
 
 **Key implementation areas:** Mock HTTP product dispatch; environment-backed
-token injection; JSON health enforcement; attachment degradation on health
-contract failure.
+token injection; JSON health enforcement; health redirect following;
+body-text health normalization; attachment degradation on health contract
+failure.
 
 **Review focus:** Whether tests verify actual request headers and output
 states instead of merely checking that manifest files exist.
@@ -29,11 +31,11 @@ change.
 and how operators should configure them.
 
 **Why modified:** Added the UniGuru and Samruddhi Trade Bot production
-attachments, their repository sources, public endpoints, and the required
-UniGuru runtime secret.
+attachments, their repository sources, public endpoints, the required UniGuru
+runtime secret, and the declared health translator behavior.
 
 **Key implementation areas:** Approved attachment list; endpoint inventory;
-credential handling; JSON health contract note.
+credential handling; JSON health contract note; translator semantics.
 
 **Review focus:** Operator clarity, no secret value disclosure, and agreement
 with the manifest files.
@@ -48,10 +50,12 @@ with the manifest files.
 contracts.
 
 **Why modified:** Updated UniGuru and Samruddhi Trade Bot rows to include the
-new production bootstrap manifests and the actual published API endpoints.
+new production bootstrap manifests, the actual published API endpoints, and
+the product-neutral health translator boundary.
 
 **Key implementation areas:** Product matrix; production manifest references;
-UniGuru auth dependency; Trade Bot prediction and analysis routes.
+UniGuru auth dependency; Trade Bot prediction and analysis routes; non-linear
+health behavior.
 
 **Review focus:** Contract accuracy and consistency with the production
 manifest directory.

@@ -116,10 +116,7 @@ def create_frontend_connector_router(
             workspace_id=request.workspace_id,
             product_id=request.product_id,
             capability_id=request.capability_id,
-            payload={
-                "workflow_name": request.workflow_name,
-                **request.payload,
-            },
+            payload=request.payload,
             metadata={
                 **request.metadata,
                 "frontend_workflow_name": request.workflow_name,

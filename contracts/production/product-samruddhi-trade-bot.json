@@ -71,6 +71,18 @@
               "signals": {"type": ["array", "object", "null"]},
               "metadata": {"type": ["object", "null"]},
               "trace_id": {"type": "string"}
+            },
+            "not": {
+              "required": ["predictions"],
+              "properties": {
+                "predictions": {
+                  "type": "array",
+                  "contains": {
+                    "type": "object",
+                    "required": ["error"]
+                  }
+                }
+              }
             }
           },
           "dispatch": {
@@ -144,8 +156,22 @@
             "properties": {
               "status": {"type": "string"},
               "analysis": {"type": ["object", "array", "string", "null"]},
+              "predictions": {"type": ["array", "object", "null"]},
+              "metadata": {"type": ["object", "null"]},
               "risk": {"type": ["object", "string", "null"]},
               "trace_id": {"type": "string"}
+            },
+            "not": {
+              "required": ["predictions"],
+              "properties": {
+                "predictions": {
+                  "type": "array",
+                  "contains": {
+                    "type": "object",
+                    "required": ["error"]
+                  }
+                }
+              }
             }
           },
           "dispatch": {
@@ -178,7 +204,21 @@
       "required_format": "json",
       "expected_content_type": "application/json",
       "status_field": "status",
-      "healthy_status_values": ["healthy", "ok"]
+      "healthy_status_values": ["healthy", "ok"],
+      "translator": {
+        "body_contains": [
+          {
+            "contains": "service has been suspended",
+            "status": "unhealthy",
+            "reason": "Trade Bot downstream Render service is suspended"
+          },
+          {
+            "contains": "Service Suspended",
+            "status": "unhealthy",
+            "reason": "Trade Bot downstream Render service is suspended"
+          }
+        ]
+      }
     },
     "public_contracts": {
       "apis": [

@@ -14,30 +14,24 @@
 | Integration APIs | FastAPI endpoints under `/api/v1` |
 | Architecture diagrams | `docs/ARCHITECTURE.md` |
 | Phase 1 architecture/lifecycle/state/interfaces | `docs/PHASE_1_COMPANION_RUNTIME_DESIGN.md` |
-| Phase 1 validation report | `PHASE_1_VALIDATION_REPORT.md` |
+| Consolidated validation report | `VALIDATION_REPORT.md` |
 | Phase 2 Context Runtime design | `docs/PHASE_2_CONTEXT_RUNTIME.md` |
-| Phase 2 validation report | `PHASE_2_VALIDATION_REPORT.md` |
 | Context Runtime policy | `contracts/context-runtime-policy.json` |
 | Context View schema | `contracts/schemas/context-view.schema.json` |
 | Phase 3 Intent Router design | `docs/PHASE_3_INTENT_ROUTER.md` |
-| Phase 3 validation report | `PHASE_3_VALIDATION_REPORT.md` |
 | Intent Router policy | `contracts/intent-router-policy.json` |
 | Intent registration schema | `contracts/schemas/intent-registration.schema.json` |
 | Capability view schema | `contracts/schemas/capability-view.schema.json` |
 | Phase 4 Product Attachment Runtime design | `docs/PHASE_4_PRODUCT_ATTACHMENT_RUNTIME.md` |
-| Phase 4 validation report | `PHASE_4_VALIDATION_REPORT.md` |
 | Product Attachment Runtime policy | `contracts/product-attachment-runtime-policy.json` |
 | Attachment record schema | `contracts/schemas/attachment-record.schema.json` |
 | Product self-attachment example | `contracts/examples/product-self-attach.http`, `contracts/examples/product-echo.json` |
 | Phase 5 Integration Contracts design | `docs/PHASE_5_INTEGRATION_CONTRACTS.md` |
-| Phase 5 validation report | `PHASE_5_VALIDATION_REPORT.md` |
 | Integration contract catalog | `contracts/integration-contracts.json` |
 | Integration contract schema | `contracts/schemas/integration-contracts.schema.json` |
 | Phase 6 Testing design | `docs/PHASE_6_TESTING.md` |
-| Phase 6 validation report | `PHASE_6_VALIDATION_REPORT.md` |
 | Runtime simulation tests | `pratham/tests/test_phase6_runtime_simulation.py` |
 | Phase 7 Documentation package | `docs/PHASE_7_DOCUMENTATION.md` |
-| Phase 7 validation report | `PHASE_7_VALIDATION_REPORT.md` |
 | Runtime interface catalog | `contracts/runtime-interface-catalog.json` |
 | Runtime state machine | `contracts/runtime-state-machine.json` |
 | Execution diagrams | `docs/EXECUTION_FLOW.md` |

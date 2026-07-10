@@ -11,12 +11,14 @@ while routing every request into the Mitra companion runtime.
 `/api/companion/greeting/{user_id}`, `/api/companion/memory/{user_id}`,
 `/api/companion/capabilities`, and `/api/workflow/run`. Those routes now
 translate into runtime sessions, capability analysis, dispatch, telemetry, and
-replay/depository trace endpoints instead of bypassing Mitra.
+replay/depository trace endpoints instead of bypassing Mitra. Workflow names
+are preserved as connector metadata, not injected into strict product payloads.
 
 **Key implementation areas:** Legacy request models; frontend-to-runtime
 contract translation; session reuse by `user_id`; capability listing from
 attached manifests; workflow requests routed through `companion_message`;
-frontend response fields plus Mitra trace links.
+frontend response fields plus Mitra trace links; payload hygiene for strict
+product schemas.
 
 **Review focus:** The adapter must remain thin, must not hardcode BHIV product
 logic, must not simulate capabilities, and must preserve the runtime as the

@@ -33,11 +33,11 @@ Runtime. Incoming engineers should follow the documents in the order below.
 
 ## Historical Sprint Records
 
-Files named `PHASE_*_VALIDATION_REPORT.md`, the phase design documents, and
-the review packets describe earlier sprint checkpoints. They are retained for
-traceability but are not rebuild instructions and may contain historical test
-counts. Current acceptance comes from executing the commands in
-`docs/HANDOVER.md`.
+The old root-level `PHASE_*_VALIDATION_REPORT.md` files were merged into
+`VALIDATION_REPORT.md` to reduce review noise. The phase design documents and
+historical review packet remain traceability references, but they are not
+rebuild instructions and may contain historical test counts. Current
+acceptance comes from executing the commands in `docs/HANDOVER.md`.
 
 ## Machine-Readable Contracts
 

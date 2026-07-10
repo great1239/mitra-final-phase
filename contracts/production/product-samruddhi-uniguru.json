@@ -67,7 +67,50 @@
               "headers": {
                 "X-Caller-Name": "bhiv-assistant"
               },
-              "bearer_token_env": "MITRA_PRODUCT_UNIGURU_BEARER_TOKEN"
+              "bearer_token_env": "MITRA_PRODUCT_UNIGURU_BEARER_TOKEN",
+              "response_fallbacks": [
+                {
+                  "name": "uniguru-new-rag-when-ask-safe-fallback",
+                  "when": {
+                    "field_equals": {
+                      "decision": "reject",
+                      "verification_status": "FAILED"
+                    },
+                    "field_contains": {
+                      "reason": "invalid response payload type"
+                    }
+                  },
+                  "endpoint": "/new_rag",
+                  "request_body": "payload",
+                  "headers": {
+                    "X-Caller-Name": "bhiv-assistant"
+                  },
+                  "bearer_token_env": "MITRA_PRODUCT_UNIGURU_RAG_TOKEN",
+                  "payload": {
+                    "defaults": {
+                      "domain": "general"
+                    },
+                    "copy_fields": ["query"]
+                  },
+                  "response": {
+                    "set": {
+                      "decision": "accept",
+                      "verification_status": "PARTIAL",
+                      "fallback_source": "uniguru.new_rag",
+                      "reason": "Primary /ask returned UniGuru safe fallback; routed through published /new_rag endpoint."
+                    },
+                    "copy_fields": {
+                      "answer": "final_answer",
+                      "reasoning_trace": "reasoning_trace",
+                      "confidence": "confidence",
+                      "signals_used": "signals_used",
+                      "knowledge_ids": "knowledge_ids"
+                    },
+                    "include_raw_as": "fallback_response",
+                    "include_original_as": "primary_response"
+                  }
+                }
+              ]
             }
           },
           "metadata": {
@@ -89,12 +132,25 @@
     "integration_surface": "published-manifest",
     "source_repository": "https://github.com/VJY123VJY/uniguru_ai",
     "source_repository_head": "a0740f552b33b19e1507014d63a4af6ecb61460a",
-    "required_runtime_env": ["MITRA_PRODUCT_UNIGURU_BEARER_TOKEN"],
+    "required_runtime_env": [
+      "MITRA_PRODUCT_UNIGURU_BEARER_TOKEN",
+      "MITRA_PRODUCT_UNIGURU_RAG_TOKEN"
+    ],
     "health_contract": {
       "required_format": "json",
       "expected_content_type": "application/json",
       "status_field": "status",
-      "healthy_status_values": ["ok", "healthy"]
+      "healthy_status_values": ["ok", "healthy"],
+      "translator": {
+        "follow_redirects": true,
+        "body_contains": [
+          {
+            "contains": "Redirecting to",
+            "status": "unknown",
+            "reason": "UniGuru health endpoint redirected without returning the declared JSON health contract"
+          }
+        ]
+      }
     },
     "public_contracts": {
       "apis": [
@@ -103,6 +159,7 @@
           "base_url": "https://uni-guru.in",
           "health": "GET /health",
           "dispatch": "POST /ask",
+          "fallback_dispatch": "POST /new_rag",
           "docs": "docs/api/PUBLIC_API_USAGE.md"
         }
       ],
