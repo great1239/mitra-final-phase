@@ -10,18 +10,23 @@
     "Runtime Lifecycle",
     "Runtime State",
     "Context Transfer Runtime",
-    "Product Attachment Runtime"
+    "Product Attachment Runtime",
+    "Deterministic Runtime Reconstruction",
+    "Runtime Artifact Export",
+    "BHIV Contract Integration"
   ],
   "does_not_own": [
-    "Conversation Design",
+    "Product Conversation Design",
+    "Product Business Logic",
     "Governance",
-    "Safety",
-    "Knowledge",
+    "Safety Policy",
+    "Knowledge Authority",
     "Project Intelligence",
     "Domain Intelligence",
-    "Evidence",
-    "Replay",
-    "Certification"
+    "External Evidence Authority",
+    "External Replay Authority",
+    "Certification",
+    "Central Depository Acceptance"
   ],
   "implementation_folders": [
     "companion-runtime",

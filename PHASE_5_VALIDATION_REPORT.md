@@ -1,5 +1,7 @@
 # Phase 5 Validation Report
 
+> Historical sprint record. Use `docs/HANDOVER.md` for current verification.
+
 Validated on June 24, 2026.
 
 ## Scope

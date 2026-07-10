@@ -19,7 +19,7 @@ def main() -> None:
     serve.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("MITRA_COMPANION_PORT", "8090")),
+        default=int(os.getenv("MITRA_COMPANION_PORT", os.getenv("PORT", "8090"))),
     )
     serve.add_argument(
         "--workers",

@@ -69,24 +69,58 @@ Content-Type: application/json
 The runtime does not copy private product context. Only explicit exchange
 payloads are shared.
 
-## Accessible Product Fixtures
+## Runtime Consumer Contracts
+
+| Consumer | Published interaction |
+|---|---|
+| Ashmit | `GET /health/system` |
+| Bucket | latest hash, artifact storage/read, chain validation, replay validation |
+| InsightFlow | execution trace ingest |
+| Karma | integrity append and bucket-artifact append |
+| PRANA | strict byte forwarding and trace-preserving core forwarding |
+| Central Depository | Mitra's subject-filtered runtime export API |
+
+Karma precedes PRANA. Mitra forwards only after Karma returns `appended`.
+Strict forwarding uses the exact canonical request bytes. Other independent
+consumer calls are recorded with their own response, rejection, failure, or
+explicit skipped result.
+
+Inspect configured/redacted integration state with:
+
+```http
+GET /api/v1/runtime/integrations
+```
+
+## Product Manifests
 
 | Product | Manifest | Transport |
 | --- | --- | --- |
 | UniGuru | `contracts/examples/product-uniguru-runtime.json` | `POST /runtime/execute`, health `GET /health` |
 | Samruddhi/trade-bot | `contracts/examples/product-trade-bot-main.json` | `POST /tools/predict`, `POST /tools/analyze`, health `GET /tools/health` |
+| Bucket Insight | `contracts/examples/product-bucket-insight.json` | manifest contract |
+| PRANA Runtime | `contracts/examples/product-prana-runtime.json` | manifest contract |
+| Karma Ledger | `contracts/examples/product-karma-ledger.json` | manifest contract |
+| SETU Bridge | `contracts/examples/product-setu-bridge.json` | manifest contract |
+| KESHAV Knowledge | `contracts/examples/product-keshav-knowledge.json` | manifest contract |
+| SARATHI Guide | `contracts/examples/product-sarathi-guide.json` | manifest contract |
+
+These files are contract and test fixtures. Production bootstrap uses
+`contracts/production`; live products should connect through
+`POST /api/v1/products/connect` or publish an approved production manifest
+with `metadata.production_bootstrap: true`.
 
 Both use generic HTTP transport with native payload projection through
 `dispatch.options.request_body`.
 
-## Evidence
+## Verification
 
-- `test_bhiv_products_attach_create_sessions_and_dispatch`
-- `test_bhiv_dispatch_concurrency_metrics_and_structured_log`
-- `test_runtime_analysis_matches_assignment_to_attached_product`
-- `test_ai_analysis_payload_is_used_when_deterministic_payload_is_missing`
-- `test_product_exchange_api_contract`
-- `test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes`
+- `pratham/tests/test_bhiv_integrations.py`
+- `pratham/tests/test_bhiv_product_integration.py`
+- `pratham/tests/test_replay_convergence_and_graph.py`
+- `pratham/tests/test_production_hardening.py`
+
+These tests submit data and assert requests, responses, forwarding order,
+byte identity, trace identity, reconstruction, and depository lineage.
 
 No runtime source contains product-specific branches. Product-specific material
 is limited to manifests and integration tests.

@@ -1,5 +1,7 @@
 # Phase 7 Validation Report
 
+> Historical sprint record. Use `docs/HANDOVER.md` for current verification.
+
 Validated on June 24, 2026.
 
 ## Scope
@@ -20,5 +22,6 @@ Phase 7 completes the review-facing documentation package.
 
 The documentation is bounded to Pratham-owned runtime capabilities and repeats
 the explicit non-ownership boundary for governance, safety, knowledge,
-evidence, replay, certification, and domain/project intelligence.
+external evidence/replay authority, certification, and domain/project
+intelligence.
 

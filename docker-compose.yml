@@ -8,10 +8,17 @@ services:
     environment:
       MITRA_COMPANION_DATA_ROOT: /data
       MITRA_COMPANION_DATABASE_PATH: /data/companion-runtime.db
-      MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/examples
+      MITRA_COMPANION_SQLITE_SYNCHRONOUS: NORMAL
+      MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/production
+      MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS: "false"
+      MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS: "false"
+      MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS: "false"
+      MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS: "false"
+      MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS: "true"
+      MITRA_COMPANION_CORS_ORIGINS: "https://mitra.blackholeinfiverse.com,https://mitra-live-runtime-sprint.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
       MITRA_COMPANION_ENVIRONMENT: production
       MITRA_COMPANION_OTEL_ENABLED: "true"
-      MITRA_COMPANION_UVICORN_WORKERS: "2"
+      MITRA_COMPANION_UVICORN_WORKERS: "1"
       OTEL_SERVICE_NAME: mitra-companion-runtime
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
     volumes:
@@ -23,7 +30,6 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: 256
     stop_grace_period: 30s
     depends_on:
       - otel-collector
@@ -49,6 +55,7 @@ services:
         limits:
           cpus: "1.0"
           memory: 768M
+          pids: 256
         reservations:
           cpus: "0.25"
           memory: 256M
@@ -76,6 +83,7 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+          pids: 128
         reservations:
           cpus: "0.10"
           memory: 128M

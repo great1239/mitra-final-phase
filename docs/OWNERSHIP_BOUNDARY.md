@@ -17,34 +17,40 @@ The same boundary is published machine-readably at
 | Runtime State | `mitra_companion.constants.RuntimeState` and the lifecycle journal |
 | Context Transfer Runtime | `SessionRuntime.transfer`, `ContextRuntime.initialize_transfer`, and the versioned transfer contract |
 | Product Attachment Runtime | product manifests and lifecycle inside `AttachmentRuntime` |
+| Deterministic Runtime Reconstruction | immutable artifact reconstruction and verification inside `DeterministicReconstructionLedger` |
+| Runtime Artifact Export | content-addressed artifacts and subject lineage inside `CentralDepository` |
+| BHIV Contract Integration | published consumer calls and response recording inside `BHIVRuntimeIntegrator` |
 
-Only these capabilities may contain executable behavior owned by Pratham.
+These capabilities may contain executable behavior owned by Pratham.
 
 ## Explicitly external capabilities
 
 Pratham does not implement or own:
 
-- Conversation Design;
+- Product Conversation Design;
+- Product Business Logic;
 - Governance;
-- Safety;
-- Knowledge;
+- Safety Policy;
+- Knowledge Authority;
 - Project Intelligence;
 - Domain Intelligence;
-- Evidence;
-- Replay;
-- Certification.
+- External Evidence Authority;
+- External Replay Authority;
+- Certification;
+- Central Depository Acceptance.
 
 If another component supplies an explicit registered intent or receives a
 dispatch, the Companion Runtime treats it as an external contract participant.
-It does not infer, reproduce, approve, score, certify, govern, enrich, retrieve,
-replay, or redesign that participant's behavior.
+It does not approve, score, certify, govern, enrich, or redesign that
+participant's behavior. Deterministic reconstruction is limited to
+runtime-owned execution artifacts.
 
 ## Enforcement
 
 The automated ownership tests verify that:
 
 1. implementation folders are limited to the five assigned runtime folders;
-2. all nine owned capabilities have concrete implementation symbols;
+2. owned capabilities have concrete implementation symbols;
 3. forbidden subsystem names do not appear in implementation module, class, or
    function names;
 4. forbidden subsystem packages are not imported;
@@ -53,9 +59,10 @@ The automated ownership tests verify that:
    no conversation or domain inference;
 7. external integration occurs through published ports and adapters.
 
-## Clarification: assignment evidence
+## Clarification: Runtime Artifacts
 
 The repository's `evidence/` directory contains screenshots, a demo transcript,
 and a demo video required for assignment review. It is static submission
-material. It is not an Evidence subsystem, evidence authority, evidence
-producer, lineage engine, or runtime dependency.
+material. Runtime artifact export and lineage are implemented independently of
+those static files. Neither makes Mitra the ecosystem evidence authority or
+Central Depository acceptance authority.

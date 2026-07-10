@@ -37,6 +37,9 @@ class IntentRegistration(BaseModel):
     intent_id: str = Field(pattern=r"^[a-z][a-z0-9_.-]{2,95}$")
     description: str = Field(min_length=3, max_length=500)
     input_schema: dict[str, Any] = Field(default_factory=dict)
+    response_schema: dict[str, Any] = Field(
+        default_factory=lambda: {"type": "object"}
+    )
     dispatch: DispatchTarget
     metadata: dict[str, Any] = Field(default_factory=dict)
 

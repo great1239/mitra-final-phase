@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: mitra-runtime-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /ready
+    autoDeploy: true
+    disk:
+      name: mitra-runtime-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: MITRA_COMPANION_ENVIRONMENT
+        value: production
+      - key: MITRA_COMPANION_CONFIG_PROFILE
+        value: production-independent
+      - key: MITRA_COMPANION_DATA_ROOT
+        value: /data
+      - key: MITRA_COMPANION_DATABASE_PATH
+        value: /data/companion-runtime.db
+      - key: MITRA_COMPANION_TELEMETRY_LOG_PATH
+        value: /data/runtime-telemetry.jsonl
+      - key: MITRA_COMPANION_LOG_PATH
+        value: /data/production-runtime.jsonl
+      - key: MITRA_COMPANION_LOG_LEVEL
+        value: INFO
+      - key: MITRA_COMPANION_LOG_TO_STDOUT
+        value: "true"
+      - key: MITRA_COMPANION_MANIFEST_DIRECTORY
+        value: /app/contracts/examples
+      - key: MITRA_COMPANION_HTTP_TIMEOUT_SECONDS
+        value: "10"
+      - key: MITRA_COMPANION_OTEL_ENABLED
+        value: "false"
+      - key: MITRA_COMPANION_UVICORN_WORKERS
+        value: "1"
+      - key: MITRA_COMPANION_FORWARDED_ALLOW_IPS
+        value: "*"
+      - key: MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED
+        value: "true"
+      - key: MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS
+        value: "5"
+      - key: MITRA_COMPANION_PERSISTENT_STALE_AFTER_SECONDS
+        value: "30"
+      - key: MITRA_COMPANION_PERSISTENT_MAINTENANCE_INTERVAL_SECONDS
+        value: "60"
+      - key: MITRA_COMPANION_PERSISTENT_TASK_TIMEOUT_SECONDS
+        value: "300"
+      - key: MITRA_BHIV_INTEGRATION_TIMEOUT_SECONDS
+        value: "10"
+      - key: MITRA_BHIV_INTEGRATION_FAIL_CLOSED
+        value: "false"

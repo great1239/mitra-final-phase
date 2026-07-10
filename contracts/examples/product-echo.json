@@ -33,6 +33,16 @@
               }
             }
           },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "payload": {"type": "object"},
+              "received_context_scopes": {"type": "array"}
+            }
+          },
           "dispatch": {
             "mode": "loopback",
             "endpoint": "loopback://echo-lab/repeat"

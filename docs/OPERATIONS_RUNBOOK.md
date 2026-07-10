@@ -16,6 +16,18 @@ curl http://127.0.0.1:8090/api/v1/runtime/status
 curl http://127.0.0.1:8090/metrics
 ```
 
+For a clean rebuild use `docs/HANDOVER.md`. Do not delete the production data
+volume during a routine redeploy.
+
+### SQLite Durability
+
+`MITRA_COMPANION_SQLITE_SYNCHRONOUS` accepts `EXTRA`, `FULL`, or `NORMAL`.
+The code default is `FULL`. The Docker production profile uses `NORMAL` with
+WAL for sustained throughput; transactions remain atomic and the database
+remains consistent, but an operating-system or power failure can lose the
+newest committed WAL records. Use `FULL` or `EXTRA` when local tail durability
+is more important than dispatch latency.
+
 ## Monitor
 
 - `/ready` returns HTTP 200.
@@ -62,12 +74,38 @@ Use this after a process crash, stale peer, or interrupted task.
 
 ## Multi-Instance Validation
 
-Run two processes against the same database and manifest directory. Validate:
+Run two processes on the same durable host against the same SQLite database
+and manifest directory. Validate:
 
 - each process has a unique runtime instance ID;
 - `/api/v1/runtime/instances` lists both active instances;
 - one instance can read sessions and attachments created by the other;
 - stale peers stop appearing after the stale heartbeat window.
+
+Every process needs a unique `MITRA_COMPANION_INSTANCE_ID` unless generated
+automatically. Do not place SQLite on an unsupported distributed network
+filesystem; use one durable host or replace the storage adapter before
+cross-host scaling.
+
+## Backup And Restore
+
+1. Stop writes or stop the runtime cleanly.
+2. Preserve the SQLite database, telemetry log, production log, environment
+   configuration, secrets references, and manifest set.
+3. Record the deployed image or commit.
+4. Restore those files to the same configured paths.
+5. Start one instance and verify readiness, sessions, attachments, routes,
+   reconstruction, and a subject-filtered depository export.
+6. Start additional instances only after the first instance is healthy.
+
+The database is the durable source for runtime state. Screenshots and generated
+reports are not backups.
+
+## Central Depository Transfer
+
+For an accepted dispatch, retrieve the dispatch response, deterministic
+reconstruction, and subject-filtered depository export. Verify hashes and
+lineage using `docs/CENTRAL_DEPOSITORY_HANDOVER.md`.
 
 ## Rollback
 
@@ -76,3 +114,6 @@ Run two processes against the same database and manifest directory. Validate:
 3. Deploy the previous image or revision.
 4. Re-run `/ready`, `/health`, `/metrics`, and one dispatch.
 5. Re-enable traffic.
+
+After rollback, do not claim recovery until one real dispatch returns the
+expected output and its reconstruction verifies.

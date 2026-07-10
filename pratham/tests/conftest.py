@@ -31,6 +31,11 @@ def settings_factory(tmp_path):
             database_path=tmp_path / "companion-runtime.db",
             telemetry_log_path=tmp_path / "runtime-telemetry.jsonl",
             http_timeout_seconds=0.2,
+            allow_example_manifests=True,
+            allow_simulated_manifests=True,
+            allow_loopback_manifests=True,
+            allow_localhost_manifests=True,
+            require_production_bootstrap_manifests=False,
         )
 
     return build

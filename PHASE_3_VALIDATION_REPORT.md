@@ -1,5 +1,7 @@
 # Phase 3 Validation Report
 
+> Historical sprint record. Use `docs/HANDOVER.md` for current verification.
+
 Validated on June 23, 2026.
 
 ## Required outcomes
@@ -49,9 +51,9 @@ Detailed design: `docs/PHASE_3_INTENT_ROUTER.md`.
 
 ## Boundary proof
 
-No natural-language inference, conversation design, product-specific routing,
-governance, safety, knowledge, intelligence, evidence, replay, or
-certification behavior was introduced.
+No natural-language inference, product-specific routing, governance, safety,
+knowledge, intelligence, external evidence/replay authority, or certification
+behavior was introduced in that phase.
 
 ## Environment note
 

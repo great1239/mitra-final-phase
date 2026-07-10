@@ -22,6 +22,44 @@
         "native_routes": ["POST /tools/predict", "POST /tools/analyze", "GET /tools/health"],
         "source_file": "trade-bot-main/backend/api_server.py"
       }
+    ],
+    "convergence_consumers": [
+      {
+        "product_id": "bucket-insight",
+        "product_name": "Bucket Insight",
+        "manifest": "contracts/examples/product-bucket-insight.json",
+        "consumes": ["central_depository", "dispatch_replay_package"]
+      },
+      {
+        "product_id": "prana-runtime",
+        "product_name": "PRANA",
+        "manifest": "contracts/examples/product-prana-runtime.json",
+        "consumes": ["runtime_status", "telemetry_snapshot"]
+      },
+      {
+        "product_id": "karma-ledger",
+        "product_name": "Karma",
+        "manifest": "contracts/examples/product-karma-ledger.json",
+        "consumes": ["dispatch_proof", "lineage_hash"]
+      },
+      {
+        "product_id": "setu-bridge",
+        "product_name": "SETU",
+        "manifest": "contracts/examples/product-setu-bridge.json",
+        "consumes": ["proof_bundle", "replay_package"]
+      },
+      {
+        "product_id": "keshav-knowledge",
+        "product_name": "KESHAV",
+        "manifest": "contracts/examples/product-keshav-knowledge.json",
+        "consumes": ["runtime_context", "published_query"]
+      },
+      {
+        "product_id": "sarathi-guide",
+        "product_name": "SARATHI",
+        "manifest": "contracts/examples/product-sarathi-guide.json",
+        "consumes": ["companion_task_status", "replay_package"]
+      }
     ]
   },
   "integration_proof": {
@@ -29,6 +67,15 @@
     "sessions": "One product-scoped session is created for UniGuru and one for Samruddhi.",
     "routing": "Intent routing resolves only registered manifest intent IDs.",
     "dispatch": ["uniguru.execute-query", "tradebot.predict"],
+    "convergence_dispatch_surfaces": [
+      "bucket.lookup-artifact",
+      "prana.observe-runtime",
+      "karma.record-event",
+      "setu.forward-handoff",
+      "keshav.retrieve-reference",
+      "sarathi.suggest-next-step"
+    ],
+    "replay_and_depository": "Dispatch replay packages and central depository lineage are exported for downstream BHIV consumers.",
     "payload_projection": "Manifest option dispatch.options.request_body=payload sends native product request bodies without runtime product branches.",
     "zero_product_branches": true
   },
@@ -55,8 +102,10 @@
     "pdf_requested_real_product_count": 3,
     "available_real_product_count": 2,
     "available_products": ["UniGuru", "Samruddhi"],
-    "scope_clarification": "The clarified assignment validates multiple independent BHIV products using UniGuru and Samruddhi/trade-bot as the two independent products in scope.",
-    "resolution": "The assignment-scoped independent BHIV products are integrated through published contracts only; a third product can be added later by publishing another manifest without runtime code changes."
+    "convergence_consumer_count": 6,
+    "convergence_consumers": ["Bucket Insight", "PRANA", "Karma", "SETU", "KESHAV", "SARATHI"],
+    "scope_clarification": "Two code-backed BHIV products are available in this workspace. Additional BHIV systems are represented as published convergence consumer manifests so the runtime can attach, plan, and hand off without product branches.",
+    "resolution": "A third code-backed execution product still requires that product repository or service. The runtime now demonstrates the manifest and replay/depository surfaces needed for three-plus BHIV consumers without modifying Mitra code."
   },
   "focused_verification": {
     "command": "pytest pratham/tests/test_bhiv_product_integration.py pratham/tests/test_production_hardening.py pratham/tests/test_phase5_integration_contracts.py pratham/tests/test_production_readiness_gate.py -q",

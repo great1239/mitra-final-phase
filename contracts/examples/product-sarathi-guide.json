@@ -1,0 +1,60 @@
+{
+  "product_id": "sarathi-guide",
+  "display_name": "SARATHI Guide",
+  "product_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "simulated",
+  "capabilities": [
+    {
+      "capability_id": "operator-guidance",
+      "description": "Consumes execution status and suggests product-owned next operator steps outside Mitra authority.",
+      "context_scopes": ["session", "workspace", "handoff"],
+      "metadata": {
+        "bhiv_system": true,
+        "convergence_role": "operator-guidance-consumer",
+        "integration_surface": "published-manifest"
+      },
+      "intents": [
+        {
+          "intent_id": "sarathi.suggest-next-step",
+          "description": "Suggest a next operator step from a runtime status or replay reference.",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["current_status"],
+            "properties": {
+              "current_status": {"type": "string", "minLength": 1},
+              "dispatch_id": {"type": "string"},
+              "package_hash": {"type": "string"}
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "recommendations": {"type": ["array", "object", "string", "null"]},
+              "next_step": {"type": "string"}
+            }
+          },
+          "dispatch": {
+            "mode": "loopback",
+            "endpoint": "loopback://sarathi/operator/suggest"
+          },
+          "metadata": {
+            "owned_by_product": true,
+            "consumes": ["companion_task_status", "replay_package"]
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "bhiv_product": true,
+    "bhiv_product_name": "SARATHI",
+    "business_logic_owner": "sarathi-guide",
+    "integration_direction": "convergence-consumer",
+    "integration_surface": "published-manifest"
+  }
+}

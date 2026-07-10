@@ -148,7 +148,7 @@ class RuntimeStartupManager:
                 {
                     "source": type(source).__name__,
                     "manifest_count": len(manifests),
-                    "attachment_count": len(attachments),
+                    "attachment_count": attachments["attached_count"],
                 }
             )
         return loaded

@@ -10,15 +10,25 @@ from typing import Any, Iterator
 
 from .constants import AttachmentState, RuntimeState, SessionState
 from .errors import ContextRevisionConflict, ResourceConflictError
-from .utils import utc_now
+from .utils import sha256_json, utc_now
 
 
 class RuntimeStore:
     """Durable state for lifecycle, sessions, contexts, attachments, and dispatches."""
 
-    def __init__(self, database_path: Path):
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        synchronous: str = "FULL",
+    ):
         self.database_path = Path(database_path)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self.synchronous = synchronous.upper()
+        if self.synchronous not in {"EXTRA", "FULL", "NORMAL"}:
+            raise ValueError(
+                "SQLite synchronous mode must be EXTRA, FULL, or NORMAL"
+            )
         self._schema_lock = threading.Lock()
         self._initialize()
 
@@ -31,8 +41,8 @@ class RuntimeStore:
             check_same_thread=False,
         )
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA synchronous=FULL")
+        connection.execute(f"PRAGMA synchronous={self.synchronous}")
+        connection.execute("PRAGMA busy_timeout=30000")
         connection.execute("PRAGMA foreign_keys=ON")
         try:
             yield connection
@@ -41,6 +51,7 @@ class RuntimeStore:
 
     def _initialize(self) -> None:
         with self._schema_lock, self.connection() as connection:
+            connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS runtime_transitions (
@@ -222,6 +233,34 @@ class RuntimeStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_companion_tasks_session
                     ON companion_tasks(session_id, updated_at);
+
+                CREATE TABLE IF NOT EXISTS central_artifacts (
+                    artifact_hash TEXT PRIMARY KEY,
+                    artifact_type TEXT NOT NULL,
+                    artifact_json TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_central_artifacts_type
+                    ON central_artifacts(artifact_type, created_at);
+
+                CREATE TABLE IF NOT EXISTS central_lineage (
+                    lineage_id TEXT PRIMARY KEY,
+                    subject_type TEXT NOT NULL,
+                    subject_id TEXT NOT NULL,
+                    artifact_hash TEXT NOT NULL,
+                    parent_chain_hash TEXT,
+                    chain_hash TEXT NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(artifact_hash)
+                        REFERENCES central_artifacts(artifact_hash)
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_central_lineage_subject_sequence
+                    ON central_lineage(subject_type, subject_id, sequence);
+                CREATE INDEX IF NOT EXISTS idx_central_lineage_subject
+                    ON central_lineage(subject_type, subject_id, sequence);
                 """
             )
             self._migrate_legacy_workspace_contexts(connection)
@@ -913,7 +952,11 @@ class RuntimeStore:
                     utc_now(),
                 ),
             )
-        return self.get_dispatch(dispatch_id) or {}
+            row = connection.execute(
+                "SELECT * FROM dispatches WHERE dispatch_id = ?",
+                (dispatch_id,),
+            ).fetchone()
+        return self._decode_dispatch(row) or {}
 
     def complete_dispatch(
         self,
@@ -944,7 +987,11 @@ class RuntimeStore:
             )
             if cursor.rowcount != 1:
                 raise KeyError(dispatch_id)
-        return self.get_dispatch(dispatch_id) or {}
+            row = connection.execute(
+                "SELECT * FROM dispatches WHERE dispatch_id = ?",
+                (dispatch_id,),
+            ).fetchone()
+        return self._decode_dispatch(row) or {}
 
     @staticmethod
     def _decode_dispatch(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -1009,7 +1056,14 @@ class RuntimeStore:
                     json.dumps(detail or {}, sort_keys=True, ensure_ascii=False),
                 ),
             )
-        return self.get_dispatch_phase(dispatch_id, phase_name) or {}
+            row = connection.execute(
+                """
+                SELECT * FROM dispatch_phases
+                WHERE dispatch_id = ? AND phase_name = ?
+                """,
+                (dispatch_id, phase_name),
+            ).fetchone()
+        return self._decode_dispatch_phase(row) or {}
 
     def complete_dispatch_phase(
         self,
@@ -1051,7 +1105,14 @@ class RuntimeStore:
                     output_hash,
                 ),
             )
-        return self.get_dispatch_phase(dispatch_id, phase_name) or {}
+            row = connection.execute(
+                """
+                SELECT * FROM dispatch_phases
+                WHERE dispatch_id = ? AND phase_name = ?
+                """,
+                (dispatch_id, phase_name),
+            ).fetchone()
+        return self._decode_dispatch_phase(row) or {}
 
     def fail_dispatch_phase(
         self,
@@ -1093,7 +1154,14 @@ class RuntimeStore:
                     error,
                 ),
             )
-        return self.get_dispatch_phase(dispatch_id, phase_name) or {}
+            row = connection.execute(
+                """
+                SELECT * FROM dispatch_phases
+                WHERE dispatch_id = ? AND phase_name = ?
+                """,
+                (dispatch_id, phase_name),
+            ).fetchone()
+        return self._decode_dispatch_phase(row) or {}
 
     @staticmethod
     def _decode_dispatch_phase(
@@ -1135,6 +1203,262 @@ class RuntimeStore:
                 (dispatch_id,),
             ).fetchall()
         return [self._decode_dispatch_phase(row) or {} for row in rows]
+
+    def put_central_artifact(
+        self,
+        *,
+        artifact_hash: str,
+        artifact_type: str,
+        artifact: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.put_central_artifacts(
+            [
+                {
+                    "artifact_hash": artifact_hash,
+                    "artifact_type": artifact_type,
+                    "artifact": artifact,
+                    "metadata": metadata or {},
+                }
+            ]
+        )[0]
+
+    def put_central_artifacts(
+        self,
+        artifacts: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Persist an immutable component set in one write transaction."""
+        if not artifacts:
+            return []
+        prepared = [
+            {
+                **item,
+                "artifact_json": json.dumps(
+                    item["artifact"],
+                    sort_keys=True,
+                    ensure_ascii=False,
+                ),
+                "metadata_json": json.dumps(
+                    item.get("metadata") or {},
+                    sort_keys=True,
+                    ensure_ascii=False,
+                ),
+                "created_at": utc_now(),
+            }
+            for item in artifacts
+        ]
+        stored: list[dict[str, Any]] = []
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                for item in prepared:
+                    row = connection.execute(
+                        """
+                        SELECT artifact_json FROM central_artifacts
+                        WHERE artifact_hash = ?
+                        """,
+                        (item["artifact_hash"],),
+                    ).fetchone()
+                    if (
+                        row is not None
+                        and row["artifact_json"] != item["artifact_json"]
+                    ):
+                        raise ResourceConflictError(
+                            "Central depository hash collision or mutated "
+                            f"artifact: {item['artifact_hash']}"
+                        )
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO central_artifacts(
+                            artifact_hash, artifact_type, artifact_json,
+                            metadata_json, created_at
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            item["artifact_hash"],
+                            item["artifact_type"],
+                            item["artifact_json"],
+                            item["metadata_json"],
+                            item["created_at"],
+                        ),
+                    )
+                    stored_row = connection.execute(
+                        """
+                        SELECT * FROM central_artifacts
+                        WHERE artifact_hash = ?
+                        """,
+                        (item["artifact_hash"],),
+                    ).fetchone()
+                    stored.append(
+                        self._decode_central_artifact(stored_row) or {}
+                    )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return stored
+
+    @staticmethod
+    def _decode_central_artifact(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        data = dict(row)
+        data["artifact"] = json.loads(data.pop("artifact_json"))
+        data["metadata"] = json.loads(data.pop("metadata_json"))
+        return data
+
+    def get_central_artifact(
+        self,
+        artifact_hash: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM central_artifacts
+                WHERE artifact_hash = ?
+                """,
+                (artifact_hash,),
+            ).fetchone()
+        return self._decode_central_artifact(row)
+
+    def list_central_artifacts(
+        self,
+        *,
+        artifact_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: list[Any] = []
+        query = "SELECT * FROM central_artifacts"
+        if artifact_type is not None:
+            query += " WHERE artifact_type = ?"
+            params.append(artifact_type)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with self.connection() as connection:
+            rows = connection.execute(query, tuple(params)).fetchall()
+        return [self._decode_central_artifact(row) or {} for row in rows]
+
+    def append_central_lineage(
+        self,
+        *,
+        lineage_id: str,
+        subject_type: str,
+        subject_id: str,
+        artifact_hash: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        created_at = utc_now()
+        metadata_json = json.dumps(
+            metadata or {},
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    """
+                    SELECT chain_hash, sequence FROM central_lineage
+                    WHERE subject_type = ? AND subject_id = ?
+                    ORDER BY sequence DESC
+                    LIMIT 1
+                    """,
+                    (subject_type, subject_id),
+                ).fetchone()
+                parent_chain_hash = row["chain_hash"] if row else None
+                sequence = int(row["sequence"]) + 1 if row else 1
+                chain_hash = sha256_json(
+                    {
+                        "subject_type": subject_type,
+                        "subject_id": subject_id,
+                        "artifact_hash": artifact_hash,
+                        "parent_chain_hash": parent_chain_hash,
+                        "sequence": sequence,
+                        "metadata": metadata or {},
+                    }
+                )
+                connection.execute(
+                    """
+                    INSERT INTO central_lineage(
+                        lineage_id, subject_type, subject_id, artifact_hash,
+                        parent_chain_hash, chain_hash, sequence, metadata_json,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        lineage_id,
+                        subject_type,
+                        subject_id,
+                        artifact_hash,
+                        parent_chain_hash,
+                        chain_hash,
+                        sequence,
+                        metadata_json,
+                        created_at,
+                    ),
+                )
+                stored_row = connection.execute(
+                    """
+                    SELECT * FROM central_lineage
+                    WHERE lineage_id = ?
+                    """,
+                    (lineage_id,),
+                ).fetchone()
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return self._decode_central_lineage(stored_row) or {}
+
+    @staticmethod
+    def _decode_central_lineage(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        data = dict(row)
+        data["metadata"] = json.loads(data.pop("metadata_json"))
+        return data
+
+    def get_central_lineage_entry(
+        self,
+        lineage_id: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM central_lineage
+                WHERE lineage_id = ?
+                """,
+                (lineage_id,),
+            ).fetchone()
+        return self._decode_central_lineage(row)
+
+    def list_central_lineage(
+        self,
+        *,
+        subject_type: str | None = None,
+        subject_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if subject_type is not None:
+            clauses.append("subject_type = ?")
+            params.append(subject_type)
+        if subject_id is not None:
+            clauses.append("subject_id = ?")
+            params.append(subject_id)
+        query = "SELECT * FROM central_lineage"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with self.connection() as connection:
+            rows = connection.execute(query, tuple(params)).fetchall()
+        return [self._decode_central_lineage(row) or {} for row in rows]
 
     def record_transfer(
         self,

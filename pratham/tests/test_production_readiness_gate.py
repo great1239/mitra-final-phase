@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,10 +25,14 @@ def test_container_deployment_has_production_safety_controls():
     assert "read_only: true" in compose
     assert "no-new-privileges:true" in compose
     assert "cap_drop:" in compose
-    assert "pids_limit:" in compose
+    assert "pids:" in compose
     assert "resources:" in compose
     assert "max-size:" in compose
     assert "MITRA_COMPANION_UVICORN_WORKERS" in compose
+    assert "MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/production" in (
+        compose
+    )
+    assert 'MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS: "false"' in compose
 
 
 def test_operations_documents_and_environment_template_are_present():
@@ -39,8 +44,15 @@ def test_operations_documents_and_environment_template_are_present():
     )
     assert "MITRA_COMPANION_LOG_LEVEL=INFO" in production_env
     assert "MITRA_COMPANION_SECRETS_DIR" in production_env
-    assert "MITRA_COMPANION_UVICORN_WORKERS=2" in production_env
+    assert "MITRA_COMPANION_UVICORN_WORKERS=1" in production_env
     assert "MITRA_COMPANION_INSTANCE_ID" in production_env
+    assert "MITRA_COMPANION_SQLITE_SYNCHRONOUS=NORMAL" in production_env
+    assert "MITRA_COMPANION_MANIFEST_DIRECTORY=/app/contracts/production" in (
+        production_env
+    )
+    assert "MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS=false" in production_env
+    assert "MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS=false" in production_env
+    assert "MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS=false" in production_env
     assert "MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true" in production_env
     assert "MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS=5" in (
         production_env
@@ -187,6 +199,113 @@ def test_runtime_instances_are_first_class_production_surface():
     )
 
 
+def test_documentation_handover_contains_clean_rebuild_and_depository_protocol():
+    index = _read("docs/DOCUMENTATION_INDEX.md")
+    handover = _read("docs/HANDOVER.md")
+    depository = _read("docs/CENTRAL_DEPOSITORY_HANDOVER.md")
+    review_packet = _read("review_packets/REVIEW_PACKET.md")
+
+    assert "docs/HANDOVER.md" in index
+    assert "docs/CENTRAL_DEPOSITORY_HANDOVER.md" in index
+    assert 'python -m pip install -e ".[test]"' in handover
+    assert "python -m pytest" in handover
+    assert "docker compose build --pull" in handover
+    assert "scripts/validate_hosted_runtime.py" in handover
+    assert "ephemeral" in handover
+    assert "GET /api/v1/runtime/depository" in depository
+    assert "subject_type=dispatch&subject_id={dispatch_id}" in depository
+    assert 'separators=(",", ":")' in depository
+    assert "Lineage Verification" in depository
+    assert "An HTTP 200 alone is not acceptance." in depository
+    for heading in (
+        "Entry Point",
+        "Core Execution Flow",
+        "Live Runtime Flow",
+        "What Changed",
+        "Failure Cases",
+        "Production Evidence",
+        "Known Limitations",
+        "Replay Validation Summary",
+    ):
+        assert f"## {heading}" in review_packet
+
+
+def test_code_packets_are_bounded_and_complete():
+    packet_directory = ROOT / "review_packets" / "code_packets"
+    packet_index = _read("review_packets/code_packets/README.md")
+    assert "1baaadf313f4d8a91018321db1317c5c6b385ccc" in packet_index
+    assert "only files added or modified after the baseline are listed" in (
+        packet_index
+    )
+
+    packets = sorted(
+        path
+        for path in packet_directory.glob("*.md")
+        if path.name != "README.md"
+    )
+    assert packets
+    referenced_paths: set[str] = set()
+    required_fields = (
+        "Sprint change",
+        "Purpose",
+        "Why modified",
+        "Key implementation areas",
+        "Review focus",
+        "Related tests",
+    )
+    for packet in packets:
+        text = packet.read_text(encoding="utf-8")
+        entries = list(
+            re.finditer(
+                r"^## File: `([^`\r\n]+)`\s*$",
+                text,
+                re.MULTILINE,
+            )
+        )
+        assert 1 <= len(entries) <= 3
+        for position, entry in enumerate(entries):
+            relative_path = entry.group(1)
+            block_end = (
+                entries[position + 1].start()
+                if position + 1 < len(entries)
+                else len(text)
+            )
+            block = text[entry.end() : block_end]
+            assert relative_path not in referenced_paths
+            referenced_paths.add(relative_path)
+            assert (ROOT / relative_path).is_file()
+            for field in required_fields:
+                assert f"**{field}:**" in block
+
+
+def test_testing_evidence_records_all_executed_acceptance_paths():
+    evidence = _read("review_packets/testing/TESTING_EVIDENCE.md")
+    for heading in (
+        "Clean Deployment",
+        "Replay Validation",
+        "Production Validation",
+        "Failover Validation",
+        "Recovery Validation",
+        "Load Testing",
+        "Hosted Runtime Validation",
+        "Integration Validation",
+    ):
+        assert f"## {heading}" in evidence
+    assert "104 passed" in evidence
+    assert "633/633 passed" in evidence
+    assert "p95 latency:         803.92 ms" in evidence
+    assert "CAPACITY LIMIT" in evidence
+    assert "Docker was rechecked and repaired on `2026-07-10`" in evidence
+    assert "docker compose config --quiet: passed" in evidence
+    assert (
+        "docker compose up -d --force-recreate --wait --wait-timeout 180: healthy"
+        in evidence
+    )
+    assert '"uvicorn_workers": 1' in evidence
+    assert '"passed": "superseded"' in evidence
+    assert "ROUTING/REPLAY REQUIRES REAL ATTACHED PRODUCT" in evidence
+
+
 def test_production_readiness_gate_script_passes():
     completed = subprocess.run(
         [sys.executable, "scripts/production_readiness_gate.py"],
@@ -197,5 +316,15 @@ def test_production_readiness_gate_script_passes():
     )
     payload = json.loads(completed.stdout)
     assert payload["production_readiness_gate"] == "passed"
-    assert payload["accessible_bhiv_products"] == 2
+    assert set(payload["checks"]) == {
+        "container",
+        "code_packets",
+        "deployment",
+        "runtime",
+        "load_test",
+        "handover",
+        "screenshots",
+        "testing_evidence",
+    }
+    assert all(status == "passed" for status in payload["checks"].values())
     assert payload["failures"] == []

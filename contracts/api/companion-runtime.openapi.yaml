@@ -5,8 +5,10 @@ info:
   description: >
     Versioned interface for sessions, partitioned context, explicit intent
     routing, context transfer, product attachment, and bounded companion
-    interaction. The runtime does not own governance, safety, knowledge,
-    domain intelligence, evidence, replay, certification, or product logic.
+    interaction, deterministic reconstruction, and runtime artifact export.
+    The runtime does not own governance, safety, knowledge authority, product
+    logic, external evidence/replay authority, certification, or Central
+    Depository acceptance.
 servers:
   - url: http://localhost:8090
 paths:
@@ -151,6 +153,68 @@ paths:
       responses:
         "200":
           description: Manifest-backed product, capability, dependency, and contract catalog
+  /api/v1/runtime/capability-graph:
+    get:
+      operationId: getRuntimeCapabilityGraph
+      parameters:
+        - in: query
+          name: product_id
+          schema: {type: string}
+        - in: query
+          name: capability_id
+          schema: {type: string}
+        - in: query
+          name: available_only
+          schema: {type: boolean, default: false}
+        - in: query
+          name: message
+          schema: {type: string}
+      responses:
+        "200":
+          description: Dynamic capability graph built from published manifests, schemas, and optional message terms
+  /api/v1/runtime/capability-plan:
+    post:
+      operationId: createRuntimeCapabilityPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/runtime-analysis.schema.json
+      responses:
+        "200":
+          description: Candidate single or multi-capability plan over published interfaces
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/runtime/depository:
+    get:
+      operationId: getRuntimeDepository
+      parameters:
+        - in: query
+          name: artifact_type
+          schema: {type: string}
+        - in: query
+          name: subject_type
+          schema: {type: string}
+        - in: query
+          name: subject_id
+          schema: {type: string}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+      responses:
+        "200":
+          description: Content-addressed immutable runtime artifacts and hash-chain lineage export
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/runtime-depository-export.schema.json
+  /api/v1/runtime/integrations:
+    get:
+      operationId: getRuntimeIntegrations
+      responses:
+        "200":
+          description: Configured BHIV ecosystem integration endpoints and contract surfaces
   /api/v1/runtime/analysis:
     post:
       operationId: createRuntimeAnalysis
@@ -223,6 +287,19 @@ paths:
       responses:
         "200":
           description: Recent companion execution task records
+  /api/v1/companion/tasks/{task_id}:
+    get:
+      operationId: getCompanionTask
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Single companion execution task record for status polling
+        "404":
+          description: Companion task not found
   /api/v1/runtime/metrics:
     get:
       operationId: getRuntimeMetrics
@@ -728,6 +805,19 @@ paths:
       responses:
         "200":
           description: Portable dispatch proof bundle with hashes and lineage
+        "404":
+          description: Dispatch not found
+  /api/v1/dispatches/{dispatch_id}/reconstruction:
+    get:
+      operationId: getDispatchReconstruction
+      parameters:
+        - in: path
+          name: dispatch_id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Deterministic reconstruction package from immutable dispatch artifacts
         "404":
           description: Dispatch not found
 components:

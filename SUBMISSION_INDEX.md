@@ -8,7 +8,8 @@
 | Context Runtime | `pratham/context-runtime/mitra_context/` |
 | Intent Router | `pratham/intent-router/mitra_intent/` |
 | Attachment Runtime | `pratham/attachment-runtime/mitra_attachment/` |
-| Product attachment without runtime modification | `contracts/examples/product-atlas.json`, `product-nova.json` |
+| Product attachment without runtime modification | `POST /api/v1/products/connect`; production bootstrap directory `contracts/production/` |
+| Product attachment contract examples | `contracts/examples/product-atlas.json`, `product-nova.json` |
 | Versioned contracts | `contracts/schemas/`, `contracts/api/companion-runtime.openapi.yaml` |
 | Integration APIs | FastAPI endpoints under `/api/v1` |
 | Architecture diagrams | `docs/ARCHITECTURE.md` |
@@ -45,16 +46,24 @@
 | Integration tests | `contracts/integration-tests/` |
 | Failure tests | `pratham/tests/test_dispatch_and_failures.py`, `docs/FAILURE_MATRIX.md` |
 | Developer onboarding | `docs/DEVELOPER_ONBOARDING.md` |
+| Documentation index | `docs/DOCUMENTATION_INDEX.md` |
+| Clean-room rebuild and handover | `docs/HANDOVER.md` |
+| Central Depository handover | `docs/CENTRAL_DEPOSITORY_HANDOVER.md` |
+| Deterministic reconstruction | `mitra_companion/reconstruction.py`, `/api/v1/dispatches/{dispatch_id}/reconstruction` |
+| Runtime artifact export | `mitra_companion/depository.py`, `/api/v1/runtime/depository` |
+| BHIV convergence | `mitra_companion/bhiv_integrations.py`, `/api/v1/runtime/integrations` |
 | Security/IP boundaries | `docs/SECURITY_IP_BOUNDARIES.md` |
 | Ownership allowlist/denylist | `docs/OWNERSHIP_BOUNDARY.md` |
 | Machine-readable ownership contract | `contracts/ownership-boundary.json` |
 | Adapter extension guide | `docs/ADAPTER_GUIDE.md` |
-| Review packet | `REVIEW_PACKET.md` |
+| Mandatory bounded code packet | `review_packets/code_packets/README.md` |
+| Executed testing evidence | `review_packets/testing/TESTING_EVIDENCE.md` |
+| Review packet | `review_packets/REVIEW_PACKET.md` |
 | Validation report | `VALIDATION_REPORT.md` |
 | Security boundary re-execution | `REEXECUTION_REPORT.md` |
 | Runtime screenshots | `evidence/runtime-dashboard.png`, `evidence/runtime-openapi.png` |
 | Demo video | `evidence/mitra-companion-runtime-demo.mp4` |
 
 The runtime composes published interfaces only. No source from SHAKTI,
-Parikshak, governance, evidence, replay, or certification engines is imported
-into the implementation.
+Parikshak, governance, external evidence/replay authorities, or certification
+engines is imported into the implementation.

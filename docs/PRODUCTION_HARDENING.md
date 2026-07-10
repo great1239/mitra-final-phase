@@ -7,7 +7,7 @@ endpoint behavior is in OpenAPI and the integration guide.
 
 | Area | Runtime support |
 | --- | --- |
-| Deployment | Docker Compose runs `mitra-companion serve` with Uvicorn workers, proxy headers, `/ready`, and production env values. |
+| Deployment | Docker Compose runs `mitra-companion serve` with one Uvicorn worker per SQLite-backed container, proxy headers, `/ready`, and production env values. |
 | Container posture | Non-root user, read-only filesystem, explicit `/data` and `/tmp`, dropped capabilities, resource limits, and restart policy. |
 | Persistent process | `RuntimeStartupManager` starts the service and `PersistentRuntimeSupervisor` keeps heartbeats fresh, cleans stale peers, and recovers interrupted tasks. |
 | Multi-instance runtime | Runtime instances register unique IDs and share durable sessions, attachments, routes, exchanges, and dispatches through storage. |

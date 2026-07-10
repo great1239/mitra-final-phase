@@ -1,31 +1,42 @@
-# Phase 7 - Documentation
+# Documentation And Handover
 
-Phase 7 turns the implementation into a reviewable handoff package. The docs
-focus on architecture, execution, runtime diagrams, onboarding, and the final
-review packet.
+The maintained documentation is organized around an incoming engineer rather
+than sprint chronology.
 
-## Documentation set
+## Authoritative Entry Points
 
 | Deliverable | File |
 |---|---|
-| Architecture | `docs/ARCHITECTURE.md` |
-| Execution flow | `docs/EXECUTION_FLOW.md` |
-| Runtime diagrams | `docs/RUNTIME_DIAGRAMS.md` |
-| Developer onboarding | `docs/DEVELOPER_ONBOARDING.md` |
-| Integration guide | `docs/INTEGRATION_GUIDE.md` |
-| Adapter guide | `docs/ADAPTER_GUIDE.md` |
-| Failure matrix | `docs/FAILURE_MATRIX.md` |
-| Review packet | `REVIEW_PACKET.md` |
-| Submission index | `SUBMISSION_INDEX.md` |
+| Documentation map | `docs/DOCUMENTATION_INDEX.md` |
+| Clean-room rebuild and handover | `docs/HANDOVER.md` |
+| Architecture and boundaries | `docs/ARCHITECTURE.md` |
+| Product integration | `docs/INTEGRATION_GUIDE.md` |
+| BHIV integration | `docs/BHIV_PRODUCT_INTEGRATION.md` |
+| Production operations | `docs/OPERATIONS_RUNBOOK.md` |
+| Central Depository transfer | `docs/CENTRAL_DEPOSITORY_HANDOVER.md` |
+| Durable hosting | `docs/INDEPENDENT_HOSTING.md` |
+| Public serverless hosting | `docs/VERCEL_DEPLOYMENT.md` |
 
-## Review posture
+## Handover Standard
 
-The documentation avoids hidden-system assumptions. It names Pratham-owned
-runtime capabilities and explicitly excludes conversation design, governance,
-safety, knowledge, project/domain intelligence, evidence, replay, and
-certification.
+An incoming engineer must be able to:
 
-The final review packet maps assignment requirements to implementation files,
-contracts, tests, and evidence so reviewers can validate the bounded capability
-without needing private architecture context.
+1. create a clean Python environment;
+2. install the runtime and test dependencies;
+3. execute the complete test suite and readiness gate;
+4. start the API locally and with Docker;
+5. configure manifests, storage, secrets, telemetry, and BHIV endpoints;
+6. attach a product and execute a real dispatch;
+7. compare submitted input with dispatch and reconstruction output;
+8. recover or roll back a durable deployment;
+9. export and verify a dispatch-scoped Central Depository handover.
 
+The handover does not depend on generated proof reports. Acceptance comes from
+runtime responses, immutable artifacts, tests, metrics, telemetry, and
+operator execution.
+
+## Historical Records
+
+Phase reports and review packets remain historical sprint records. They are not
+the canonical rebuild path. `docs/DOCUMENTATION_INDEX.md` identifies maintained
+documentation and machine-readable contracts.

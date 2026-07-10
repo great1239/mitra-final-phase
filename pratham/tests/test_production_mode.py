@@ -33,6 +33,7 @@ def test_production_configuration_loads_env_file_and_secret_files(
         "MITRA_COMPANION_CONFIG_FILE",
         "MITRA_COMPANION_DATA_ROOT",
         "MITRA_COMPANION_DATABASE_PATH",
+        "MITRA_COMPANION_SQLITE_SYNCHRONOUS",
         "MITRA_COMPANION_TELEMETRY_LOG_PATH",
         "MITRA_COMPANION_LOG_PATH",
         "MITRA_COMPANION_LOG_LEVEL",
@@ -66,6 +67,7 @@ def test_production_configuration_loads_env_file_and_secret_files(
                 "MITRA_COMPANION_ENVIRONMENT=production-test",
                 f"MITRA_COMPANION_DATA_ROOT={data_root}",
                 f"MITRA_COMPANION_DATABASE_PATH={data_root / 'runtime.db'}",
+                "MITRA_COMPANION_SQLITE_SYNCHRONOUS=NORMAL",
                 f"MITRA_COMPANION_TELEMETRY_LOG_PATH={data_root / 'telemetry.jsonl'}",
                 f"MITRA_COMPANION_LOG_PATH={data_root / 'production.jsonl'}",
                 "MITRA_COMPANION_LOG_LEVEL=WARNING",
@@ -93,6 +95,8 @@ def test_production_configuration_loads_env_file_and_secret_files(
     )
     assert settings.production_log_level == "WARNING"
     assert settings.production_log_to_stdout is False
+    assert settings.sqlite_synchronous == "NORMAL"
+    assert summary["sqlite_synchronous"] == "NORMAL"
     assert "MITRA_COMPANION_AI_RESOLVER_URL" in (
         summary["secrets"]["secret_keys_loaded_from_files"]
     )
@@ -158,6 +162,82 @@ def test_runtime_operations_api_exposes_production_mode(settings_factory):
         assert restarted.status_code == 200
         assert restarted.json()["restart"]["status"] == "restarted"
         assert client.get("/ready").status_code == 200
+
+
+def test_production_policy_does_not_bootstrap_example_manifests(
+    settings_factory,
+):
+    settings = settings_factory()
+    settings.deployment_environment = "production"
+    settings.production_config_profile = "production"
+    settings.manifest_directory = ROOT / "contracts" / "examples"
+    settings.allow_example_manifests = False
+    settings.allow_simulated_manifests = False
+    settings.allow_loopback_manifests = False
+    settings.allow_localhost_manifests = False
+    settings.require_production_bootstrap_manifests = True
+
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        attachments = client.get("/api/v1/attachments").json()[
+            "attachments"
+        ]
+        assert attachments == []
+        startup_sources = [
+            phase["detail"]["sources"]
+            for phase in client.get("/api/v1/runtime/startup")
+            .json()["startup"]["phases"]
+            if phase["name"] == "manifest_sources_loaded"
+        ][0]
+        assert startup_sources == [
+            {
+                "source": "DirectoryManifestSourceAdapter",
+                "manifest_count": 0,
+                "attachment_count": 0,
+            }
+        ]
+
+
+def test_production_attachment_api_rejects_example_and_simulated_manifests(
+    settings_factory,
+):
+    settings = settings_factory()
+    settings.deployment_environment = "production"
+    settings.production_config_profile = "production"
+    settings.allow_example_manifests = False
+    settings.allow_simulated_manifests = False
+    settings.allow_loopback_manifests = False
+    settings.allow_localhost_manifests = False
+    settings.require_production_bootstrap_manifests = True
+    app = create_app(settings)
+    nova = json.loads(
+        (ROOT / "contracts" / "examples" / "product-nova.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    keshav = json.loads(
+        (
+            ROOT / "contracts" / "examples" / "product-keshav-knowledge.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    with TestClient(app) as client:
+        nova_response = client.post(
+            "/api/v1/attachments",
+            json={**VERSIONED, "manifest": nova},
+        )
+        assert nova_response.status_code == 422
+        assert nova_response.json()["error"]["code"] == "ATTACHMENT_INVALID"
+
+        keshav_response = client.post(
+            "/api/v1/attachments",
+            json={**VERSIONED, "manifest": keshav},
+        )
+        assert keshav_response.status_code == 422
+        assert keshav_response.json()["error"]["code"] == (
+            "ATTACHMENT_INVALID"
+        )
 
 
 def test_production_logging_writes_process_events(tmp_path):

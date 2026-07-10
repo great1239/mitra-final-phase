@@ -64,13 +64,26 @@ class DispatchProofBuilder:
             "phase_summary": self._phase_summary(phases),
             "lineage": self._lineage(dispatch, request, response),
             "reconstruction": {
-                "method": "redispatch-through-published-manifest",
+                "method": "immutable-runtime-artifact-replay",
                 "required_inputs": [
+                    "deterministic replay package",
+                    "content-addressed lifecycle snapshot",
+                    "content-addressed session snapshot",
+                    "content-addressed routing snapshot",
                     "product attachment manifest",
                     "dispatch request envelope",
                     "declared context scopes",
+                    "dispatch phase journal",
+                    "telemetry snapshot",
+                    "recovery snapshot",
+                    "failure snapshot",
                     "product transport response",
                 ],
+                "replay_boundary": (
+                    "Replay reconstructs the Mitra runtime execution from "
+                    "immutable artifacts. It does not re-execute attached "
+                    "product business logic."
+                ),
                 "request_hash": sha256_json(request),
                 "expected_response_hash": sha256_json(response or {}),
             },
@@ -85,6 +98,8 @@ class DispatchProofBuilder:
                     "verify request_hash and response_hash",
                     "inspect phase_journal for failed or missing phases",
                     "use lineage nodes to identify runtime and product boundary",
+                    "load deterministic_reconstruction and verify every component artifact hash",
+                    "confirm replay scope coverage for lifecycle, sessions, routing, attachments, context, dispatch, telemetry, recovery, and failures",
                 ],
             },
         }

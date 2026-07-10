@@ -31,6 +31,12 @@ class RuntimeTelemetry:
             "dispatch_total": 0,
             "dispatch_completed_total": 0,
             "dispatch_failed_total": 0,
+            "companion_messages_total": 0,
+            "companion_messages_completed_total": 0,
+            "companion_messages_needs_clarification_total": 0,
+            "companion_messages_failed_total": 0,
+            "fallback_dispatch_attempts_total": 0,
+            "fallback_dispatch_success_total": 0,
             "attachment_health_checks_total": 0,
             "attachment_health_failures_total": 0,
             "recovery_validations_total": 0,
@@ -104,6 +110,37 @@ class RuntimeTelemetry:
             status=status,
             latency_ms=round(latency_ms, 3),
             error=error,
+        )
+
+    def record_companion_turn(
+        self,
+        *,
+        status: str,
+        fallback_attempted: bool,
+        fallback_used: bool,
+    ) -> None:
+        normalized = status.lower()
+        with self._lock:
+            self._counters["companion_messages_total"] += 1
+            if status == "COMPLETED":
+                self._counters["companion_messages_completed_total"] += 1
+            if status == "NEEDS_CLARIFICATION":
+                self._counters[
+                    "companion_messages_needs_clarification_total"
+                ] += 1
+            if status in {"FAILED", "UNAVAILABLE"}:
+                self._counters["companion_messages_failed_total"] += 1
+            if fallback_attempted:
+                self._counters["fallback_dispatch_attempts_total"] += 1
+            if fallback_used:
+                self._counters["fallback_dispatch_success_total"] += 1
+        self.record_event(
+            "companion.turn_completed",
+            severity="error" if status == "FAILED" else "info",
+            status=status,
+            status_normalized=normalized,
+            fallback_attempted=fallback_attempted,
+            fallback_used=fallback_used,
         )
 
     def record_attachment_health(
@@ -212,6 +249,30 @@ class RuntimeTelemetry:
             "# TYPE mitra_attachment_health_checks_total counter",
             "mitra_attachment_health_checks_total "
             f"{snapshot['counters']['attachment_health_checks_total']}",
+            "# HELP mitra_companion_messages_total Companion user turns processed.",
+            "# TYPE mitra_companion_messages_total counter",
+            "mitra_companion_messages_total "
+            f"{snapshot['counters']['companion_messages_total']}",
+            "# HELP mitra_companion_messages_completed_total Completed companion turns.",
+            "# TYPE mitra_companion_messages_completed_total counter",
+            "mitra_companion_messages_completed_total "
+            f"{snapshot['counters']['companion_messages_completed_total']}",
+            "# HELP mitra_companion_messages_needs_clarification_total Companion turns needing clarification.",
+            "# TYPE mitra_companion_messages_needs_clarification_total counter",
+            "mitra_companion_messages_needs_clarification_total "
+            f"{snapshot['counters']['companion_messages_needs_clarification_total']}",
+            "# HELP mitra_companion_messages_failed_total Failed or unavailable companion turns.",
+            "# TYPE mitra_companion_messages_failed_total counter",
+            "mitra_companion_messages_failed_total "
+            f"{snapshot['counters']['companion_messages_failed_total']}",
+            "# HELP mitra_fallback_dispatch_attempts_total Companion fallback dispatch attempts.",
+            "# TYPE mitra_fallback_dispatch_attempts_total counter",
+            "mitra_fallback_dispatch_attempts_total "
+            f"{snapshot['counters']['fallback_dispatch_attempts_total']}",
+            "# HELP mitra_fallback_dispatch_success_total Successful companion fallback dispatches.",
+            "# TYPE mitra_fallback_dispatch_success_total counter",
+            "mitra_fallback_dispatch_success_total "
+            f"{snapshot['counters']['fallback_dispatch_success_total']}",
             "# HELP mitra_attachment_health_failures_total Unhealthy attachment checks.",
             "# TYPE mitra_attachment_health_failures_total counter",
             "mitra_attachment_health_failures_total "

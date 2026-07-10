@@ -1,0 +1,60 @@
+{
+  "product_id": "prana-runtime",
+  "display_name": "PRANA Runtime",
+  "product_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "simulated",
+  "capabilities": [
+    {
+      "capability_id": "runtime-vitality",
+      "description": "Consumes runtime heartbeat, health, and liveness signals for ecosystem vitality monitoring.",
+      "context_scopes": ["session", "workspace", "handoff"],
+      "metadata": {
+        "bhiv_system": true,
+        "convergence_role": "runtime-vitality-consumer",
+        "integration_surface": "published-manifest"
+      },
+      "intents": [
+        {
+          "intent_id": "prana.observe-runtime",
+          "description": "Observe a Mitra runtime health snapshot and return vitality posture.",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["runtime_instance_id"],
+            "properties": {
+              "runtime_instance_id": {"type": "string", "minLength": 1},
+              "state": {"type": "string"},
+              "dispatch_total": {"type": "integer", "minimum": 0}
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "vitality": {"type": ["string", "object", "null"]},
+              "trace_id": {"type": "string"}
+            }
+          },
+          "dispatch": {
+            "mode": "loopback",
+            "endpoint": "loopback://prana/runtime/observe"
+          },
+          "metadata": {
+            "owned_by_product": true,
+            "consumes": ["runtime_status", "telemetry_snapshot"]
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "bhiv_product": true,
+    "bhiv_product_name": "PRANA",
+    "business_logic_owner": "prana-runtime",
+    "integration_direction": "convergence-consumer",
+    "integration_surface": "published-manifest"
+  }
+}

@@ -19,7 +19,11 @@ The same signals apply to larger deployments.
 
 ## Capacity Envelope
 
-- `MITRA_COMPANION_UVICORN_WORKERS=2`
+- sustained acceptance: 5 VUs, p95 `803.92 ms`, 0% failures;
+- observed stress ceiling: 15 VUs, p95 `3.74 s`, 0% failures;
+- 15 VUs exceeds the current `1.5 s` latency objective;
+- `MITRA_COMPANION_SQLITE_SYNCHRONOUS=NORMAL` for the measured profile;
+- `MITRA_COMPANION_UVICORN_WORKERS=1` per SQLite-backed container
 - unique `MITRA_COMPANION_INSTANCE_ID` per process
 - persistent runtime enabled
 - heartbeat interval: 5 seconds
@@ -28,9 +32,14 @@ The same signals apply to larger deployments.
 - memory limit: `768M`
 - process limit: `256`
 
+For additional capacity, run multiple containers/processes with unique
+runtime instance IDs and shared durable storage rather than multiple Uvicorn
+workers inside one SQLite-backed container.
+
 Before changing the envelope:
 
 ```powershell
+$env:MAX_VUS="5"
 k6 run scripts/load/k6_companion_runtime.js
 pytest -q
 ```

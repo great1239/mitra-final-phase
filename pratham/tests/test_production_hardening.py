@@ -173,6 +173,7 @@ async def test_runtime_restart_preserves_bhiv_attachments_sessions_and_routes(
         database_path=tmp_path / "restart.db",
         telemetry_log_path=tmp_path / "restart-telemetry.jsonl",
         http_timeout_seconds=0.2,
+        allow_localhost_manifests=True,
     )
     transport = CapabilityTransport(
         default_timeout_seconds=0.2,
@@ -369,6 +370,7 @@ async def test_multiple_runtime_instances_share_state_routes_and_dispatch(
         "data_root": tmp_path,
         "database_path": database_path,
         "http_timeout_seconds": 0.2,
+        "allow_localhost_manifests": True,
     }
     first_settings = RuntimeSettings(
         **shared,
@@ -733,6 +735,12 @@ def test_production_tactics_are_deployed_as_first_class_artifacts():
     assert 'import http from "k6/http"' in k6_script
     assert "ramping-vus" in k6_script
     assert "http_req_failed" in k6_script
+    assert 'const PROFILE = (__ENV.PROFILE || "runtime")' in k6_script
+    assert 'const MAX_VUS = Math.max(1, Number(__ENV.MAX_VUS || "15"))' in (
+        k6_script
+    )
+    assert "product-echo.json" in k6_script
+    assert "dispatch output matches input" in k6_script
     assert "product-uniguru-runtime.json" in k6_script
     assert "product-trade-bot-main.json" in k6_script
     assert "/api/v1/intents/dispatch" in k6_script

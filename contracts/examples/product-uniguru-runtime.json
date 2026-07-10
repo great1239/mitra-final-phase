@@ -50,6 +50,16 @@
               }
             }
           },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "status": {"type": "string"},
+              "answer": {"type": ["string", "object", "array", "null"]},
+              "evidence": {"type": ["object", "array", "null"]},
+              "trace_id": {"type": "string"}
+            }
+          },
           "dispatch": {
             "mode": "http",
             "endpoint": "/runtime/execute",

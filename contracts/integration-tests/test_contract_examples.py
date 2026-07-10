@@ -37,7 +37,16 @@ def test_example_manifests_validate_against_published_schema():
         ).read_text(encoding="utf-8")
     )
     validator = Draft202012Validator(schema)
-    for name in ("product-atlas.json", "product-nova.json"):
+    for name in (
+        "product-atlas.json",
+        "product-nova.json",
+        "product-bucket-insight.json",
+        "product-prana-runtime.json",
+        "product-karma-ledger.json",
+        "product-setu-bridge.json",
+        "product-keshav-knowledge.json",
+        "product-sarathi-guide.json",
+    ):
         example = json.loads(
             (ROOT / "contracts" / "examples" / name).read_text(
                 encoding="utf-8"
@@ -53,6 +62,9 @@ async def test_two_products_context_transfer_and_dispatch(tmp_path):
             service_root=ROOT,
             data_root=tmp_path,
             database_path=tmp_path / "integration.db",
+            allow_example_manifests=True,
+            allow_loopback_manifests=True,
+            require_production_bootstrap_manifests=False,
         )
     )
     runtime.start()
@@ -119,6 +131,7 @@ async def test_two_products_context_transfer_and_dispatch(tmp_path):
             "attachments": 2,
             "dispatches": 2,
             "failed_dispatches": 0,
+            "product_exchanges": 0,
         }
     finally:
         runtime.stop()

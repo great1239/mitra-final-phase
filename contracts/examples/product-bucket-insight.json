@@ -1,0 +1,62 @@
+{
+  "product_id": "bucket-insight",
+  "display_name": "Bucket Insight",
+  "product_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "simulated",
+  "capabilities": [
+    {
+      "capability_id": "artifact-insight",
+      "description": "Reads runtime artifact references and returns review-oriented insight without owning Mitra execution.",
+      "context_scopes": ["session", "workspace", "handoff"],
+      "metadata": {
+        "bhiv_system": true,
+        "convergence_role": "artifact-review-consumer",
+        "integration_surface": "published-manifest"
+      },
+      "intents": [
+        {
+          "intent_id": "bucket.lookup-artifact",
+          "description": "Inspect an immutable runtime artifact hash for review and operational insight.",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact_hash"],
+            "properties": {
+              "artifact_hash": {"type": "string", "minLength": 16},
+              "review_depth": {
+                "type": "string",
+                "enum": ["summary", "full"]
+              }
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "artifact_hash": {"type": "string"},
+              "insight": {"type": ["string", "object", "array", "null"]}
+            }
+          },
+          "dispatch": {
+            "mode": "loopback",
+            "endpoint": "loopback://bucket-insight/artifacts/lookup"
+          },
+          "metadata": {
+            "owned_by_product": true,
+            "consumes": ["central_depository", "dispatch_replay_package"]
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "bhiv_product": true,
+    "bhiv_product_name": "Bucket Insight",
+    "business_logic_owner": "bucket-insight",
+    "integration_direction": "convergence-consumer",
+    "integration_surface": "published-manifest"
+  }
+}

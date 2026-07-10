@@ -214,6 +214,101 @@ async def test_http_transport_failure_degrades_attachment(settings_factory):
         runtime.stop()
 
 
+@pytest.mark.asyncio
+async def test_dispatch_response_schema_failure_preserves_raw_response(
+    runtime,
+):
+    async def invalid_response(envelope):
+        return {"accepted": True, "contract_shape": "wrong"}
+
+    manifest = ProductAttachmentManifest.model_validate(
+        {
+            "product_id": "schema-product",
+            "display_name": "Schema Product",
+            "product_version": "1.0.0",
+            "contract_version": "1.0.0",
+            "attachment_mode": "simulated",
+            "capabilities": [
+                {
+                    "capability_id": "schema-capability",
+                    "description": "Capability with a strict response schema",
+                    "context_scopes": ["session"],
+                    "intents": [
+                        {
+                            "intent_id": "schema.respond",
+                            "description": "Return a response for validation",
+                            "input_schema": {"type": "object"},
+                            "response_schema": {
+                                "type": "object",
+                                "required": ["result_id"],
+                                "properties": {
+                                    "result_id": {"type": "string"}
+                                },
+                                "additionalProperties": False,
+                            },
+                            "dispatch": {
+                                "mode": "loopback",
+                                "endpoint": "loopback://schema/respond",
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    runtime.attach(manifest)
+    runtime.transport.register_handler(
+        "schema-product",
+        "schema-capability",
+        "schema.respond",
+        invalid_response,
+    )
+    session = runtime.sessions.create(
+        actor_id="schema-user",
+        client_type="standalone",
+        workspace_id="schema",
+        product_id="schema-product",
+    )
+
+    with pytest.raises(TransportError, match="response schema"):
+        await runtime.dispatch(
+            IntentDispatchRequest(
+                session_id=session["session_id"],
+                intent_id="schema.respond",
+                payload={},
+            )
+        )
+
+    failed = runtime.store.list_dispatches(limit=1)[0]
+    assert failed["status"] == "FAILED"
+    assert failed["response"] == {
+        "accepted": True,
+        "contract_shape": "wrong",
+    }
+    replay = runtime.dispatch_reconstruction(failed["dispatch_id"])
+    reconstructed = replay["reconstructed_execution"]
+    assert replay["status"] == "verified"
+    assert all(replay["verification"]["scope_coverage"].values())
+    assert reconstructed["status"] == "FAILED"
+    assert reconstructed["lifecycle"]["state"] == "DEGRADED"
+    assert reconstructed["attachments"]["selected_attachment"][
+        "state"
+    ] == "DEGRADED"
+    assert reconstructed["dispatch"]["response"] == failed["response"]
+    assert "response schema" in (
+        reconstructed["failures"]["current_dispatch_error"]
+    )
+    assert {
+        phase["phase_name"]
+        for phase in reconstructed["failures"]["failed_phases"]
+    } == {"transport.dispatched", "dispatch.completed"}
+    assert any(
+        event["event_type"] == "dispatch.failed"
+        and event["dispatch_id"] == failed["dispatch_id"]
+        for event in reconstructed["telemetry"]["events"]
+    )
+
+
 def test_capability_catalog_validates_manifest_dependencies(runtime):
     foundation_manifest = ProductAttachmentManifest.model_validate(
         {

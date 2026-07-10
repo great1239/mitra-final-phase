@@ -18,6 +18,16 @@
             "type": "object",
             "required": ["record_type", "record_id"]
           },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "record_type": {"type": "string"},
+              "record_id": {"type": "string"}
+            }
+          },
           "dispatch": {
             "mode": "loopback",
             "endpoint": "loopback://atlas/open-record"
@@ -32,6 +42,15 @@
           "input_schema": {
             "type": "object",
             "required": ["queue_id"]
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "queue_id": {"type": "string"}
+            }
           },
           "dispatch": {
             "mode": "loopback",

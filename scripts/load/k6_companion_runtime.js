@@ -3,7 +3,13 @@ import { check, sleep } from "k6";
 
 const BASE_URL = __ENV.BASE_URL || "http://127.0.0.1:8090";
 const ATTACH_PRODUCTS = (__ENV.ATTACH_PRODUCTS || "true") !== "false";
+const PROFILE = (__ENV.PROFILE || "runtime").toLowerCase();
+const MAX_VUS = Math.max(1, Number(__ENV.MAX_VUS || "15"));
+const RAMP_VUS = Math.max(1, Math.ceil(MAX_VUS / 3));
 
+const echoManifest = JSON.parse(
+  open("../../contracts/examples/product-echo.json"),
+);
 const uniguruManifest = JSON.parse(
   open("../../contracts/examples/product-uniguru-runtime.json"),
 );
@@ -16,8 +22,8 @@ export const options = {
     bhiv_runtime_load: {
       executor: "ramping-vus",
       stages: [
-        { duration: "30s", target: 5 },
-        { duration: "1m", target: 15 },
+        { duration: "30s", target: RAMP_VUS },
+        { duration: "1m", target: MAX_VUS },
         { duration: "30s", target: 0 },
       ],
     },
@@ -76,6 +82,23 @@ export function setup() {
   const ready = http.get(`${BASE_URL}/ready`);
   check(ready, { "runtime ready": (item) => item.status === 200 });
 
+  if (PROFILE === "runtime") {
+    if (ATTACH_PRODUCTS) {
+      attach(echoManifest);
+    }
+    return {
+      profile: PROFILE,
+      echoSession: createSession(
+        echoManifest.product_id,
+        "k6-runtime-workspace",
+      ),
+    };
+  }
+
+  if (PROFILE !== "bhiv") {
+    throw new Error(`Unsupported PROFILE=${PROFILE}; use runtime or bhiv`);
+  }
+
   if (ATTACH_PRODUCTS) {
     attach(uniguruManifest);
     attach(samruddhiManifest);
@@ -97,10 +120,35 @@ export function setup() {
     "context load succeeds": (item) => item.status === 200,
   });
 
-  return { uniguruSession, samruddhiSession };
+  return { profile: PROFILE, uniguruSession, samruddhiSession };
 }
 
 export default function (sessions) {
+  if (sessions.profile === "runtime") {
+    const response = postJson(
+      "/api/v1/intents/dispatch",
+      versioned({
+        session_id: sessions.echoSession,
+        product_id: echoManifest.product_id,
+        capability_id: "echo-observation",
+        intent_id: "echo.repeat",
+        payload: {
+          message: `k6 runtime load ${__VU}-${__ITER}`,
+        },
+      }),
+    );
+    check(response, {
+      "dispatch completed": (item) => item.status === 200,
+      "dispatch has receipt": (item) =>
+        Boolean(item.json("dispatch.dispatch_id")),
+      "dispatch output matches input": (item) =>
+        item.json("dispatch.response.payload.message") ===
+        `k6 runtime load ${__VU}-${__ITER}`,
+    });
+    sleep(1);
+    return;
+  }
+
   const useUniguru = __ITER % 2 === 0;
   const body = useUniguru
     ? versioned({

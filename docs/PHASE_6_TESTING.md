@@ -51,6 +51,6 @@ A custom test adapter intentionally raises `TransportError`. The runtime:
 4. transitions lifecycle to `DEGRADED`;
 5. continues to route healthy products.
 
-This proves failure containment without governance, evidence, replay, or
-certification coupling.
+This proves failure containment without governance, external evidence
+authority, external replay authority, or certification coupling.
 

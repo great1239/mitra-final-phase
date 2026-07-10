@@ -18,6 +18,15 @@
             "type": "object",
             "required": ["run_id"]
           },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "run_id": {"type": "string"}
+            }
+          },
           "dispatch": {
             "mode": "loopback",
             "endpoint": "loopback://nova/open-run"
@@ -29,6 +38,15 @@
           "input_schema": {
             "type": "object",
             "required": ["resource_id"]
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "resource_id": {"type": "string"}
+            }
           },
           "dispatch": {
             "mode": "loopback",

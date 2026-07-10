@@ -15,6 +15,8 @@
 - `GET /api/v1/capabilities`
 - `GET /api/v1/intents`
 - `GET /api/v1/products/{product_id}/intent-registrations`
+- `GET /api/v1/runtime/capability-graph`
+- `POST /api/v1/runtime/capability-plan`
 
 ## Intent Routing
 
@@ -56,18 +58,36 @@ The response contains:
 - payload;
 - dispatch receipt;
 - task notification.
+- execution explanation with selected candidate, resolver, confidence,
+  runtime-analysis summary, payload keys, dispatch ID, task ID, fallback
+  attempts, and reviewer focus.
+- capability graph plan;
+- companion identity continuity, preferences, trust posture, and relationship
+  profile.
+
+## Reconstruction And Depository
+
+Every terminal dispatch writes immutable content-addressed artifacts for the
+request, route, manifest, context, phase journal, receipt, and response.
+`GET /api/v1/dispatches/{dispatch_id}/reconstruction` rebuilds the execution
+from those artifacts and verifies hashes. `GET /api/v1/runtime/depository`
+exposes artifact hashes and lineage chain entries for external MDU, evidence,
+or replay consumers.
 
 ## Command Chain
 
 `GET /api/v1/runtime/chain` returns the command-chain model loaded from
 `contracts/runtime-command-chain.json` and enriches it with currently attached
-published capabilities.
+published capabilities, including Bucket Insight, PRANA, Karma, SETU, KESHAV,
+and SARATHI convergence consumer manifests.
 
 ## Failure Path
 
 Transport failures mark the attachment `DEGRADED`, persist a failed dispatch,
-record a failed task, emit telemetry, and return a retry-after-health-check
-strategy.
+emit telemetry, and then attempt fallback dispatch through the next suitable
+ranked published capability when the same inputs can be satisfied safely. If no
+fallback is viable, the runtime records a failed task and returns a retry-after-
+health-check strategy.
 
 ## Recovery Path
 
@@ -83,3 +103,7 @@ manifest, with recovery telemetry emitted.
 - execution status;
 - final message;
 - typing stopped.
+
+Clients can poll `GET /api/v1/companion/tasks/{task_id}` for a single execution
+task. Companion and fallback behavior is also exposed through Prometheus
+counters under `/metrics`.

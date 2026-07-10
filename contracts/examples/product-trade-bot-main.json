@@ -61,6 +61,16 @@
               }
             }
           },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "status": {"type": "string"},
+              "predictions": {"type": ["array", "object", "null"]},
+              "signals": {"type": ["array", "object", "null"]},
+              "trace_id": {"type": "string"}
+            }
+          },
           "dispatch": {
             "mode": "http",
             "endpoint": "/tools/predict",
@@ -124,6 +134,16 @@
                 "minimum": 0.1,
                 "maximum": 100.0
               }
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "status": {"type": "string"},
+              "analysis": {"type": ["object", "array", "string", "null"]},
+              "risk": {"type": ["object", "string", "null"]},
+              "trace_id": {"type": "string"}
             }
           },
           "dispatch": {

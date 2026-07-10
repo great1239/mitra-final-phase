@@ -68,6 +68,53 @@ def _sparse_market_manifest() -> ProductAttachmentManifest:
     )
 
 
+def _fallback_market_manifest(
+    *,
+    product_id: str,
+    display_name: str,
+    capability_description: str,
+    intent_description: str,
+) -> ProductAttachmentManifest:
+    return ProductAttachmentManifest.model_validate(
+        {
+            "product_id": product_id,
+            "display_name": display_name,
+            "product_version": "1.0.0",
+            "contract_version": "1.0.0",
+            "attachment_mode": "simulated",
+            "capabilities": [
+                {
+                    "capability_id": "market-forecast",
+                    "description": capability_description,
+                    "context_scopes": ["session"],
+                    "intents": [
+                        {
+                            "intent_id": "market.forecast",
+                            "description": intent_description,
+                            "input_schema": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["symbols"],
+                                "properties": {
+                                    "symbols": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "items": {"type": "string"},
+                                    }
+                                },
+                            },
+                            "dispatch": {
+                                "mode": "loopback",
+                                "endpoint": f"loopback://{product_id}/forecast",
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+
 @pytest.mark.asyncio
 async def test_companion_message_selects_executes_and_persists_memory(
     settings_factory,
@@ -119,6 +166,12 @@ async def test_companion_message_selects_executes_and_persists_memory(
         ] == ["symbols"]
         assert result["payload"] == {"symbols": ["RELIANCE.NS"]}
         assert result["dispatch"]["status"] == "COMPLETED"
+        assert result["execution_explanation"]["selected_candidate"] == {
+            "product_id": "trade-bot-main",
+            "capability_id": "market-prediction",
+            "intent_id": "tradebot.predict",
+        }
+        assert result["execution_explanation"]["fallback"]["used"] is False
         assert received == [
             {
                 "path": "/tools/predict",
@@ -137,6 +190,9 @@ async def test_companion_message_selects_executes_and_persists_memory(
         assert context["merged"]["companion_memory"]["last_analysis"][
             "recommended_candidate"
         ]["intent_id"] == "tradebot.predict"
+        metrics = runtime.metrics_snapshot()["counters"]
+        assert metrics["companion_messages_total"] == 1
+        assert metrics["companion_messages_completed_total"] == 1
     finally:
         runtime.stop()
 
@@ -257,6 +313,94 @@ async def test_ai_analysis_payload_is_used_when_deterministic_payload_is_missing
     assert result["dispatch"]["status"] == "COMPLETED"
 
 
+@pytest.mark.asyncio
+async def test_companion_falls_back_to_next_published_capability(
+    settings_factory,
+):
+    transport = CapabilityTransport(default_timeout_seconds=0.2)
+
+    async def failing_primary(envelope: dict[str, Any]) -> dict[str, Any]:
+        raise RuntimeError("primary product endpoint is offline")
+
+    async def working_fallback(envelope: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "fallback": True,
+            "product_id": envelope["product_id"],
+            "payload": envelope["payload"],
+        }
+
+    transport.register_handler(
+        "alpha-market",
+        "market-forecast",
+        "market.forecast",
+        failing_primary,
+    )
+    transport.register_handler(
+        "beta-market",
+        "market-forecast",
+        "market.forecast",
+        working_fallback,
+    )
+    runtime = CompanionRuntime(settings_factory(), transport=transport)
+    runtime.start()
+    try:
+        runtime.attach(
+            _fallback_market_manifest(
+                product_id="alpha-market",
+                display_name="Alpha Market",
+                capability_description=(
+                    "Primary alpha market forecast prediction execution"
+                ),
+                intent_description=(
+                    "Run primary alpha market forecast predictions"
+                ),
+            )
+        )
+        runtime.attach(
+            _fallback_market_manifest(
+                product_id="beta-market",
+                display_name="Beta Market",
+                capability_description=(
+                    "Backup market forecast prediction execution"
+                ),
+                intent_description="Run backup market forecast predictions",
+            )
+        )
+
+        result = await runtime.companion_message(
+            CompanionMessageRequest(
+                actor_id="fallback-user",
+                client_type="standalone",
+                workspace_id="fallback-workspace",
+                message="Use alpha primary market forecast for INFY",
+            )
+        )
+
+        assert result["status"] == "COMPLETED"
+        assert result["dispatch"]["product_id"] == "beta-market"
+        assert result["dispatch"]["response"]["fallback"] is True
+        assert result["payload"] == {"symbols": ["INFY"]}
+        explanation = result["execution_explanation"]
+        assert explanation["fallback"]["used"] is True
+        assert explanation["fallback"]["used_candidate"] == {
+            "product_id": "beta-market",
+            "capability_id": "market-forecast",
+            "intent_id": "market.forecast",
+        }
+        assert explanation["fallback"]["attempts"][-1]["status"] == "COMPLETED"
+        task = runtime.companion_task(result["task"]["task_id"])
+        assert task["status"] == "COMPLETED"
+        assert task["result"]["fallback_used"]["product_id"] == "beta-market"
+        metrics = runtime.metrics_snapshot()["counters"]
+        assert metrics["dispatch_total"] == 2
+        assert metrics["dispatch_failed_total"] == 1
+        assert metrics["dispatch_completed_total"] == 1
+        assert metrics["fallback_dispatch_attempts_total"] == 1
+        assert metrics["fallback_dispatch_success_total"] == 1
+    finally:
+        runtime.stop()
+
+
 def test_companion_api_exposes_message_memory_task_and_stream(
     settings_factory,
 ):
@@ -279,7 +423,7 @@ def test_companion_api_exposes_message_memory_task_and_stream(
         chain = client.get("/api/v1/runtime/chain")
         assert chain.status_code == 200, chain.text
         systems = [item["system"] for item in chain.json()["chain"]["systems"]]
-        assert systems == [
+        assert systems[:7] == [
             "Mitra",
             "attached product runtime",
             "TANTRA",
@@ -288,6 +432,14 @@ def test_companion_api_exposes_message_memory_task_and_stream(
             "TMS",
             "Parikshak",
         ]
+        assert {
+            "Bucket Insight",
+            "PRANA",
+            "Karma",
+            "SETU",
+            "KESHAV",
+            "SARATHI",
+        }.issubset(systems)
         assert chain.json()["chain"]["known_capabilities"][0][
             "product_id"
         ] == "trade-bot-main"

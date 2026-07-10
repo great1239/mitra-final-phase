@@ -13,7 +13,16 @@
         "product transport dispatch",
         "user-facing execution status"
       ],
-      "hands_to": ["attached product runtime", "TANTRA"]
+      "hands_to": [
+        "attached product runtime",
+        "TANTRA",
+        "Bucket Insight",
+        "PRANA",
+        "Karma",
+        "SETU",
+        "KESHAV",
+        "SARATHI"
+      ]
     },
     {
       "system": "attached product runtime",
@@ -74,6 +83,66 @@
         "blocked or partial review status"
       ],
       "hands_to": ["reviewer"]
+    },
+    {
+      "system": "Bucket Insight",
+      "role": "artifact insight consumer",
+      "owns": [
+        "artifact interpretation",
+        "review insight",
+        "bucket-specific business rules"
+      ],
+      "hands_to": ["reviewer", "SETU"]
+    },
+    {
+      "system": "PRANA",
+      "role": "runtime vitality consumer",
+      "owns": [
+        "vitality posture",
+        "liveness interpretation",
+        "ecosystem health decision"
+      ],
+      "hands_to": ["Karma", "SARATHI"]
+    },
+    {
+      "system": "Karma",
+      "role": "accountability event consumer",
+      "owns": [
+        "event ledger",
+        "action accountability",
+        "downstream action posture"
+      ],
+      "hands_to": ["Parikshak"]
+    },
+    {
+      "system": "SETU",
+      "role": "handoff bridge",
+      "owns": [
+        "external handoff delivery",
+        "bridge routing",
+        "consumer acknowledgement"
+      ],
+      "hands_to": ["Bucket Insight", "KESHAV", "SARATHI"]
+    },
+    {
+      "system": "KESHAV",
+      "role": "external knowledge provider",
+      "owns": [
+        "knowledge retrieval",
+        "reference quality",
+        "knowledge source policy"
+      ],
+      "hands_to": ["SARATHI", "reviewer"]
+    },
+    {
+      "system": "SARATHI",
+      "role": "operator guidance consumer",
+      "owns": [
+        "operator next-step suggestion",
+        "guidance policy",
+        "user-facing advisory posture"
+      ],
+      "hands_to": ["reviewer"]
     }
   ],
   "product_execution_path": [
@@ -91,6 +160,12 @@
     "SHAKTI",
     "MDU",
     "TMS",
-    "Parikshak"
+    "Parikshak",
+    "Bucket Insight",
+    "PRANA",
+    "Karma",
+    "SETU",
+    "KESHAV",
+    "SARATHI"
   ]
 }

@@ -17,7 +17,8 @@ It does not depend on:
 - private product source code;
 - hidden services, tables, events, or routes;
 - product names or repository layouts;
-- governance, safety, knowledge, evidence, replay, or certification internals;
+- governance, safety, knowledge, external evidence/replay authority, or
+  certification internals;
 - assumptions about systems that are not present in a published contract.
 
 ## Enforced implementation rules

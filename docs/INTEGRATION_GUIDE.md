@@ -65,3 +65,22 @@ This release accepts contract `1.0.0` and compatibility
 new required fields need a new major contract.
 
 Machine-readable catalog: `contracts/integration-contracts.json`.
+
+## Command-Center Frontend Connector
+
+The runtime also exposes compatibility routes for the existing Mitra
+command-center frontend:
+
+- `POST /api/companion/chat`
+- `GET /api/companion/greeting/{user_id}`
+- `GET /api/companion/memory/{user_id}`
+- `GET /api/companion/capabilities`
+- `POST /api/workflow/run`
+
+These routes are adapters only. They translate the frontend's unversioned
+request shape into the versioned Mitra runtime flow, then return frontend
+fields such as `message`, `session_id`, `intent`, `capability_result`, and
+`suggested_actions`. Actual analysis, matching, dispatch, telemetry, replay,
+and depository export remain owned by the `/api/v1` runtime surfaces.
+
+Browser origins are controlled by `MITRA_COMPANION_CORS_ORIGINS`.

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "mitra-runtime-api"
+      }
+    }
+  ],
+  "env": {
+    "MITRA_COMPANION_ENVIRONMENT": "production-vercel",
+    "MITRA_COMPANION_CONFIG_PROFILE": "production-vercel",
+    "MITRA_COMPANION_DATA_ROOT": "/tmp/mitra-runtime",
+    "MITRA_COMPANION_DATABASE_PATH": "/tmp/mitra-runtime/companion-runtime.db",
+    "MITRA_COMPANION_TELEMETRY_LOG_PATH": "/tmp/mitra-runtime/runtime-telemetry.jsonl",
+    "MITRA_COMPANION_LOG_PATH": "/tmp/mitra-runtime/production-runtime.jsonl",
+    "MITRA_COMPANION_MANIFEST_DIRECTORY": "contracts/production",
+    "MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS": "false",
+    "MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS": "false",
+    "MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS": "false",
+    "MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS": "false",
+    "MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS": "true",
+    "MITRA_COMPANION_CORS_ORIGINS": "https://mitra.blackholeinfiverse.com,https://mitra-live-runtime-sprint.vercel.app",
+    "MITRA_COMPANION_OTEL_ENABLED": "false",
+    "MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED": "false",
+    "MITRA_COMPANION_LOG_TO_STDOUT": "true",
+    "MITRA_BHIV_INTEGRATION_FAIL_CLOSED": "false"
+  },
+  "services": {
+    "mitra-runtime-api": {
+      "root": ".",
+      "framework": "fastapi",
+      "entrypoint": "api/index.py"
+    }
+  }
+}

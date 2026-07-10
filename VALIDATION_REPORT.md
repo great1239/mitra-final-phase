@@ -1,80 +1,43 @@
 # Validation Report
 
-Validated on July 6, 2026.
+This file records the current repository-level verification entry points. It
+is not a generated evidence package.
 
-## Automated verification
+## Automated Verification
 
-| Check | Result |
-|---|---|
-| Unit, API, integration, contract, failure, adapter, ownership, production hardening, production readiness, persistent multi-instance runtime, runtime analysis, previous-submission reuse, and Phase 1-7 conformance tests | `84 passed` |
-| Current previous-submission reuse extension focused validation | `11 passed` |
-| Example manifests against JSON Schema 2020-12 | passed |
-| Two-product runtime simulation | passed |
-| Cross-product context isolation | passed |
-| Loopback capability dispatch | 2 completed |
-| Remote HTTP failure handling | failed receipt persisted; product/runtime degraded |
-| Custom transport adapter | passed without runtime/router changes |
-| Generic manifest source | arbitrary filenames discovered and attached |
-| Hardcoded product-name boundary scan | passed |
-| Concrete cross-module coupling scan | passed |
-| Ownership contract schema | 9 owned, 9 excluded, 0 errors |
-| Forbidden subsystem symbol/import/API scan | passed |
-| Phase 1 runtime interface catalog | 7 interfaces, 0 schema errors |
-| Phase 1 runtime state machine | 6 runtime states, 14 transitions, 0 schema errors |
-| OpenAPI surface | 35 published paths |
-| Durable session resume after runtime recreation | passed |
-| Durable session and context continuity after runtime recreation | passed |
-| Actor-scoped workspace isolation | passed |
-| Session/product context isolation | passed |
-| Selective capability context loading | passed |
-| Deterministic intent registration/discovery | passed |
-| Runtime analysis assignment profile, product profile, protocol hints, and fit matrix | passed |
-| Automatic AI payload fallback after deterministic schema inference gap | passed |
-| Persistent runtime supervisor heartbeat | passed |
-| Stale runtime peer cleanup | passed |
-| Interrupted companion task recovery after restart | passed |
-| Previous submission reuse: source-scope catalog, seven-phase dispatch journal, capability catalog, public contract summary, and proof bundle | passed |
-| Exact capability lookup | passed |
-| Ambiguous intent fail-closed routing | passed |
-| Unexpected adapter exception normalization | passed |
-| Phase 4 Product Attachment Runtime policy and attachment record contracts validate | passed |
-| Product self-attachment through published API | passed |
-| Detached attachment audit listing | passed |
-| Arbitrary transport adapter without runtime code change | passed |
-| Phase 5 integration contract catalog | passed |
-| Phase 6 multi-product runtime simulation | passed |
-| Phase 6 transfer, routing, attachment validation, and failure containment | passed |
-| Phase 7 documentation and review package | completed |
-| OpenTelemetry instrumentation and collector configuration | passed |
-| Prometheus runtime metrics and collector exporter configuration | passed |
-| k6 production load profile artifact | passed |
-| Structured JSONL telemetry with service/environment fields | passed |
-| Production readiness gate | passed |
-| Non-root/read-only/restart/resource-bounded container posture | passed |
-| Multi-instance runtime continuity | passed |
-| Python wheel build and isolated install | passed |
-| All five implementation packages import from built artifact | passed |
-| OpenAPI YAML parse | OpenAPI `3.1.0`, 35 paths |
-| Demo video decode | H.264 MP4, 1440x1080, 30 fps, 17 seconds |
+```powershell
+python -m pytest
+python scripts/production_readiness_gate.py
+```
 
-## Live evidence
+The suite covers lifecycle, sessions, context isolation, attachment, routing,
+transport, product exchange, companion interaction, dispatch persistence,
+deterministic reconstruction, Central Depository lineage, BHIV contracts,
+recovery, restart continuity, multi-instance state, concurrency, OpenAPI, JSON
+Schema, ownership, and deployment configuration.
 
-The runtime was started at `http://127.0.0.1:8090` against the persisted demo
-database. Live checks returned:
+## Hosted Verification
 
-- runtime state: `READY`;
-- attached products: `2`;
-- durable sessions: `2`;
-- completed dispatches: `2`;
-- failed dispatches: `0`;
-- product isolation verified: `true`.
+```powershell
+python scripts/validate_hosted_runtime.py
+```
 
-Screenshots and the video are under `evidence/`.
+The validator submits real attachment, session, and dispatch data. It checks
+the returned output, deterministic reconstruction, phase journal, recovery,
+metrics, and telemetry. It exits nonzero on mismatch and does not create proof
+documents or screenshots.
 
-## Container note
+## Sustained Load
 
-The Dockerfile and Compose profile are included. A Docker build was attempted,
-but Docker Desktop's Linux engine was not running on the validation host, so
-container execution could not be exercised in this pass. The Python wheel and
-production CLI entry point were independently built and installed
-successfully.
+```powershell
+k6 run scripts/load/k6_companion_runtime.js
+```
+
+Run sustained load against a durable deployment. Vercel's ephemeral serverless
+storage is not the continuity or recovery validation topology.
+
+## Handover
+
+Rebuild instructions: `docs/HANDOVER.md`.
+
+Central Depository transfer: `docs/CENTRAL_DEPOSITORY_HANDOVER.md`.

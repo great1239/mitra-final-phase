@@ -46,8 +46,12 @@ Pass it to the API composition root:
 app = create_app(manifest_sources=[RegistryManifestSource()])
 ```
 
-The bundled `DirectoryManifestSourceAdapter` discovers every `*.json` file in a
-configured directory. It has no knowledge of product names or filenames.
+The bundled `DirectoryManifestSourceAdapter` discovers `*.json` files in a
+configured directory. In development it can load examples and loopback
+fixtures; in production the API composition root configures it to skip
+example, simulated, loopback, and localhost-bound manifests unless the
+operator explicitly opts in. Production startup manifests must include
+`metadata.production_bootstrap: true`.
 
 When multiple manifests are returned, the composition root calls `attach_many`.
 Attachment is sequential and validates each manifest through the same public

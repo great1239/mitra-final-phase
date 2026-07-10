@@ -17,6 +17,8 @@ from mitra_intent import IntentRouter
 from mitra_session import SessionRuntime
 
 from .analysis import RuntimeAnalyzer
+from .bhiv_integrations import BHIVRuntimeIntegrator
+from .capability_graph import CapabilityGraphPlanner
 from .config import RuntimeSettings
 from .constants import (
     DISPATCH_PHASE_MODEL,
@@ -33,8 +35,10 @@ from .contracts import (
     ProductAttachmentManifest,
     RuntimeAnalysisRequest,
 )
+from .depository import CentralDepository
 from .dependency_registry import CapabilityDependencyRegistry
 from .errors import (
+    AttachmentValidationError,
     IntentRoutingError,
     ResourceConflictError,
     ResourceNotFoundError,
@@ -50,6 +54,7 @@ from .lifecycle import RuntimeLifecycle
 from .observability import runtime_span
 from .production_logging import configure_production_logging, production_log
 from .proofs import DispatchProofBuilder
+from .reconstruction import DeterministicReconstructionLedger
 from .source_scope import SourceScopeRegistry
 from .startup import RuntimeStartupManager
 from .store import RuntimeStore
@@ -131,7 +136,10 @@ class CompanionRuntime:
         self.settings = settings
         self.settings.prepare()
         self.production_logger = configure_production_logging(settings)
-        self.store = RuntimeStore(settings.database_path)
+        self.store = RuntimeStore(
+            settings.database_path,
+            synchronous=settings.sqlite_synchronous,
+        )
         self.lifecycle = RuntimeLifecycle(self.store)
         self.sessions = SessionRuntime(self.store)
         self.context = ContextRuntime(self.store, self.sessions)
@@ -145,6 +153,14 @@ class CompanionRuntime:
             service_name=settings.otel_service_name,
             environment=settings.deployment_environment,
             runtime_instance_id=settings.runtime_instance_id,
+        )
+        self.depository = CentralDepository(self.store)
+        self.reconstruction = DeterministicReconstructionLedger(
+            self.depository
+        )
+        self.bhiv_integrations = BHIVRuntimeIntegrator(
+            settings,
+            self.depository,
         )
         self.intent_resolver = NaturalIntentResolver(
             threshold=settings.deterministic_intent_threshold,
@@ -395,6 +411,8 @@ class CompanionRuntime:
         }
 
     def capability_catalog(self) -> dict[str, Any]:
+        candidates = self.router.discover(available_only=False)
+        graph = CapabilityGraphPlanner(candidates).graph()
         catalog = CapabilityDependencyRegistry(
             self.attachments.list(include_detached=True)
         ).catalog()
@@ -402,6 +420,19 @@ class CompanionRuntime:
             **catalog,
             "dispatch_phase_model": list(DISPATCH_PHASE_MODEL),
             "proof_bundle_model": "mitra-dispatch-proof-v1",
+            "reconstruction_model": "mitra-deterministic-reconstruction-v1",
+            "replay_model": "mitra-true-deterministic-replay-v1",
+            "central_depository": {
+                "mode": "content-addressed-runtime-export",
+                "authority_boundary": "external MDU remains system authority",
+            },
+            "bhiv_integrations": self.bhiv_integrations.status(),
+            "capability_graph": {
+                "graph_type": graph["graph_type"],
+                "node_count": graph["node_count"],
+                "edge_count": graph["edge_count"],
+                "composition": "dynamic graph built from manifests and schemas",
+            },
             "source_scope": self.source_scope_registry.summary(),
         }
 
@@ -423,6 +454,36 @@ class CompanionRuntime:
             "source_scope": self.source_scope_registry.summary(),
         }
 
+    def capability_graph(
+        self,
+        *,
+        product_id: str | None = None,
+        capability_id: str | None = None,
+        available_only: bool = False,
+        message: str | None = None,
+    ) -> dict[str, Any]:
+        candidates = self.router.discover(
+            product_id=product_id,
+            capability_id=capability_id,
+            available_only=available_only,
+        )
+        return CapabilityGraphPlanner(candidates).graph(message=message)
+
+    def capability_plan(
+        self,
+        *,
+        message: str,
+        product_id: str | None = None,
+        capability_id: str | None = None,
+        available_only: bool = False,
+    ) -> dict[str, Any]:
+        candidates = self.router.discover(
+            product_id=product_id,
+            capability_id=capability_id,
+            available_only=available_only,
+        )
+        return CapabilityGraphPlanner(candidates).plan(message=message)
+
     def _load_chain_contract(self) -> dict[str, Any]:
         path = self.settings.service_root / "contracts" / (
             "runtime-command-chain.json"
@@ -439,6 +500,7 @@ class CompanionRuntime:
     def attach(self, manifest: ProductAttachmentManifest) -> dict[str, Any]:
         if not self.accepting:
             raise RuntimeError("Runtime is not accepting attachments")
+        self._validate_attachment_policy(manifest)
         self.transport.validate_manifest(manifest)
         attachment = self.attachments.attach(manifest)
         registration = self.router.register(manifest.product_id)
@@ -465,6 +527,62 @@ class CompanionRuntime:
             "intent_registration_count": registration[
                 "registration_count"
             ],
+        }
+
+    def _validate_attachment_policy(
+        self,
+        manifest: ProductAttachmentManifest,
+    ) -> None:
+        metadata = manifest.metadata or {}
+        if (
+            metadata.get("example") is True
+            and not self.settings.allow_example_manifests
+        ):
+            raise AttachmentValidationError(
+                "Example manifests are disabled for this runtime profile"
+            )
+        if (
+            manifest.attachment_mode == "simulated"
+            and not self.settings.allow_simulated_manifests
+        ):
+            raise AttachmentValidationError(
+                "Simulated manifests are disabled for this runtime profile"
+            )
+        if (
+            self._manifest_uses_loopback(manifest)
+            and not self.settings.allow_loopback_manifests
+        ):
+            raise AttachmentValidationError(
+                "Loopback dispatch manifests are disabled for this runtime "
+                "profile"
+            )
+        if (
+            self._manifest_uses_localhost(manifest)
+            and not self.settings.allow_localhost_manifests
+        ):
+            raise AttachmentValidationError(
+                "Localhost product manifests are disabled for this runtime "
+                "profile"
+            )
+
+    @staticmethod
+    def _manifest_uses_loopback(manifest: ProductAttachmentManifest) -> bool:
+        return any(
+            intent.dispatch.mode == "loopback"
+            for capability in manifest.capabilities
+            for intent in capability.intents
+        )
+
+    @staticmethod
+    def _manifest_uses_localhost(manifest: ProductAttachmentManifest) -> bool:
+        if manifest.base_url is None:
+            return False
+        host = getattr(manifest.base_url, "host", "") or ""
+        return host.lower() in {
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "::1",
         }
 
     def attach_many(
@@ -763,6 +881,9 @@ class CompanionRuntime:
             )
         dispatch_started = time.perf_counter()
         transport_started = time.perf_counter()
+        response: dict[str, Any] | None = None
+        reconstruction_record: dict[str, Any] | None = None
+        ecosystem_record: dict[str, Any] | None = None
         self.store.start_dispatch_phase(
             dispatch_id=dispatch_id,
             phase_name="transport.dispatched",
@@ -793,11 +914,36 @@ class CompanionRuntime:
                     "Capability transport raised an unexpected error: "
                     f"{type(exc).__name__}: {exc}"
                 ) from exc
+            response_schema = route.get("response_schema") or {
+                "type": "object"
+            }
+            response_errors = sorted(
+                Draft202012Validator(response_schema).iter_errors(response),
+                key=lambda error: tuple(str(part) for part in error.path),
+            )
+            if response_errors:
+                detail = "; ".join(
+                    error.message for error in response_errors[:3]
+                )
+                raise TransportError(
+                    "Capability endpoint response does not satisfy "
+                    f"{route['intent_id']} response schema: {detail}"
+                )
             self.store.complete_dispatch_phase(
                 dispatch_id=dispatch_id,
                 phase_name="transport.dispatched",
                 phase_index=4,
-                detail={"status": "response-received"},
+                detail={
+                    "status": "response-received",
+                    "response_schema_type": route.get(
+                        "response_schema",
+                        {},
+                    ).get("type"),
+                    "required_response_fields": route.get(
+                        "response_schema",
+                        {},
+                    ).get("required", []),
+                },
                 output_hash=sha256_json(response),
                 duration_ms=(time.perf_counter() - transport_started) * 1000,
             )
@@ -828,13 +974,30 @@ class CompanionRuntime:
                 output_hash=sha256_json(dispatch),
                 duration_ms=(time.perf_counter() - dispatch_started) * 1000,
             )
+            if self.lifecycle.state == RuntimeState.ACTIVE:
+                self.lifecycle.transition(
+                    RuntimeState.READY,
+                    "Intent dispatch completed",
+                )
+            latency_ms = (time.perf_counter() - dispatch_started) * 1000
             self.telemetry.record_dispatch(
                 product_id=route["product_id"],
                 capability_id=route["capability_id"],
                 intent_id=route["intent_id"],
                 dispatch_id=dispatch_id,
                 status=DispatchStatus.COMPLETED.value,
-                latency_ms=(time.perf_counter() - dispatch_started) * 1000,
+                latency_ms=latency_ms,
+            )
+            reconstruction_record = self._record_dispatch_reconstruction(
+                dispatch=dispatch,
+                route=route,
+                manifest=attachment["manifest"],
+                context=context,
+            )
+            ecosystem_record = await self._publish_bhiv_convergence(
+                dispatch=dispatch,
+                route=route,
+                reconstruction=reconstruction_record,
             )
         except TransportError as exc:
             self.attachments.mark_degraded(route["product_id"], str(exc))
@@ -856,6 +1019,7 @@ class CompanionRuntime:
             dispatch = self.store.complete_dispatch(
                 dispatch_id,
                 status=DispatchStatus.FAILED.value,
+                response=response,
                 error=str(exc),
             )
             self.store.complete_dispatch_phase(
@@ -865,6 +1029,8 @@ class CompanionRuntime:
                 detail={
                     "status": dispatch["status"],
                     "finished_at": dispatch["finished_at"],
+                    "response_persisted": dispatch.get("response")
+                    is not None,
                     "error_persisted": bool(dispatch.get("error")),
                 },
                 output_hash=sha256_json(dispatch),
@@ -877,14 +1043,26 @@ class CompanionRuntime:
                 detail={"status": dispatch["status"]},
                 duration_ms=(time.perf_counter() - dispatch_started) * 1000,
             )
+            latency_ms = (time.perf_counter() - dispatch_started) * 1000
             self.telemetry.record_dispatch(
                 product_id=route["product_id"],
                 capability_id=route["capability_id"],
                 intent_id=route["intent_id"],
                 dispatch_id=dispatch_id,
                 status=DispatchStatus.FAILED.value,
-                latency_ms=(time.perf_counter() - dispatch_started) * 1000,
+                latency_ms=latency_ms,
                 error=str(exc),
+            )
+            reconstruction_record = self._record_dispatch_reconstruction(
+                dispatch=dispatch,
+                route=route,
+                manifest=attachment["manifest"],
+                context=context,
+            )
+            ecosystem_record = await self._publish_bhiv_convergence(
+                dispatch=dispatch,
+                route=route,
+                reconstruction=reconstruction_record,
             )
             raise
         finally:
@@ -897,6 +1075,365 @@ class CompanionRuntime:
             "dispatch": dispatch,
             "route": route,
             "phases": self.store.list_dispatch_phases(dispatch_id),
+            "reconstruction": reconstruction_record,
+            "ecosystem_convergence": ecosystem_record,
+        }
+
+    def _record_dispatch_reconstruction(
+        self,
+        *,
+        dispatch: dict[str, Any],
+        route: dict[str, Any],
+        manifest: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        phases = self.store.list_dispatch_phases(dispatch["dispatch_id"])
+        artifact_set = self._dispatch_artifact_set(
+            dispatch=dispatch,
+            route=route,
+            manifest=manifest,
+            context=context,
+            phases=phases,
+        )
+        reconstruction_record = self.reconstruction.record_dispatch(
+            dispatch=dispatch,
+            route=route,
+            manifest=manifest,
+            context=context,
+            phases=phases,
+            **artifact_set,
+        )
+        self.telemetry.record_event(
+            "dispatch.reconstruction_recorded",
+            dispatch_id=dispatch["dispatch_id"],
+            package_hash=reconstruction_record["package_hash"],
+            chain_hash=reconstruction_record["chain_hash"],
+        )
+        return reconstruction_record
+
+    def _dispatch_artifact_set(
+        self,
+        *,
+        dispatch: dict[str, Any],
+        route: dict[str, Any],
+        manifest: dict[str, Any],
+        context: dict[str, Any],
+        phases: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        dispatch_id = dispatch["dispatch_id"]
+        selected_product_id = route["product_id"]
+        selected_session_id = dispatch["session_id"]
+        failed_phases = [
+            phase for phase in phases if phase.get("status") == "FAILED"
+        ]
+        operational_events = self.telemetry.recent_events(limit=100)
+        telemetry_events = [
+            event
+            for event in operational_events
+            if event.get("dispatch_id") == dispatch_id
+        ]
+        recovery_events = [
+            event
+            for event in operational_events
+            if any(
+                marker in str(event.get("event_type", ""))
+                for marker in ("recovery", "recover", "stale", "restart")
+            )
+        ][-20:]
+        candidate_routes = self.router.discover(
+            product_id=selected_product_id,
+            capability_id=route["capability_id"],
+            intent_id=route["intent_id"],
+            available_only=False,
+        )
+        return {
+            "lifecycle": {
+                "runtime_instance_id": self.instance_id,
+                "state": self.lifecycle.state.value,
+                "accepting": self.accepting,
+                "history": self.lifecycle.history(limit=20),
+            },
+            "sessions": {
+                "active_session": self.sessions.get(selected_session_id),
+                "session_id": selected_session_id,
+            },
+            "routing": {
+                "selected_route": route,
+                "candidate_routes": candidate_routes,
+                "candidate_count": len(candidate_routes),
+                "registration": self.router.register(selected_product_id),
+                "route_selection": {
+                    "product_resolution": route.get("product_resolution"),
+                    "capability_resolution": route.get(
+                        "capability_resolution"
+                    ),
+                },
+            },
+            "attachments": {
+                "selected_attachment": self.attachments.get(
+                    selected_product_id
+                ),
+                "product_id": selected_product_id,
+                "manifest_hash": sha256_json(manifest),
+            },
+            "telemetry": {
+                "metrics": self.telemetry.snapshot(),
+                "events": telemetry_events,
+            },
+            "recovery": {
+                "runtime_instances": self.store.list_runtime_instances(
+                    include_stopped=True
+                ),
+                "startup": self.startup_status(),
+                "events": recovery_events,
+                "persistent_runtime": {
+                    "enabled": self.settings.persistent_runtime_enabled,
+                    "supervisor_running": self.supervisor.running,
+                    "stale_after_seconds": (
+                        self.settings.persistent_stale_after_seconds
+                    ),
+                    "task_timeout_seconds": (
+                        self.settings.persistent_task_timeout_seconds
+                    ),
+                },
+            },
+            "failures": {
+                "current_dispatch_error": dispatch.get("error"),
+                "failed_dispatches": (
+                    [dispatch] if dispatch.get("status") == "FAILED" else []
+                ),
+                "failed_phases": failed_phases,
+                "phase_statuses": {
+                    phase["phase_name"]: phase["status"]
+                    for phase in phases
+                },
+            },
+        }
+
+    async def _publish_bhiv_convergence(
+        self,
+        *,
+        dispatch: dict[str, Any],
+        route: dict[str, Any],
+        reconstruction: dict[str, Any],
+    ) -> dict[str, Any]:
+        proof = self.dispatch_proof(dispatch["dispatch_id"])
+        record = await self.bhiv_integrations.publish_dispatch(
+            dispatch=dispatch,
+            route=route,
+            reconstruction=reconstruction,
+            proof=proof,
+        )
+        self.telemetry.record_event(
+            "bhiv.convergence_published",
+            dispatch_id=dispatch["dispatch_id"],
+            trace_id=record["trace_id"],
+            accepted_count=record["accepted_count"],
+            failed_count=record["failed_count"],
+            skipped_count=record["skipped_count"],
+            artifact_hash=record["artifact_hash"],
+        )
+        return record
+
+    @staticmethod
+    def _candidate_identity(candidate: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "product_id": candidate.get("product_id"),
+            "capability_id": candidate.get("capability_id"),
+            "intent_id": candidate.get("intent_id"),
+        }
+
+    @classmethod
+    def _find_candidate(
+        cls,
+        candidates: list[dict[str, Any]],
+        identity: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        wanted = (
+            identity.get("product_id"),
+            identity.get("capability_id"),
+            identity.get("intent_id"),
+        )
+        for candidate in candidates:
+            if (
+                candidate.get("product_id"),
+                candidate.get("capability_id"),
+                candidate.get("intent_id"),
+            ) == wanted:
+                return candidate
+        return None
+
+    async def _attempt_fallback_dispatch(
+        self,
+        *,
+        request: CompanionMessageRequest,
+        session: dict[str, Any],
+        candidates: list[dict[str, Any]],
+        selection: dict[str, Any],
+        memory: dict[str, Any],
+        runtime_analysis: dict[str, Any],
+        failed_candidate: dict[str, Any],
+        failed_error: str,
+    ) -> dict[str, Any]:
+        attempts: list[dict[str, Any]] = []
+        failed_identity = self._candidate_identity(failed_candidate)
+        explicit_payload = {
+            **(runtime_analysis.get("ai_payload_hints") or {}),
+            **(selection.get("ai_payload") or {}),
+            **request.payload,
+        }
+        for recommendation in selection.get("fallback_candidates") or []:
+            candidate = self._find_candidate(candidates, recommendation)
+            identity = {
+                "product_id": recommendation.get("product_id"),
+                "capability_id": recommendation.get("capability_id"),
+                "intent_id": recommendation.get("intent_id"),
+            }
+            if candidate is None:
+                attempts.append(
+                    {
+                        **identity,
+                        "status": "SKIPPED",
+                        "reason": "fallback candidate was not in the current registry snapshot",
+                    }
+                )
+                continue
+            if self._candidate_identity(candidate) == failed_identity:
+                continue
+            if candidate["attachment_state"] != AttachmentState.ATTACHED.value:
+                attempts.append(
+                    {
+                        **self._candidate_identity(candidate),
+                        "status": "SKIPPED",
+                        "reason": "fallback product is not attached",
+                    }
+                )
+                continue
+            payload_result = build_payload_from_message(
+                message=request.message,
+                explicit_payload=explicit_payload,
+                candidate=candidate,
+                memory=memory,
+            )
+            if payload_result["missing"]:
+                attempts.append(
+                    {
+                        **self._candidate_identity(candidate),
+                        "status": "SKIPPED",
+                        "reason": "fallback candidate needs additional input",
+                        "missing_inputs": payload_result["missing"],
+                    }
+                )
+                continue
+            dispatch_request = IntentDispatchRequest(
+                session_id=session["session_id"],
+                product_id=candidate["product_id"],
+                capability_id=candidate["capability_id"],
+                intent_id=candidate["intent_id"],
+                payload=payload_result["payload"],
+            )
+            try:
+                dispatch_result = await self.dispatch(dispatch_request)
+            except (IntentRoutingError, TransportError) as exc:
+                attempts.append(
+                    {
+                        **self._candidate_identity(candidate),
+                        "status": "FAILED",
+                        "reason": str(exc),
+                    }
+                )
+                continue
+            attempts.append(
+                {
+                    **self._candidate_identity(candidate),
+                    "status": "COMPLETED",
+                    "dispatch_id": dispatch_result["dispatch"]["dispatch_id"],
+                    "reason": "fallback dispatch succeeded through a published capability",
+                }
+            )
+            self.telemetry.record_event(
+                "companion.fallback_dispatch_succeeded",
+                product_id=candidate["product_id"],
+                capability_id=candidate["capability_id"],
+                intent_id=candidate["intent_id"],
+                failed_product_id=failed_identity["product_id"],
+                failed_error=failed_error,
+            )
+            return {
+                "used": True,
+                "attempts": attempts,
+                "candidate": candidate,
+                "payload": payload_result["payload"],
+                "dispatch_result": dispatch_result,
+            }
+        return {
+            "used": False,
+            "attempts": attempts,
+            "candidate": None,
+            "payload": None,
+            "dispatch_result": None,
+        }
+
+    @staticmethod
+    def _execution_explanation(
+        *,
+        status: str,
+        assistant_text: str,
+        selection: dict[str, Any],
+        runtime_analysis: dict[str, Any],
+        payload: dict[str, Any] | None,
+        dispatch_result: dict[str, Any] | None,
+        task: dict[str, Any] | None,
+        fallback: dict[str, Any],
+        capability_plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        selected = selection.get("candidate") or {}
+        fallback_candidate = fallback.get("candidate") or {}
+        dispatch = dispatch_result["dispatch"] if dispatch_result else None
+        return {
+            "status": status,
+            "summary": assistant_text,
+            "resolver": selection.get("resolver"),
+            "selected_candidate": CompanionRuntime._candidate_identity(
+                selected
+            )
+            if selected
+            else None,
+            "selection_confidence": selection.get("confidence"),
+            "selection_reason": selection.get("reason"),
+            "analysis": {
+                "status": runtime_analysis.get("status"),
+                "resolver": runtime_analysis.get("resolver"),
+                "confidence": runtime_analysis.get("confidence"),
+                "reason": runtime_analysis.get("reason"),
+                "gap_count": len(runtime_analysis.get("gaps") or []),
+            },
+            "payload_keys": sorted((payload or {}).keys()),
+            "capability_plan": {
+                "plan_type": capability_plan.get("plan_type"),
+                "step_count": capability_plan.get("step_count"),
+                "composition_status": capability_plan.get(
+                    "composition_status"
+                ),
+            },
+            "dispatch_id": dispatch.get("dispatch_id") if dispatch else None,
+            "task_id": task.get("task_id") if task else None,
+            "fallback": {
+                "attempted": bool(fallback.get("attempts")),
+                "used": bool(fallback.get("used")),
+                "used_candidate": CompanionRuntime._candidate_identity(
+                    fallback_candidate
+                )
+                if fallback_candidate
+                else None,
+                "attempts": fallback.get("attempts", []),
+            },
+            "reviewer_focus": [
+                "selection used published manifest and schema metadata",
+                "payload was derived from the message, explicit payload, or approved AI hints",
+                "dispatch used the product's published transport contract",
+                "fallbacks never use product-specific runtime branches",
+            ],
         }
 
     async def companion_message(
@@ -928,6 +1465,9 @@ class CompanionRuntime:
             product_id=candidate_product,
             capability_id=request.capability_id,
             available_only=False,
+        )
+        capability_plan = CapabilityGraphPlanner(candidates).plan(
+            message=request.message
         )
         runtime_analysis = await self.analyzer.analyze(
             message=request.message,
@@ -965,6 +1505,13 @@ class CompanionRuntime:
         )
         final_payload: dict[str, Any] | None = None
         missing_fields: list[dict[str, Any]] = []
+        fallback_result: dict[str, Any] = {
+            "used": False,
+            "attempts": [],
+            "candidate": None,
+            "payload": None,
+            "dispatch_result": None,
+        }
 
         if selection["status"] == "selected":
             candidate = selection["candidate"]
@@ -1030,23 +1577,83 @@ class CompanionRuntime:
                     try:
                         dispatch_result = await self.dispatch(dispatch_request)
                     except TransportError as exc:
-                        assistant_status = "FAILED"
-                        assistant_text = (
-                            "That capability is unavailable right now. I "
-                            "recorded the failure and can retry after the "
-                            "published health check recovers."
+                        fallback_result = await self._attempt_fallback_dispatch(
+                            request=request,
+                            session=session,
+                            candidates=candidates,
+                            selection=selection,
+                            memory=memory_before,
+                            runtime_analysis=runtime_analysis,
+                            failed_candidate=candidate,
+                            failed_error=str(exc),
                         )
-                        task = self.store.update_companion_task(
-                            task["task_id"],
-                            status="FAILED",
-                            status_detail=str(exc),
-                            notification={
-                                "type": "execution_status",
-                                "message": "Capability execution failed",
-                            },
-                            result={"error": str(exc)},
-                            finished=True,
-                        )
+                        if fallback_result["used"]:
+                            dispatch_result = fallback_result[
+                                "dispatch_result"
+                            ]
+                            final_payload = fallback_result["payload"]
+                            fallback_candidate = fallback_result["candidate"]
+                            assistant_status = "COMPLETED"
+                            assistant_text = (
+                                "The first selected capability was unavailable, "
+                                "so I used the next suitable published capability "
+                                "and received a product response."
+                            )
+                            task = self.store.update_companion_task(
+                                task["task_id"],
+                                status="COMPLETED",
+                                status_detail=(
+                                    "Capability execution completed through "
+                                    "fallback routing"
+                                ),
+                                notification={
+                                    "type": "execution_status",
+                                    "message": (
+                                        "Capability execution completed through "
+                                        "fallback routing"
+                                    ),
+                                },
+                                result={
+                                    "dispatch_id": dispatch_result["dispatch"][
+                                        "dispatch_id"
+                                    ],
+                                    "status": dispatch_result["dispatch"][
+                                        "status"
+                                    ],
+                                    "primary_error": str(exc),
+                                    "fallback_used": self._candidate_identity(
+                                        fallback_candidate
+                                    ),
+                                    "fallback_attempts": fallback_result[
+                                        "attempts"
+                                    ],
+                                },
+                                finished=True,
+                            )
+                        else:
+                            assistant_status = "FAILED"
+                            assistant_text = (
+                                "That capability is unavailable right now. I "
+                                "recorded the failure and could not find another "
+                                "published capability with enough compatible "
+                                "inputs to run safely."
+                            )
+                            task = self.store.update_companion_task(
+                                task["task_id"],
+                                status="FAILED",
+                                status_detail=str(exc),
+                                notification={
+                                    "type": "execution_status",
+                                    "message": "Capability execution failed",
+                                },
+                                result={
+                                    "error": str(exc),
+                                    "fallback_attempts": fallback_result[
+                                        "attempts"
+                                    ],
+                                },
+                                finished=True,
+                            )
                     else:
                         assistant_status = "COMPLETED"
                         assistant_text = (
@@ -1085,6 +1692,24 @@ class CompanionRuntime:
             outcome=outcome,
             runtime_analysis=runtime_analysis,
         )
+        memory_after["companion_profile"] = self._companion_profile(
+            previous=memory_before,
+            request=request,
+            session=session,
+            status=assistant_status,
+            selection=selection,
+        )
+        execution_explanation = self._execution_explanation(
+            status=assistant_status,
+            assistant_text=assistant_text,
+            selection=selection,
+            runtime_analysis=runtime_analysis,
+            payload=final_payload,
+            dispatch_result=dispatch_result,
+            task=task,
+            fallback=fallback_result,
+            capability_plan=capability_plan,
+        )
         assistant_turn = self.store.record_companion_message(
             turn_id=f"turn_{uuid4().hex}",
             session_id=session["session_id"],
@@ -1101,9 +1726,15 @@ class CompanionRuntime:
                     else None
                 ),
                 "task_id": task["task_id"] if task else None,
+                "execution_explanation": execution_explanation,
             },
         )
         self._persist_companion_memory(session["session_id"], memory_after)
+        self.telemetry.record_companion_turn(
+            status=assistant_status,
+            fallback_attempted=bool(fallback_result.get("attempts")),
+            fallback_used=bool(fallback_result.get("used")),
+        )
         self.telemetry.record_event(
             "companion.message.completed",
             session_id=session["session_id"],
@@ -1122,6 +1753,8 @@ class CompanionRuntime:
             "analysis": runtime_analysis,
             "outcome": outcome,
             "selection": selection,
+            "capability_plan": capability_plan,
+            "execution_explanation": execution_explanation,
             "payload": final_payload,
             "dispatch": dispatch_result["dispatch"] if dispatch_result else None,
             "route": dispatch_result["route"] if dispatch_result else None,
@@ -1209,6 +1842,91 @@ class CompanionRuntime:
             limit=limit,
         )
 
+    def companion_task(self, task_id: str) -> dict[str, Any]:
+        task = self.store.get_companion_task(task_id)
+        if task is None:
+            raise ResourceNotFoundError(f"Unknown companion task: {task_id}")
+        return task
+
+    @staticmethod
+    def _companion_profile(
+        *,
+        previous: dict[str, Any],
+        request: CompanionMessageRequest,
+        session: dict[str, Any],
+        status: str,
+        selection: dict[str, Any],
+    ) -> dict[str, Any]:
+        prior = previous.get("companion_profile") or {}
+        preferences = dict(prior.get("preferences") or {})
+        metadata_preferences = (
+            request.metadata.get("preferences")
+            or request.metadata.get("user_preferences")
+            or {}
+        )
+        if isinstance(metadata_preferences, dict):
+            preferences.update(metadata_preferences)
+        for key in ("preferred_tone", "preferred_detail", "locale"):
+            if key in request.metadata:
+                preferences[key] = request.metadata[key]
+
+        trust = dict(prior.get("trust") or {})
+        successful = int(trust.get("successful_dispatches") or 0)
+        clarifications = int(trust.get("clarifications") or 0)
+        failed = int(trust.get("failed_or_unavailable_turns") or 0)
+        if status == "COMPLETED":
+            successful += 1
+        elif status == "NEEDS_CLARIFICATION":
+            clarifications += 1
+        elif status in {"FAILED", "UNAVAILABLE"}:
+            failed += 1
+        if successful >= 3 and failed == 0:
+            trust_level = "established"
+        elif failed > successful:
+            trust_level = "cautious"
+        else:
+            trust_level = "forming"
+
+        client_history = list(prior.get("client_history") or [])
+        client_type = request.client_type or session.get("client_type")
+        if client_type and client_type not in client_history:
+            client_history.append(client_type)
+
+        selected = selection.get("candidate") or {}
+        return {
+            "identity_continuity": {
+                "actor_id": session.get("actor_id") or request.actor_id,
+                "workspace_id": session.get("workspace_id")
+                or request.workspace_id,
+                "session_id": session.get("session_id"),
+                "client_type": client_type,
+                "client_history": client_history[-8:],
+            },
+            "preferences": preferences,
+            "trust": {
+                "level": trust_level,
+                "successful_dispatches": successful,
+                "clarifications": clarifications,
+                "failed_or_unavailable_turns": failed,
+                "last_status": status,
+            },
+            "relationship_model": {
+                "mode": "bounded-runtime-companion",
+                "last_helped_with": selected.get("capability_id"),
+                "continuity_basis": [
+                    "session memory",
+                    "workspace context",
+                    "explicit metadata preferences",
+                    "published capability selections",
+                ],
+                "boundaries": [
+                    "no governance decisions",
+                    "no product-owned business logic",
+                    "no replay authority beyond immutable runtime export",
+                ],
+            },
+        }
+
     def get_dispatch(self, dispatch_id: str) -> dict[str, Any]:
         dispatch = self.store.get_dispatch(dispatch_id)
         if dispatch is None:
@@ -1222,7 +1940,80 @@ class CompanionRuntime:
     def dispatch_proof(self, dispatch_id: str) -> dict[str, Any]:
         dispatch = self.get_dispatch(dispatch_id)
         phases = self.store.list_dispatch_phases(dispatch_id)
-        return self.proofs.build(dispatch=dispatch, phases=phases)
+        proof = self.proofs.build(dispatch=dispatch, phases=phases)
+        reconstruction_package = self.reconstruction.package(dispatch_id)
+        proof["deterministic_reconstruction"] = {
+            "status": reconstruction_package["status"],
+            "package_hash": reconstruction_package.get("package_hash"),
+            "replay_type": (
+                reconstruction_package.get("snapshot") or {}
+            ).get("replay_type"),
+            "scope_coverage": (
+                reconstruction_package.get("verification") or {}
+            ).get("scope_coverage"),
+            "verification": reconstruction_package.get("verification"),
+        }
+        proof["artifact_hashes"]["deterministic_reconstruction"] = sha256_json(
+            proof["deterministic_reconstruction"]
+        )
+        proof["bundle_hash"] = sha256_json(proof)
+        return proof
+
+    def dispatch_reconstruction(self, dispatch_id: str) -> dict[str, Any]:
+        return self.reconstruction.package(dispatch_id)
+
+    def central_depository(
+        self,
+        *,
+        artifact_type: str | None = None,
+        subject_type: str | None = None,
+        subject_id: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        lineage = self.depository.lineage(
+            subject_type=subject_type,
+            subject_id=subject_id,
+            limit=limit,
+        )
+        if subject_type is not None or subject_id is not None:
+            artifacts = []
+            seen_hashes: set[str] = set()
+            for entry in lineage:
+                artifact_hash = entry["artifact_hash"]
+                if artifact_hash in seen_hashes:
+                    continue
+                artifact = self.depository.artifact(artifact_hash)
+                if artifact is None:
+                    continue
+                if (
+                    artifact_type is not None
+                    and artifact["artifact_type"] != artifact_type
+                ):
+                    continue
+                seen_hashes.add(artifact_hash)
+                artifacts.append(artifact)
+        else:
+            artifacts = self.depository.artifacts(
+                artifact_type=artifact_type,
+                limit=limit,
+            )
+        return {
+            "depository_type": "mitra-runtime-central-depository-export",
+            "authority_boundary": (
+                "Mitra exports immutable runtime artifacts. External MDU or "
+                "BHIV depository services remain authoritative consumers."
+            ),
+            "filters": {
+                "artifact_type": artifact_type,
+                "subject_type": subject_type,
+                "subject_id": subject_id,
+                "limit": limit,
+            },
+            "artifact_count": len(artifacts),
+            "lineage_count": len(lineage),
+            "artifacts": artifacts,
+            "lineage": lineage,
+        }
 
     def _session_for_companion_message(
         self,

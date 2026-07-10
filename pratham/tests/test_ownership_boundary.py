@@ -10,7 +10,10 @@ from jsonschema import Draft202012Validator
 from mitra_attachment import AttachmentRuntime
 from mitra_companion.constants import RuntimeState
 from mitra_companion.contracts import ContextTransferRequest
+from mitra_companion.bhiv_integrations import BHIVRuntimeIntegrator
+from mitra_companion.depository import CentralDepository
 from mitra_companion.lifecycle import RuntimeLifecycle
+from mitra_companion.reconstruction import DeterministicReconstructionLedger
 from mitra_companion.runtime import CompanionRuntime
 from mitra_context import ContextRuntime
 from mitra_intent import IntentRouter
@@ -47,17 +50,22 @@ OWNED_CAPABILITIES = {
     "Runtime State",
     "Context Transfer Runtime",
     "Product Attachment Runtime",
+    "Deterministic Runtime Reconstruction",
+    "Runtime Artifact Export",
+    "BHIV Contract Integration",
 }
 EXTERNAL_CAPABILITIES = {
-    "Conversation Design",
+    "Product Conversation Design",
+    "Product Business Logic",
     "Governance",
-    "Safety",
-    "Knowledge",
+    "Safety Policy",
+    "Knowledge Authority",
     "Project Intelligence",
     "Domain Intelligence",
-    "Evidence",
-    "Replay",
+    "External Evidence Authority",
+    "External Replay Authority",
     "Certification",
+    "Central Depository Acceptance",
 }
 
 
@@ -114,6 +122,9 @@ def test_all_owned_runtime_capabilities_have_concrete_symbols():
     assert RuntimeLifecycle
     assert RuntimeState
     assert ContextTransferRequest
+    assert DeterministicReconstructionLedger
+    assert CentralDepository
+    assert BHIVRuntimeIntegrator
     assert callable(SessionRuntime.transfer)
     assert callable(ContextRuntime.initialize_transfer)
     assert callable(AttachmentRuntime.attach)

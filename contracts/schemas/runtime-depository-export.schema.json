@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/runtime-depository-export/1.0.0",
+  "title": "Mitra Runtime Depository Export Response",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime_version",
+    "compatibility_version",
+    "depository"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime_version": {"const": "1.0.0"},
+    "compatibility_version": {"const": "mitra-companion-1"},
+    "depository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "depository_type",
+        "authority_boundary",
+        "filters",
+        "artifact_count",
+        "lineage_count",
+        "artifacts",
+        "lineage"
+      ],
+      "properties": {
+        "depository_type": {
+          "const": "mitra-runtime-central-depository-export"
+        },
+        "authority_boundary": {"type": "string", "minLength": 1},
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_type",
+            "subject_type",
+            "subject_id",
+            "limit"
+          ],
+          "properties": {
+            "artifact_type": {"type": ["string", "null"]},
+            "subject_type": {"type": ["string", "null"]},
+            "subject_id": {"type": ["string", "null"]},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 500}
+          }
+        },
+        "artifact_count": {"type": "integer", "minimum": 0},
+        "lineage_count": {"type": "integer", "minimum": 0},
+        "artifacts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/artifact"}
+        },
+        "lineage": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/lineage"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_hash",
+        "artifact_type",
+        "artifact",
+        "metadata",
+        "created_at"
+      ],
+      "properties": {
+        "artifact_hash": {"$ref": "#/$defs/sha256"},
+        "artifact_type": {"type": "string", "minLength": 1},
+        "artifact": {"type": "object"},
+        "metadata": {"type": "object"},
+        "created_at": {"type": "string", "minLength": 1}
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lineage_id",
+        "subject_type",
+        "subject_id",
+        "artifact_hash",
+        "parent_chain_hash",
+        "chain_hash",
+        "sequence",
+        "metadata",
+        "created_at"
+      ],
+      "properties": {
+        "lineage_id": {"type": "string", "minLength": 1},
+        "subject_type": {"type": "string", "minLength": 1},
+        "subject_id": {"type": "string", "minLength": 1},
+        "artifact_hash": {"$ref": "#/$defs/sha256"},
+        "parent_chain_hash": {
+          "anyOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"type": "null"}
+          ]
+        },
+        "chain_hash": {"$ref": "#/$defs/sha256"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "metadata": {"type": "object"},
+        "created_at": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

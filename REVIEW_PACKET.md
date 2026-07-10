@@ -1,5 +1,8 @@
 # Review Packet - Mitra Companion Runtime Phase V
 
+> Historical sprint review map. For current rebuild and handover instructions,
+> use `docs/DOCUMENTATION_INDEX.md` and `docs/HANDOVER.md`.
+
 ## Scope
 
 This repository implements Pratham's bounded ownership:
@@ -13,9 +16,9 @@ This repository implements Pratham's bounded ownership:
 - bounded companion interaction: natural tool selection, memory,
   clarification, status notifications, streaming, and execution receipts.
 
-It does not implement product conversation design, governance, safety,
-knowledge, project/domain intelligence, evidence, replay, certification, or
-product-specific business logic.
+It does not implement product conversation design, product business logic,
+governance, safety policy, knowledge authority, external evidence/replay
+authority, certification, or Central Depository acceptance.
 
 ## Canonical flow
 
@@ -78,10 +81,9 @@ source session
 
 ## Verification
 
-- Automated suite: `84 passed`
-- Current reuse extension focused checks: `11 passed`
-- Companion interaction and runtime analysis tests: `7 passed`
-- Focused BHIV, hardening, contract, and production-readiness suite: `18 passed`
+- Current command: `python -m pytest`
+- Deployment configuration: `python scripts/production_readiness_gate.py`
+- Hosted output alignment: `python scripts/validate_hosted_runtime.py`
 - Two products attached through published manifests
 - Two accessible BHIV products attach through published manifests: UniGuru in `uniguru_ai` and Samruddhi in `trade-bot-main`
 - Two sessions spanning an explicit cross-product transfer

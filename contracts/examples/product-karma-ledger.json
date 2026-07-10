@@ -1,0 +1,60 @@
+{
+  "product_id": "karma-ledger",
+  "display_name": "Karma Ledger",
+  "product_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "simulated",
+  "capabilities": [
+    {
+      "capability_id": "action-ledger",
+      "description": "Records action events and downstream accountability references outside Mitra runtime ownership.",
+      "context_scopes": ["session", "workspace", "handoff"],
+      "metadata": {
+        "bhiv_system": true,
+        "convergence_role": "accountability-event-consumer",
+        "integration_surface": "published-manifest"
+      },
+      "intents": [
+        {
+          "intent_id": "karma.record-event",
+          "description": "Record an action or dispatch event reference for downstream accountability review.",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["event_type", "subject_id"],
+            "properties": {
+              "event_type": {"type": "string", "minLength": 3},
+              "subject_id": {"type": "string", "minLength": 1},
+              "artifact_hash": {"type": "string"}
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "accepted": {"type": "boolean"},
+              "status": {"type": "string"},
+              "event_id": {"type": "string"},
+              "ledger_hash": {"type": "string"}
+            }
+          },
+          "dispatch": {
+            "mode": "loopback",
+            "endpoint": "loopback://karma/events/record"
+          },
+          "metadata": {
+            "owned_by_product": true,
+            "consumes": ["dispatch_proof", "lineage_hash"]
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "bhiv_product": true,
+    "bhiv_product_name": "Karma",
+    "business_logic_owner": "karma-ledger",
+    "integration_direction": "convergence-consumer",
+    "integration_surface": "published-manifest"
+  }
+}

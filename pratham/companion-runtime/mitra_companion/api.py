@@ -6,6 +6,7 @@ from html import escape
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     HTMLResponse,
     PlainTextResponse,
@@ -31,10 +32,12 @@ from .contracts import (
     versioned_response,
 )
 from .errors import CompanionRuntimeError
+from .frontend_connector import create_frontend_connector_router
 from .manifest_sources import DirectoryManifestSourceAdapter
 from .observability import configure_opentelemetry
 from .ports import ManifestSourceAdapter
 from .runtime import CompanionRuntime
+from .utils import utc_now
 
 
 def create_app(
@@ -50,7 +53,14 @@ def create_app(
     if runtime_settings.manifest_directory is not None:
         sources.append(
             DirectoryManifestSourceAdapter(
-                runtime_settings.manifest_directory
+                runtime_settings.manifest_directory,
+                allow_examples=runtime_settings.allow_example_manifests,
+                allow_simulated=runtime_settings.allow_simulated_manifests,
+                allow_loopback=runtime_settings.allow_loopback_manifests,
+                allow_localhost=runtime_settings.allow_localhost_manifests,
+                require_production_bootstrap=(
+                    runtime_settings.require_production_bootstrap_manifests
+                ),
             )
         )
 
@@ -73,6 +83,14 @@ def create_app(
         ),
         lifespan=lifespan,
     )
+    if runtime_settings.cors_allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=runtime_settings.cors_allowed_origins,
+            allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-API-Key"],
+            allow_credentials=False,
+        )
     app.state.runtime = companion
     app.state.opentelemetry = configure_opentelemetry(app, runtime_settings)
 
@@ -86,6 +104,7 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard() -> str:
+        captured_at = utc_now()
         status = companion.status()
         attachments = companion.attachments.list()
         sessions = companion.store.list_sessions(limit=8)
@@ -150,50 +169,75 @@ def create_app(
   <title>Mitra Companion Runtime</title>
   <style>
     :root {{
-      color-scheme: dark;
-      font-family: Inter, "Segoe UI", sans-serif;
-      --ink:#f7f8ff; --muted:#9aa6c5; --panel:#11182a;
-      --line:#273353; --violet:#9f7aea; --cyan:#49d7e8;
+      color-scheme: light;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      --page:#f5f7f3; --surface:#ffffff; --surface-alt:#edf2ee;
+      --ink:#17201d; --muted:#62706b; --line:#d7dfd9;
+      --signal:#17735d; --signal-soft:#dff3ec; --blue:#2f68d8;
+      --danger:#b42318; --shadow:#17201d18;
     }}
     * {{ box-sizing:border-box; }}
     body {{
       margin:0; color:var(--ink);
-      background:
-        radial-gradient(circle at 18% 10%, #2b1652 0, transparent 28%),
-        radial-gradient(circle at 80% 0%, #0a5361 0, transparent 24%),
-        #070b14;
+      background:linear-gradient(180deg, #f9faf7 0, var(--page) 42%, #eaf0ec 100%);
     }}
-    main {{ max-width:1220px; margin:auto; padding:42px 26px 70px; }}
-    .eyebrow {{ color:var(--cyan); letter-spacing:.16em; text-transform:uppercase;
-      font-weight:700; font-size:12px; }}
-    h1 {{ font-size:42px; line-height:1.05; margin:10px 0 8px; }}
-    .subtitle {{ color:var(--muted); max-width:760px; font-size:17px; line-height:1.55; }}
-    .top {{ display:flex; justify-content:space-between; align-items:flex-start; gap:24px; }}
-    .state {{ padding:10px 15px; border:1px solid #48668e; border-radius:999px;
-      background:#0e2331; color:#8bf0d0; font-weight:750; }}
-    .grid {{ display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin:30px 0; }}
-    .card {{ border:1px solid var(--line); border-radius:17px; padding:20px;
-      background:linear-gradient(145deg, #151d32, #0e1423); box-shadow:0 16px 45px #0007; }}
-    .label {{ color:var(--muted); font-size:12px; letter-spacing:.1em; text-transform:uppercase; }}
-    .value {{ font-size:30px; font-weight:800; margin-top:8px; }}
-    .section {{ margin-top:16px; }}
-    .section h2 {{ margin:0 0 14px; font-size:18px; }}
-    table {{ width:100%; border-collapse:collapse; }}
-    th, td {{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--line); }}
-    th {{ color:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }}
+    main {{ max-width:1240px; margin:auto; padding:34px 24px 64px; }}
+    .top {{
+      display:flex; justify-content:space-between; align-items:flex-start; gap:24px;
+      padding:22px 0 24px; border-bottom:1px solid var(--line);
+    }}
+    .eyebrow {{
+      color:var(--signal); letter-spacing:0; text-transform:uppercase;
+      font-weight:800; font-size:12px;
+    }}
+    h1 {{ font-size:40px; line-height:1.08; margin:8px 0 8px; font-weight:850; }}
+    .subtitle {{ color:var(--muted); max-width:780px; font-size:16px; line-height:1.55; }}
+    .timestamp {{ color:var(--muted); font-size:12px; margin-top:8px; }}
+    .state {{
+      min-width:112px; text-align:center; padding:9px 14px; border:1px solid #9dc9b9;
+      border-radius:999px; background:var(--signal-soft); color:#0d5c49; font-weight:800;
+      box-shadow:0 8px 20px var(--shadow);
+    }}
+    .grid {{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin:24px 0; }}
+    .card {{
+      border:1px solid var(--line); border-radius:8px; padding:18px;
+      background:var(--surface); box-shadow:0 12px 28px var(--shadow);
+      overflow:auto;
+    }}
+    .grid .card {{ min-height:112px; display:flex; flex-direction:column; justify-content:space-between; }}
+    .label {{ color:var(--muted); font-size:12px; letter-spacing:0; text-transform:uppercase; font-weight:800; }}
+    .value {{ font-size:30px; font-weight:850; margin-top:10px; color:#101815; }}
+    .section {{ margin-top:14px; }}
+    .section h2 {{ margin:0 0 12px; font-size:18px; line-height:1.25; }}
+    table {{ width:100%; border-collapse:collapse; min-width:620px; }}
+    th, td {{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:top; }}
+    th {{
+      color:var(--muted); font-size:11px; letter-spacing:0; text-transform:uppercase;
+      background:var(--surface-alt); font-weight:800;
+    }}
+    tr:last-child td {{ border-bottom:0; }}
     small {{ display:block; color:var(--muted); margin-top:3px; }}
-    code {{ color:#bad7ff; }}
-    .badge {{ display:inline-block; padding:5px 9px; border-radius:999px;
-      background:#202b46; color:#cfd8ef; font-size:11px; font-weight:750; }}
-    .attached,.completed {{ background:#123a31; color:#7cf2c4; }}
-    .degraded,.failed {{ background:#4a242b; color:#ff9ea9; }}
-    .accepted,.active {{ background:#183658; color:#8fd0ff; }}
-    .flow {{ color:#cdd6ef; line-height:1.8; }}
-    .flow strong {{ color:var(--cyan); }}
-    a {{ color:#a9c8ff; }}
+    code {{ color:#224fba; background:#eef3ff; padding:1px 5px; border-radius:5px; }}
+    .badge {{
+      display:inline-block; padding:5px 9px; border-radius:999px;
+      background:#eef2ed; color:#35423d; font-size:11px; font-weight:800;
+    }}
+    .attached,.completed {{ background:var(--signal-soft); color:#0d5c49; }}
+    .degraded,.failed {{ background:#fde7e7; color:var(--danger); }}
+    .accepted,.active {{ background:#e6efff; color:#224fba; }}
+    .flow {{ color:#33413c; line-height:1.8; }}
+    .flow strong {{ color:var(--signal); }}
+    a {{ color:var(--blue); font-weight:750; text-decoration:none; }}
+    a:hover {{ text-decoration:underline; }}
     @media (max-width:850px) {{
       .grid {{ grid-template-columns:repeat(2, 1fr); }}
       .top {{ flex-direction:column; }}
+    }}
+    @media (max-width:560px) {{
+      main {{ padding:24px 14px 44px; }}
+      h1 {{ font-size:32px; }}
+      .grid {{ grid-template-columns:1fr; }}
+      .card {{ padding:15px; }}
     }}
   </style>
 </head>
@@ -205,6 +249,7 @@ def create_app(
       <div class="subtitle">A bounded execution layer for session continuity,
         isolated context, explicit intent routing, and interface-driven product
         attachment across standalone, embedded, mobile, XR, and robotics clients.</div>
+      <div class="timestamp">Snapshot UTC: {escape(captured_at)}</div>
     </div>
     <div class="state">{escape(status['state'])}</div>
   </div>
@@ -368,6 +413,56 @@ def create_app(
     async def runtime_capability_catalog() -> dict:
         return versioned_response(catalog=companion.capability_catalog())
 
+    @app.get("/api/v1/runtime/capability-graph")
+    async def runtime_capability_graph(
+        product_id: str | None = None,
+        capability_id: str | None = None,
+        available_only: bool = False,
+        message: str | None = None,
+    ) -> dict:
+        return versioned_response(
+            graph=companion.capability_graph(
+                product_id=product_id,
+                capability_id=capability_id,
+                available_only=available_only,
+                message=message,
+            )
+        )
+
+    @app.post("/api/v1/runtime/capability-plan")
+    async def runtime_capability_plan(request: RuntimeAnalysisRequest) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            plan=companion.capability_plan(
+                message=request.message,
+                product_id=request.product_id,
+                capability_id=request.capability_id,
+                available_only=False,
+            )
+        )
+
+    @app.get("/api/v1/runtime/depository")
+    async def runtime_depository(
+        artifact_type: str | None = None,
+        subject_type: str | None = None,
+        subject_id: str | None = None,
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> dict:
+        return versioned_response(
+            depository=companion.central_depository(
+                artifact_type=artifact_type,
+                subject_type=subject_type,
+                subject_id=subject_id,
+                limit=limit,
+            )
+        )
+
+    @app.get("/api/v1/runtime/integrations")
+    async def runtime_integrations() -> dict:
+        return versioned_response(
+            integrations=companion.bhiv_integrations.status()
+        )
+
     @app.post("/api/v1/runtime/analysis")
     async def runtime_analysis(request: RuntimeAnalysisRequest) -> dict:
         validate_contract(request)
@@ -459,6 +554,10 @@ def create_app(
                 limit=limit,
             )
         )
+
+    @app.get("/api/v1/companion/tasks/{task_id}")
+    async def companion_task(task_id: str) -> dict:
+        return versioned_response(task=companion.companion_task(task_id))
 
     @app.post("/api/v1/sessions", status_code=201)
     async def create_session(request: SessionCreateRequest) -> dict:
@@ -755,6 +854,14 @@ def create_app(
         return versioned_response(
             proof=companion.dispatch_proof(dispatch_id)
         )
+
+    @app.get("/api/v1/dispatches/{dispatch_id}/reconstruction")
+    async def get_dispatch_reconstruction(dispatch_id: str) -> dict:
+        return versioned_response(
+            reconstruction=companion.dispatch_reconstruction(dispatch_id)
+        )
+
+    app.include_router(create_frontend_connector_router(companion))
 
     return app
 

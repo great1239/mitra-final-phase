@@ -74,6 +74,10 @@
                 },
                 "description": {"type": "string", "minLength": 3},
                 "input_schema": {"type": "object"},
+                "response_schema": {
+                  "type": "object",
+                  "description": "JSON Schema describing the response object returned by this intent's dispatch target. Older manifests may omit this field; Mitra treats omission as {\"type\":\"object\"}."
+                },
                 "metadata": {"type": "object"},
                 "dispatch": {
                   "type": "object",

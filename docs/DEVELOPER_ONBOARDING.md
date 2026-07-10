@@ -1,12 +1,17 @@
 # Developer Onboarding
 
+Use `docs/HANDOVER.md` for the complete clean-room rebuild, deployment,
+operations, and transfer procedure. This document covers day-to-day extension
+rules after the runtime is running.
+
 ## Local setup
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e . pytest pytest-asyncio jsonschema
-pytest
+python -m pip install -e ".[test]"
+python -m pytest
+python scripts/production_readiness_gate.py
 ```
 
 Run the demo:
@@ -14,8 +19,18 @@ Run the demo:
 ```powershell
 python scripts/run_demo.py
 $env:MITRA_COMPANION_MANIFEST_DIRECTORY="contracts\examples"
+$env:MITRA_COMPANION_ENVIRONMENT="development"
+$env:MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS="true"
+$env:MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS="true"
+$env:MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS="true"
+$env:MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS="true"
+$env:MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS="false"
 mitra-companion serve --port 8090
 ```
+
+`contracts/examples` is never the production bootstrap source. Production
+uses `contracts/production` and rejects example, simulated, loopback, and
+localhost-bound manifests unless an operator explicitly opts into them.
 
 ## Folder rule
 
@@ -53,13 +68,17 @@ Before handing off a change:
    `contracts/schemas/product-attachment.schema.json`;
 3. update `contracts/integration-contracts.json` when a public contract or
    example is added;
-4. keep `REVIEW_PACKET.md` and `SUBMISSION_INDEX.md` in sync.
+4. update the OpenAPI/catalog and the relevant maintained guide;
+5. run the full test suite and readiness gate.
 
 ## Design guardrails
 
 - Do not add natural-language intent classification here.
-- Do not copy SHAKTI, Evidence, Replay, or Parikshak logic.
+- Do not copy SHAKTI, governance, certification, external replay-authority, or
+  external evidence-authority logic.
 - Do not put product-specific branches in the router.
+- Do not point production at `contracts/examples`.
+- Do not use simulated or loopback manifests as production integrations.
 - Do not expose another product's context partition.
 - Do not store raw resume tokens.
 - Do not accept breaking contract versions silently.
