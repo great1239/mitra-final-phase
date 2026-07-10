@@ -95,8 +95,8 @@ GET /api/v1/runtime/integrations
 
 | Product | Manifest | Transport |
 | --- | --- | --- |
-| UniGuru | `contracts/examples/product-uniguru-runtime.json` | `POST /runtime/execute`, health `GET /health` |
-| Samruddhi/trade-bot | `contracts/examples/product-trade-bot-main.json` | `POST /tools/predict`, `POST /tools/analyze`, health `GET /tools/health` |
+| UniGuru | `contracts/examples/product-uniguru-runtime.json`; production bootstrap `contracts/production/product-samruddhi-uniguru.json` | `POST /ask`, health `GET /health`; dispatch uses `MITRA_PRODUCT_UNIGURU_BEARER_TOKEN` when configured |
+| Samruddhi/trade-bot | `contracts/examples/product-trade-bot-main.json`; production bootstrap `contracts/production/product-samruddhi-trade-bot.json` | `POST /tools/predict`, `POST /tools/analyze`, health `GET /tools/health` |
 | Bucket Insight | `contracts/examples/product-bucket-insight.json` | manifest contract |
 | PRANA Runtime | `contracts/examples/product-prana-runtime.json` | manifest contract |
 | Karma Ledger | `contracts/examples/product-karma-ledger.json` | manifest contract |

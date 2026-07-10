@@ -1,0 +1,115 @@
+{
+  "product_id": "samruddhi-uniguru",
+  "display_name": "Samruddhi UniGuru",
+  "product_version": "1.1.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "remote",
+  "base_url": "https://uni-guru.in",
+  "health_endpoint": "/health",
+  "capabilities": [
+    {
+      "capability_id": "learning-reasoning",
+      "description": "Routes governed learning and knowledge queries to the published UniGuru reasoning API.",
+      "context_scopes": ["session", "workspace", "product"],
+      "metadata": {
+        "source_repository": "https://github.com/VJY123VJY/uniguru_ai",
+        "source_repository_head": "a0740f552b33b19e1507014d63a4af6ecb61460a",
+        "interface_file": "backend/service/api.py",
+        "published_health_route": "GET /health",
+        "published_dispatch_route": "POST /ask"
+      },
+      "intents": [
+        {
+          "intent_id": "samruddhi.uniguru.ask",
+          "description": "Ask UniGuru a governed learning or knowledge query through its published /ask contract.",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+              "query": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "context": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "allow_web": {
+                "type": "boolean"
+              },
+              "session_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "decision": {"type": "string"},
+              "answer": {"type": ["string", "object", "array", "null"]},
+              "session_id": {"type": ["string", "null"]},
+              "request_id": {"type": "string"},
+              "verification_status": {"type": "string"},
+              "reasoning_trace": {"type": ["object", "array", "null"]}
+            }
+          },
+          "dispatch": {
+            "mode": "http",
+            "endpoint": "/ask",
+            "timeout_seconds": 45,
+            "options": {
+              "request_body": "payload",
+              "headers": {
+                "X-Caller-Name": "bhiv-assistant"
+              },
+              "bearer_token_env": "MITRA_PRODUCT_UNIGURU_BEARER_TOKEN"
+            }
+          },
+          "metadata": {
+            "owned_by_product": true,
+            "adapter_contract": "native-http-payload",
+            "requires_runtime_secret": "MITRA_PRODUCT_UNIGURU_BEARER_TOKEN"
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "production_bootstrap": true,
+    "bhiv_product": true,
+    "bhiv_product_name": "UniGuru",
+    "attached_product_group": "samruddhi",
+    "business_logic_owner": "VJY123VJY/uniguru_ai",
+    "integration_direction": "backward",
+    "integration_surface": "published-manifest",
+    "source_repository": "https://github.com/VJY123VJY/uniguru_ai",
+    "source_repository_head": "a0740f552b33b19e1507014d63a4af6ecb61460a",
+    "required_runtime_env": ["MITRA_PRODUCT_UNIGURU_BEARER_TOKEN"],
+    "health_contract": {
+      "required_format": "json",
+      "expected_content_type": "application/json",
+      "status_field": "status",
+      "healthy_status_values": ["ok", "healthy"]
+    },
+    "public_contracts": {
+      "apis": [
+        {
+          "name": "UniGuru public reasoning API",
+          "base_url": "https://uni-guru.in",
+          "health": "GET /health",
+          "dispatch": "POST /ask",
+          "docs": "docs/api/PUBLIC_API_USAGE.md"
+        }
+      ],
+      "permissions": ["uniguru.ask"],
+      "events": {
+        "publishes": ["uniguru.reasoning.completed.v1"]
+      }
+    }
+  }
+}

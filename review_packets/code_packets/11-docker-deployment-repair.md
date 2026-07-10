@@ -34,7 +34,7 @@ policy and WAL-friendly SQLite settings.
 
 **Key implementation areas:** Worker count; manifest directory; manifest
 policy flags; SQLite synchronous mode; production logging; telemetry
-configuration.
+configuration; operator-supplied product secret placeholders.
 
 **Review focus:** Operator copy/paste safety, parity with Compose, and whether
 defaults avoid simulated/example startup attachments.

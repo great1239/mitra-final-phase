@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import time
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 from urllib.parse import urljoin
 
@@ -75,6 +77,7 @@ class HttpTransportAdapter:
 
     mode = "http"
     _REQUEST_BODY_MODES = {"envelope", "payload", "none"}
+    _HEALTH_FORMATS = {"json"}
 
     def __init__(
         self,
@@ -105,6 +108,57 @@ class HttpTransportAdapter:
                 "HTTP adapter request_body option must be one of: "
                 "envelope, payload, none"
             )
+        self._validate_header_options(target.options)
+
+    def _validate_header_options(self, options: dict[str, Any]) -> None:
+        headers = options.get("headers", {})
+        if headers is not None and not isinstance(headers, dict):
+            raise AttachmentValidationError(
+                "HTTP adapter headers option must be an object"
+            )
+        secret_headers = options.get("secret_headers", {})
+        if secret_headers is not None and not isinstance(secret_headers, dict):
+            raise AttachmentValidationError(
+                "HTTP adapter secret_headers option must be an object"
+            )
+        bearer_token_env = options.get("bearer_token_env")
+        if bearer_token_env is not None and not isinstance(
+            bearer_token_env,
+            str,
+        ):
+            raise AttachmentValidationError(
+                "HTTP adapter bearer_token_env option must be a string"
+            )
+
+    def _secret_value(self, env_name: str) -> str:
+        direct = os.getenv(env_name, "").strip()
+        if direct:
+            return direct
+        file_name = os.getenv(f"{env_name}_FILE", "").strip()
+        if file_name:
+            try:
+                return Path(file_name).read_text(encoding="utf-8").strip()
+            except OSError as exc:
+                raise TransportError(
+                    f"Configured secret file for {env_name} could not be read"
+                ) from exc
+        return ""
+
+    def _headers_from_options(self, options: dict[str, Any]) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        for name, value in (options.get("headers") or {}).items():
+            if value is not None:
+                headers[str(name)] = str(value)
+        for name, env_name in (options.get("secret_headers") or {}).items():
+            env_value = self._secret_value(str(env_name))
+            if env_value:
+                headers[str(name)] = env_value
+        bearer_token_env = options.get("bearer_token_env")
+        if bearer_token_env:
+            token = self._secret_value(str(bearer_token_env))
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+        return headers
 
     async def dispatch(
         self,
@@ -144,6 +198,14 @@ class HttpTransportAdapter:
                 "HTTP adapter request_body option must be one of: "
                 "envelope, payload, none"
             )
+        headers = self._headers_from_options(target.get("options", {}))
+        headers.update(
+            {
+                "X-Contract-Version": envelope["contract_version"],
+                "X-Companion-Session": envelope["session_id"],
+                "X-Correlation-ID": envelope["correlation_id"],
+            }
+        )
         try:
             async with httpx.AsyncClient(
                 transport=self.http_transport,
@@ -152,11 +214,7 @@ class HttpTransportAdapter:
                 response = await client.post(
                     endpoint,
                     **request_kwargs,
-                    headers={
-                        "X-Contract-Version": envelope["contract_version"],
-                        "X-Companion-Session": envelope["session_id"],
-                        "X-Correlation-ID": envelope["correlation_id"],
-                    },
+                    headers=headers,
                 )
                 response.raise_for_status()
         except (httpx.HTTPError, httpx.TimeoutException) as exc:
@@ -174,6 +232,77 @@ class HttpTransportAdapter:
                 "Capability endpoint response must be a JSON object"
             )
         return payload
+
+    @staticmethod
+    def validate_health_contract(
+        *,
+        manifest: dict[str, Any],
+        response: httpx.Response,
+        payload: Any,
+        json_response: bool,
+    ) -> dict[str, Any]:
+        contract = (manifest.get("metadata") or {}).get("health_contract") or {}
+        if not isinstance(contract, dict) or not contract:
+            return {"enabled": False, "valid": True}
+        required_format = str(contract.get("required_format") or "").lower()
+        if required_format:
+            if required_format not in HttpTransportAdapter._HEALTH_FORMATS:
+                return {
+                    "enabled": True,
+                    "valid": False,
+                    "reason": (
+                        "Unsupported health_contract.required_format: "
+                        f"{required_format}"
+                    ),
+                }
+            if required_format == "json" and not json_response:
+                return {
+                    "enabled": True,
+                    "valid": False,
+                    "reason": "Health endpoint did not return JSON",
+                }
+
+        expected_values = contract.get("healthy_status_values") or []
+        if expected_values:
+            if not isinstance(payload, dict):
+                return {
+                    "enabled": True,
+                    "valid": False,
+                    "reason": "Health response was not a JSON object",
+                }
+            status_field = str(contract.get("status_field") or "status")
+            actual = payload.get(status_field)
+            normalized_actual = str(actual or "").strip().lower()
+            normalized_expected = {
+                str(value).strip().lower() for value in expected_values
+            }
+            if normalized_actual not in normalized_expected:
+                return {
+                    "enabled": True,
+                    "valid": False,
+                    "reason": (
+                        f"Health field {status_field!r} value "
+                        f"{actual!r} was not one of "
+                        f"{sorted(normalized_expected)}"
+                    ),
+                }
+
+        expected_content_type = str(
+            contract.get("expected_content_type") or ""
+        ).lower()
+        if expected_content_type:
+            content_type = response.headers.get("content-type", "").lower()
+            if expected_content_type not in content_type:
+                return {
+                    "enabled": True,
+                    "valid": False,
+                    "reason": (
+                        "Health content type "
+                        f"{content_type!r} did not include "
+                        f"{expected_content_type!r}"
+                    ),
+                }
+        return {"enabled": True, "valid": True}
 
 
 class CapabilityTransport:
@@ -292,8 +421,17 @@ class CapabilityTransport:
             healthy = 200 <= response.status_code < 400
             try:
                 payload: Any = response.json()
+                json_response = True
             except ValueError:
                 payload = {"body": response.text[:500]}
+                json_response = False
+            health_contract = HttpTransportAdapter.validate_health_contract(
+                manifest=manifest,
+                response=response,
+                payload=payload,
+                json_response=json_response,
+            )
+            healthy = healthy and health_contract["valid"]
             return {
                 "product_id": product_id,
                 "status": "healthy" if healthy else "unhealthy",
@@ -302,6 +440,7 @@ class CapabilityTransport:
                 "latency_ms": round(latency_ms, 3),
                 "endpoint": endpoint,
                 "response": payload,
+                "health_contract": health_contract,
             }
         except (httpx.HTTPError, httpx.TimeoutException) as exc:
             latency_ms = (time.perf_counter() - started) * 1000

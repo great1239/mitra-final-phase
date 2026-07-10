@@ -29,6 +29,8 @@ critical code entry points.
 10. [Production manifest policy](10-production-manifest-policy.md)
 11. [Docker deployment repair](11-docker-deployment-repair.md)
 12. [Frontend compatibility connector](12-frontend-connector.md)
+13. [Samruddhi product attachments](13-samruddhi-product-attachments.md)
+14. [Samruddhi validation and docs](14-samruddhi-validation-docs.md)
 
 ## Reviewer Path
 

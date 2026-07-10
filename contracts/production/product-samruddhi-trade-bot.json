@@ -1,0 +1,203 @@
+{
+  "product_id": "samruddhi-trade-bot",
+  "display_name": "Samruddhi Trade Bot",
+  "product_version": "4.0.0",
+  "contract_version": "1.0.0",
+  "attachment_mode": "remote",
+  "base_url": "https://trade-bot-api.onrender.com",
+  "health_endpoint": "/tools/health",
+  "capabilities": [
+    {
+      "capability_id": "market-prediction",
+      "description": "Generates stock prediction outputs through the published Samruddhi Trade Bot MCP API.",
+      "context_scopes": ["session", "workspace", "product"],
+      "metadata": {
+        "source_repository": "https://github.com/harshapawar136/trade-bot-main",
+        "source_repository_head": "cfa68555c2c9ca42bba419791cb50dbe0c7295eb",
+        "interface_file": "backend/api_server.py",
+        "published_health_route": "GET /tools/health",
+        "published_dispatch_route": "POST /tools/predict"
+      },
+      "intents": [
+        {
+          "intent_id": "samruddhi.tradebot.predict",
+          "description": "Generate predictions for one or more market symbols through the Trade Bot MCP API.",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["symbols"],
+            "properties": {
+              "symbols": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                }
+              },
+              "horizon": {
+                "type": "string",
+                "enum": ["intraday", "short", "long"]
+              },
+              "risk_profile": {
+                "type": "string",
+                "enum": ["low", "moderate", "high"]
+              },
+              "stop_loss_pct": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 50.0
+              },
+              "capital_risk_pct": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 100.0
+              },
+              "drawdown_limit_pct": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 100.0
+              }
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "status": {"type": "string"},
+              "predictions": {"type": ["array", "object", "null"]},
+              "signals": {"type": ["array", "object", "null"]},
+              "metadata": {"type": ["object", "null"]},
+              "trace_id": {"type": "string"}
+            }
+          },
+          "dispatch": {
+            "mode": "http",
+            "endpoint": "/tools/predict",
+            "timeout_seconds": 60,
+            "options": {
+              "request_body": "payload"
+            }
+          },
+          "metadata": {
+            "owned_by_product": true,
+            "adapter_contract": "native-http-payload"
+          }
+        }
+      ]
+    },
+    {
+      "capability_id": "risk-analysis",
+      "description": "Runs symbol-level horizon analysis through the published Samruddhi Trade Bot MCP API.",
+      "context_scopes": ["session", "workspace", "product"],
+      "metadata": {
+        "source_repository": "https://github.com/harshapawar136/trade-bot-main",
+        "source_repository_head": "cfa68555c2c9ca42bba419791cb50dbe0c7295eb",
+        "interface_file": "backend/api_server.py",
+        "published_dispatch_route": "POST /tools/analyze"
+      },
+      "intents": [
+        {
+          "intent_id": "samruddhi.tradebot.analyze",
+          "description": "Analyze a market symbol across one or more horizons with risk parameters.",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["symbol"],
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "horizons": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "string",
+                  "enum": ["intraday", "short", "long"]
+                }
+              },
+              "stop_loss_pct": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 50.0
+              },
+              "capital_risk_pct": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 100.0
+              },
+              "drawdown_limit_pct": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 100.0
+              }
+            }
+          },
+          "response_schema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "status": {"type": "string"},
+              "analysis": {"type": ["object", "array", "string", "null"]},
+              "risk": {"type": ["object", "string", "null"]},
+              "trace_id": {"type": "string"}
+            }
+          },
+          "dispatch": {
+            "mode": "http",
+            "endpoint": "/tools/analyze",
+            "timeout_seconds": 60,
+            "options": {
+              "request_body": "payload"
+            }
+          },
+          "metadata": {
+            "owned_by_product": true,
+            "adapter_contract": "native-http-payload"
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "production_bootstrap": true,
+    "bhiv_product": true,
+    "bhiv_product_name": "Samruddhi",
+    "attached_product_group": "samruddhi",
+    "business_logic_owner": "harshapawar136/trade-bot-main",
+    "integration_direction": "forward",
+    "integration_surface": "published-manifest",
+    "source_repository": "https://github.com/harshapawar136/trade-bot-main",
+    "source_repository_head": "cfa68555c2c9ca42bba419791cb50dbe0c7295eb",
+    "health_contract": {
+      "required_format": "json",
+      "expected_content_type": "application/json",
+      "status_field": "status",
+      "healthy_status_values": ["healthy", "ok"]
+    },
+    "public_contracts": {
+      "apis": [
+        {
+          "name": "Samruddhi Trade Bot MCP API",
+          "base_url": "https://trade-bot-api.onrender.com",
+          "health": "GET /tools/health",
+          "predict": "POST /tools/predict",
+          "analyze": "POST /tools/analyze",
+          "docs": "backend/api_server.py"
+        }
+      ],
+      "permissions": ["tradebot.predict", "tradebot.analyze"],
+      "events": {
+        "publishes": [
+          "tradebot.prediction.completed.v1",
+          "tradebot.analysis.completed.v1"
+        ]
+      }
+    }
+  }
+}

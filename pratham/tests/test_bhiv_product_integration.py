@@ -235,3 +235,164 @@ async def test_http_adapter_can_post_native_payload_body(
         assert result["dispatch"]["response"] == {"accepted": True}
     finally:
         runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_http_adapter_applies_manifest_headers_and_bearer_token_env(
+    settings_factory,
+    monkeypatch,
+):
+    monkeypatch.setenv("MITRA_TEST_PRODUCT_TOKEN", "secret-token")
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8"))
+        assert payload == {"query": "What is ahimsa?"}
+        assert request.headers["X-Caller-Name"] == "bhiv-assistant"
+        assert request.headers["Authorization"] == "Bearer secret-token"
+        assert request.headers["X-Correlation-ID"] == "header-contract-test"
+        return httpx.Response(
+            200,
+            json={
+                "decision": "accept",
+                "answer": "Ahimsa means non-violence.",
+            },
+        )
+
+    settings: RuntimeSettings = settings_factory()
+    transport = CapabilityTransport(
+        default_timeout_seconds=0.2,
+        http_transport=httpx.MockTransport(handler),
+    )
+    runtime = CompanionRuntime(settings, transport=transport)
+    runtime.start()
+    try:
+        manifest = ProductAttachmentManifest.model_validate(
+            {
+                "product_id": "auth-http-product",
+                "display_name": "Authenticated HTTP Product",
+                "product_version": "1.0.0",
+                "contract_version": "1.0.0",
+                "attachment_mode": "remote",
+                "base_url": "https://auth-product.invalid",
+                "capabilities": [
+                    {
+                        "capability_id": "auth-capability",
+                        "description": "Authenticated payload projection fixture",
+                        "context_scopes": ["session"],
+                        "intents": [
+                            {
+                                "intent_id": "auth.execute",
+                                "description": "Execute with manifest headers",
+                                "input_schema": {
+                                    "type": "object",
+                                    "required": ["query"],
+                                },
+                                "dispatch": {
+                                    "mode": "http",
+                                    "endpoint": "/ask",
+                                    "options": {
+                                        "request_body": "payload",
+                                        "headers": {
+                                            "X-Caller-Name": "bhiv-assistant"
+                                        },
+                                        "bearer_token_env": (
+                                            "MITRA_TEST_PRODUCT_TOKEN"
+                                        ),
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        runtime.attach(manifest)
+        session = runtime.sessions.create(
+            actor_id="auth-user",
+            client_type="standalone",
+            workspace_id="auth-workspace",
+            product_id="auth-http-product",
+        )
+        result = await runtime.dispatch(
+            IntentDispatchRequest(
+                session_id=session["session_id"],
+                intent_id="auth.execute",
+                payload={"query": "What is ahimsa?"},
+                correlation_id="header-contract-test",
+            )
+        )
+        assert result["dispatch"]["status"] == "COMPLETED"
+        assert result["dispatch"]["response"]["decision"] == "accept"
+    finally:
+        runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_manifest_health_contract_rejects_frontend_html_fallback(
+    settings_factory,
+):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/health"
+        return httpx.Response(
+            200,
+            text="<html><body>frontend shell</body></html>",
+            headers={"content-type": "text/html; charset=utf-8"},
+        )
+
+    settings: RuntimeSettings = settings_factory()
+    transport = CapabilityTransport(
+        default_timeout_seconds=0.2,
+        http_transport=httpx.MockTransport(handler),
+    )
+    runtime = CompanionRuntime(settings, transport=transport)
+    runtime.start()
+    try:
+        manifest = ProductAttachmentManifest.model_validate(
+            {
+                "product_id": "html-health-product",
+                "display_name": "HTML Health Product",
+                "product_version": "1.0.0",
+                "contract_version": "1.0.0",
+                "attachment_mode": "remote",
+                "base_url": "https://html-health.invalid",
+                "health_endpoint": "/health",
+                "metadata": {
+                    "health_contract": {
+                        "required_format": "json",
+                        "expected_content_type": "application/json",
+                        "status_field": "status",
+                        "healthy_status_values": ["ok", "healthy"],
+                    }
+                },
+                "capabilities": [
+                    {
+                        "capability_id": "html-capability",
+                        "description": "Health contract fixture",
+                        "context_scopes": ["session"],
+                        "intents": [
+                            {
+                                "intent_id": "html.execute",
+                                "description": "Unused fixture intent",
+                                "input_schema": {"type": "object"},
+                                "dispatch": {
+                                    "mode": "http",
+                                    "endpoint": "/execute",
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        runtime.attach(manifest)
+        health = await runtime.check_attachment_health("html-health-product")
+        check = health["checks"][0]
+        assert check["health"]["status"] == "unhealthy"
+        assert check["health"]["health_contract"] == {
+            "enabled": True,
+            "valid": False,
+            "reason": "Health endpoint did not return JSON",
+        }
+        assert check["attachment"]["state"] == "DEGRADED"
+    finally:
+        runtime.stop()
