@@ -340,8 +340,10 @@ See `docs/INTEGRATION_GUIDE.md`.
 
 ## 9. Deployment Choice
 
-Use Docker or `render.yaml` when durable state, recovery, long-duration
-execution, or multiple runtime instances are required.
+Use Docker or `deploy/render.persistent-runtime.yaml` when durable Mitra
+state, recovery, long-duration execution, or multiple runtime instances are
+required. The root `render.yaml` is the independently hosted public module
+stack and uses networked PostgreSQL for durable Karma and InsightFlow state.
 
 Use `vercel.json` only for the public serverless API. Its `/tmp` database is
 ephemeral and persistent supervision is disabled. Do not use a Vercel

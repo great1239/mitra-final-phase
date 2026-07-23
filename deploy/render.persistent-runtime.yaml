@@ -1,0 +1,102 @@
+services:
+  - type: web
+    name: mitra-runtime-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /ready
+    autoDeploy: true
+    disk:
+      name: mitra-runtime-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: MITRA_COMPANION_ENVIRONMENT
+        value: production
+      - key: MITRA_COMPANION_CONFIG_PROFILE
+        value: production-independent
+      - key: MITRA_COMPANION_DEPLOYMENT_PLATFORM
+        value: render
+      - key: MITRA_COMPANION_RUNTIME_STORAGE_MODE
+        value: persistent
+      - key: MITRA_COMPANION_REQUIRE_ECOSYSTEM_READY
+        value: "true"
+      - key: MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS
+        value: "true"
+      - key: MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME
+        value: "true"
+      - key: MITRA_COMPANION_RELEASE_REVISION
+        sync: false
+      - key: MITRA_COMPANION_DATA_ROOT
+        value: /data
+      - key: MITRA_COMPANION_DATABASE_PATH
+        value: /data/companion-runtime.db
+      - key: MITRA_COMPANION_TELEMETRY_LOG_PATH
+        value: /data/runtime-telemetry.jsonl
+      - key: MITRA_COMPANION_LOG_PATH
+        value: /data/production-runtime.jsonl
+      - key: MITRA_COMPANION_LOG_LEVEL
+        value: INFO
+      - key: MITRA_COMPANION_LOG_TO_STDOUT
+        value: "true"
+      - key: MITRA_COMPANION_MANIFEST_DIRECTORY
+        value: /app/contracts/production
+      - key: MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS
+        value: "true"
+      - key: MITRA_COMPANION_HTTP_TIMEOUT_SECONDS
+        value: "10"
+      - key: MITRA_COMPANION_OTEL_ENABLED
+        value: "false"
+      - key: MITRA_COMPANION_UVICORN_WORKERS
+        value: "1"
+      - key: MITRA_COMPANION_FORWARDED_ALLOW_IPS
+        value: "*"
+      - key: MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED
+        value: "true"
+      - key: MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS
+        value: "5"
+      - key: MITRA_COMPANION_PERSISTENT_STALE_AFTER_SECONDS
+        value: "30"
+      - key: MITRA_COMPANION_PERSISTENT_MAINTENANCE_INTERVAL_SECONDS
+        value: "60"
+      - key: MITRA_COMPANION_PERSISTENT_TASK_TIMEOUT_SECONDS
+        value: "300"
+      - key: MITRA_BHIV_INTEGRATION_TIMEOUT_SECONDS
+        value: "10"
+      - key: MITRA_BHIV_INTEGRATION_FAIL_CLOSED
+        value: "true"
+      - key: MITRA_ECOSYSTEM_TIMEOUT_SECONDS
+        value: "45"
+      - key: MITRA_RAJ_WORKFLOW_BASE_URL
+        sync: false
+      - key: MITRA_RAJ_API_KEY
+        sync: false
+      - key: MITRA_BHIV_ASHMIT_BASE_URL
+        value: https://ai-assistant-backend-8hur.onrender.com
+      - key: MITRA_BHIV_ASHMIT_API_KEY
+        sync: false
+      - key: MITRA_BHIV_BUCKET_BASE_URL
+        value: https://pratham-bhiv-bucket.onrender.com
+      - key: MITRA_BHIV_BUCKET_PARENT_HASH
+        sync: false
+      - key: MITRA_BHIV_KESHAV_BASE_URL
+        value: https://keshav-cia7.onrender.com
+      - key: MITRA_BHIV_KARMA_BASE_URL
+        sync: false
+      - key: MITRA_BHIV_KARMA_PREVIOUS_HASH
+        sync: false
+      - key: MITRA_BHIV_PRANA_BASE_URL
+        sync: false
+      - key: MITRA_BHIV_INSIGHTFLOW_INGEST_URL
+        sync: false
+      - key: MITRA_BHIV_INSIGHTFLOW_API_KEY
+        sync: false
+      - key: MITRA_CENTRAL_DEPOSITORY_BASE_URL
+        value: https://pratham-bhiv-bucket.onrender.com

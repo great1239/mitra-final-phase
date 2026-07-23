@@ -21,9 +21,11 @@ Docker/Render deployment                           optional persistent profile
 Use Vercel for the public hosted API proof. The repo includes `vercel.json`,
 `api/index.py`, and `requirements.txt` for this serverless profile.
 
-For persistent runtime behavior, use a Docker-capable host such as Render,
-Fly.io, Railway, or a VPS. The repo also includes `render.yaml` for that
-alternate profile.
+The root `render.yaml` deploys the independent public Raj, Karma, PRANA, and
+InsightFlow services on free Render web instances. For persistent Mitra
+runtime behavior, use a Docker-capable host and
+`deploy/render.persistent-runtime.yaml`; that profile requires durable disk
+storage and is intentionally separate from the free module stack.
 
 Current production URL:
 

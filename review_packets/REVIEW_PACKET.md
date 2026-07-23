@@ -208,6 +208,7 @@ authority and certification remain outside Mitra.
 ## Deployment Proof
 
 Deployment artifacts are `Dockerfile`, `docker-compose.yml`, `render.yaml`,
+`deploy/render.persistent-runtime.yaml`,
 `vercel.json`, `api/index.py`, and `deploy/production.env.example`.
 
 The public deployment is independently reachable over HTTPS at the assigned

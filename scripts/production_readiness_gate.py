@@ -199,11 +199,18 @@ def main() -> int:
                 '"MITRA_COMPANION_RUNTIME_STORAGE_MODE": "ephemeral"',
                 '"MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS": "true"',
             ),
-            "render.yaml": (
+            "deploy/render.persistent-runtime.yaml": (
                 "healthCheckPath: /ready",
                 "value: /app/contracts/production",
                 "key: MITRA_RAJ_WORKFLOW_BASE_URL",
                 "key: MITRA_BHIV_KESHAV_BASE_URL",
+            ),
+            "render.yaml": (
+                "name: pratham-mitra-raj-gateway",
+                "name: pratham-mitra-karma-integrity",
+                "name: pratham-mitra-prana-forwarder",
+                "name: pratham-mitra-insightflow-registry",
+                "name: pratham-mitra-insightflow-bridge",
             ),
             "deploy/production.env.example": (
                 "MITRA_RAJ_WORKFLOW_BASE_URL_FILE",

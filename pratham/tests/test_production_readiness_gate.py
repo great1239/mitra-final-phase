@@ -104,7 +104,7 @@ def test_operations_documents_and_environment_template_are_present():
 
 def test_public_module_blueprint_is_portable_and_fail_closed():
     blueprint = yaml.safe_load(
-        _read("deploy/render.public-modules.yaml")
+        _read("render.yaml")
     )
     services = {
         service["name"]: service
@@ -125,7 +125,7 @@ def test_public_module_blueprint_is_portable_and_fail_closed():
         for service in services.values()
     )
 
-    rendered = _read("deploy/render.public-modules.yaml")
+    rendered = _read("render.yaml")
     assert "localhost" not in rendered
     assert "127.0.0.1" not in rendered
     assert "KARMA_DATABASE_URL" in rendered
