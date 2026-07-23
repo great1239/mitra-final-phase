@@ -78,8 +78,10 @@ or replay consumers.
 
 `GET /api/v1/runtime/chain` returns the command-chain model loaded from
 `contracts/runtime-command-chain.json` and enriches it with currently attached
-published capabilities, including Bucket Insight, PRANA, Karma, SETU, KESHAV,
-and SARATHI convergence consumer manifests.
+published capabilities. Historical Bucket Insight, PRANA, Karma, SETU, KESHAV,
+and SARATHI manifests remain example fixtures and are not loaded by the
+production profile. Current KESHAV integration is the conditional owner stage
+in the strict ecosystem flow.
 
 ## Failure Path
 

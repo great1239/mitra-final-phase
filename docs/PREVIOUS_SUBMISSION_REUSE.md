@@ -14,6 +14,7 @@ authority systems remain external.
 | Operational gateway negative-path discipline | failed dispatch phases and receipts | Failure stays scoped to affected attachment. |
 | Source scope and prior-submission feature catalog | `contracts/source-scope-catalog.json` and `/api/v1/runtime/source-scope` | Documents what was imported or externalized. |
 | Product exchange mailbox | product exchange envelope, inbox, and receipt APIs | Shares explicit payloads only. |
+| TANTRA evidence consumer gateway | `TantraHandoverAdapter`, four deterministic bundles, exact wire hashes, one published gateway POST | TANTRA and downstream systems retain orchestration and decision authority. |
 
 ## Externalized
 
@@ -26,4 +27,6 @@ authority systems remain external.
 ## Verification
 
 Tests cover source-scope exposure, dispatch phases, proof hashes, manifest
-dependency validation, product exchange, and boundary scans.
+dependency validation, product exchange, TANTRA handover interoperability, and
+boundary scans. See `docs/TANTRA_INTEGRATION.md` for the inclusion/exclusion
+audit.

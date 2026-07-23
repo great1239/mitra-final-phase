@@ -143,7 +143,13 @@ class RuntimeStartupManager:
         loaded: list[dict[str, Any]] = []
         for source in manifest_sources:
             manifests = source.load()
-            attachments = self.runtime.attach_many(manifests)
+            # Configured startup sources are authoritative for their product
+            # manifests. Replace a persisted prior revision atomically after
+            # the new manifest has passed runtime and transport validation.
+            attachments = self.runtime.attach_many(
+                manifests,
+                replace_existing=True,
+            )
             loaded.append(
                 {
                     "source": type(source).__name__,

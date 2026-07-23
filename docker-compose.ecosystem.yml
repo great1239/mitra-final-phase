@@ -1,0 +1,514 @@
+name: mitra-real-ecosystem
+
+x-contract-service: &contract-service
+  build:
+    context: .
+    dockerfile: integration_services/Dockerfile
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - ecosystem
+
+services:
+  bucket-redis:
+    image: redis:7.4-alpine
+    user: redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${BUCKET_REDIS_PASSWORD:?set BUCKET_REDIS_PASSWORD}
+    environment:
+      BUCKET_REDIS_PASSWORD: ${BUCKET_REDIS_PASSWORD:?set BUCKET_REDIS_PASSWORD}
+    volumes:
+      - bucket-redis-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          redis-cli --no-auth-warning -a "$${BUCKET_REDIS_PASSWORD}" ping
+          | grep -q PONG
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - ecosystem
+
+  bucket:
+    build:
+      context: ${BUCKET_CONTEXT:-../BHIV-Bucket}
+      dockerfile_inline: |
+        FROM python:3.11-slim
+        ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000
+        WORKDIR /app
+        COPY requirements.txt /app/requirements.txt
+        RUN pip install --no-cache-dir --retries 10 --timeout 120 -r /app/requirements.txt
+        COPY . /app
+        RUN mkdir -p /app/logs /data/artifacts
+        EXPOSE 8000
+        CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: ${BUCKET_MONGODB_URI:?set BUCKET_MONGODB_URI}
+      REDIS_HOST: bucket-redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${BUCKET_REDIS_PASSWORD:?set BUCKET_REDIS_PASSWORD}
+      BHIV_ARTIFACT_PATH: /data/artifacts
+      PORT: "8000"
+    volumes:
+      - bucket-artifact-data:/data/artifacts
+    ports:
+      - "127.0.0.1:8125:8000"
+    depends_on:
+      ashmit-mongo:
+        condition: service_healthy
+      bucket-redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=8));
+          assert data['status']=='healthy';
+          assert data['services']['mongodb']=='connected';
+          assert data['services']['redis']=='connected'
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 45s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - ecosystem
+
+  insightflow-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${INSIGHTFLOW_POSTGRES_USER:?set INSIGHTFLOW_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${INSIGHTFLOW_POSTGRES_PASSWORD:?set INSIGHTFLOW_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${INSIGHTFLOW_POSTGRES_DATABASE:-bhiv_registry}
+    volumes:
+      - insightflow-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - ecosystem
+
+  insightflow-registry:
+    build:
+      context: .
+      dockerfile: integration_services/insightflow-owner.Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      DATABASE_URL: >-
+        postgresql+asyncpg://${INSIGHTFLOW_POSTGRES_USER}:${INSIGHTFLOW_POSTGRES_PASSWORD}@insightflow-postgres:5432/${INSIGHTFLOW_POSTGRES_DATABASE:-bhiv_registry}
+    ports:
+      - "127.0.0.1:8123:8000"
+    depends_on:
+      insightflow-postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)
+      interval: 10s
+      timeout: 8s
+      retries: 20
+      start_period: 20s
+    networks:
+      - ecosystem
+
+  insightflow-seed:
+    build:
+      context: .
+      dockerfile: integration_services/insightflow-owner.Dockerfile
+    restart: "no"
+    command: ["python", "/app/seed_insightflow_key.py"]
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      DATABASE_URL: >-
+        postgresql+asyncpg://${INSIGHTFLOW_POSTGRES_USER}:${INSIGHTFLOW_POSTGRES_PASSWORD}@insightflow-postgres:5432/${INSIGHTFLOW_POSTGRES_DATABASE:-bhiv_registry}
+      INSIGHTFLOW_REGISTRY_API_KEY: ${INSIGHTFLOW_REGISTRY_API_KEY:?set INSIGHTFLOW_REGISTRY_API_KEY}
+    depends_on:
+      insightflow-registry:
+        condition: service_healthy
+    networks:
+      - ecosystem
+
+  insightflow-bridge:
+    <<: *contract-service
+    command:
+      - uvicorn
+      - integration_services.insightflow_bridge:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8024"
+    environment:
+      INSIGHTFLOW_REGISTRY_BASE_URL: http://insightflow-registry:8000
+      INSIGHTFLOW_REGISTRY_API_KEY: ${INSIGHTFLOW_REGISTRY_API_KEY:?set INSIGHTFLOW_REGISTRY_API_KEY}
+      INSIGHTFLOW_BRIDGE_API_KEY: ${INSIGHTFLOW_BRIDGE_API_KEY:?set INSIGHTFLOW_BRIDGE_API_KEY}
+    ports:
+      - "127.0.0.1:8124:8024"
+    depends_on:
+      insightflow-seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8024/health', timeout=5));
+          assert data['status']=='healthy'
+      interval: 10s
+      timeout: 8s
+      retries: 20
+
+  karma:
+    <<: *contract-service
+    command:
+      - uvicorn
+      - integration_services.karma:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8021"
+    environment:
+      KARMA_DATABASE_PATH: /data/karma.db
+      KARMA_GENESIS_HASH: ${KARMA_GENESIS_HASH:-0000000000000000000000000000000000000000000000000000000000000000}
+    volumes:
+      - karma-data:/data
+    ports:
+      - "127.0.0.1:8121:8021"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8021/health', timeout=5)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  prana:
+    <<: *contract-service
+    command:
+      - uvicorn
+      - integration_services.prana:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8022"
+    environment:
+      PRANA_STRICT_TARGET_URL: http://insightflow-bridge:8024/ingest/karma
+      PRANA_CORE_TARGET_URL: http://insightflow-bridge:8024/ingest/core
+      PRANA_SIGNAL_TARGET_URL: http://insightflow-bridge:8024/ingest/core
+      PRANA_TARGET_API_KEY: ${INSIGHTFLOW_BRIDGE_API_KEY:?set INSIGHTFLOW_BRIDGE_API_KEY}
+    ports:
+      - "127.0.0.1:8122:8022"
+    depends_on:
+      insightflow-bridge:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8022/health', timeout=5));
+          assert data['status']=='healthy'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  uniguru:
+    profiles: ["uniguru-product"]
+    build:
+      context: ${UNIGURU_CONTEXT:-../uniguru_ai}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${UNIGURU_ENV_FILE:-../uniguru_ai/.env.local}
+    environment:
+      UNIGURU_HOST: 0.0.0.0
+      UNIGURU_PORT: "8000"
+      UNIGURU_WORKERS: "1"
+      EXTERNAL_API_SECRET_KEY: ${MITRA_PRODUCT_UNIGURU_RAG_TOKEN:?set MITRA_PRODUCT_UNIGURU_RAG_TOKEN}
+      SUPABASE_URL: ${UNIGURU_SUPABASE_URL:?configure UniGuru Supabase before enabling this profile}
+      SUPABASE_ANON_KEY: ${UNIGURU_SUPABASE_ANON_KEY:?configure UniGuru Supabase before enabling this profile}
+    ports:
+      - "127.0.0.1:8131:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10));
+          assert data['status']=='ok'
+      interval: 15s
+      timeout: 12s
+      retries: 30
+      start_period: 60s
+    networks:
+      - ecosystem
+
+  trade-bot:
+    profiles: ["tradebot-product"]
+    build:
+      context: ${TRADEBOT_BACKEND_CONTEXT:-../trade-bot-main/backend}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      HFT2_BACKEND_URL: ""
+      CORS_ALLOW_ALL: "false"
+    ports:
+      - "127.0.0.1:8130:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/tools/health', timeout=10)
+      interval: 15s
+      timeout: 12s
+      retries: 30
+      start_period: 90s
+    networks:
+      - ecosystem
+
+  keshav:
+    build:
+      context: ${KESHAV_CONTEXT:-../KESHAV-4}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "5000"
+      DEBUG: "false"
+      MAX_CONTENT_MB: "1"
+    ports:
+      - "127.0.0.1:8126:5000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5));
+          assert data['status']=='OK';
+          assert data['service']=='KESHAV'
+      interval: 10s
+      timeout: 8s
+      retries: 20
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - ecosystem
+
+  raj:
+    <<: *contract-service
+    command:
+      - uvicorn
+      - integration_services.raj:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8020"
+    environment:
+      RAJ_API_KEY: ${RAJ_API_KEY:-}
+      RAJ_ENDPOINT_OVERRIDES_JSON: ${RAJ_ENDPOINT_OVERRIDES_JSON:-{"https://pratham-bhiv-bucket.onrender.com":"http://bucket:8000","https://uni-guru.in":"http://uniguru:8000","https://trade-bot-api.onrender.com":"http://trade-bot:8000"}}
+      MITRA_PRODUCT_UNIGURU_BEARER_TOKEN: ${MITRA_PRODUCT_UNIGURU_BEARER_TOKEN:-}
+      MITRA_PRODUCT_UNIGURU_RAG_TOKEN: ${MITRA_PRODUCT_UNIGURU_RAG_TOKEN:-}
+    ports:
+      - "127.0.0.1:8120:8020"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8020/healthz', timeout=5));
+          assert data['service']=='workflow-executor'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  ashmit-mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${ASHMIT_MONGO_ROOT_USER:?set ASHMIT_MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${ASHMIT_MONGO_ROOT_PASSWORD:?set ASHMIT_MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${ASHMIT_DATABASE_NAME:-mitra_production}
+    volumes:
+      - ashmit-mongo-data:/data/db
+    ports:
+      - "127.0.0.1:8111:27017"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet
+          --username "$${MONGO_INITDB_ROOT_USERNAME}"
+          --password "$${MONGO_INITDB_ROOT_PASSWORD}"
+          --authenticationDatabase admin
+          --eval "quit(db.adminCommand({ping:1}).ok ? 0 : 2)"
+      interval: 10s
+      timeout: 8s
+      retries: 30
+      start_period: 20s
+    networks:
+      - ecosystem
+
+  ashmit:
+    build:
+      context: ${ASHMIT_BACKEND_CONTEXT:-../Ashmit-Mitra-T42/backend}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ENV: production
+      ENVIRONMENT: production
+      API_KEY: ${ASHMIT_API_KEY:?set ASHMIT_API_KEY}
+      JWT_SECRET_KEY: ${ASHMIT_JWT_SECRET_KEY:?set ASHMIT_JWT_SECRET_KEY}
+      MONGODB_URI: ${ASHMIT_MONGODB_URI:?set ASHMIT_MONGODB_URI}
+      DATABASE_NAME: ${ASHMIT_DATABASE_NAME:-mitra_production}
+      BUCKET_MONGO_DATABASE: ${ASHMIT_DATABASE_NAME:-mitra_production}
+      BUCKET_MONGO_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8110:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/system', timeout=5));
+          assert data['bucket']['mongo_connected'] is True;
+          assert data['bucket']['audit_active'] is True
+      interval: 10s
+      timeout: 8s
+      retries: 25
+      start_period: 60s
+    networks:
+      - ecosystem
+
+  mitra:
+    build: .
+    restart: unless-stopped
+    environment:
+      MITRA_COMPANION_DATA_ROOT: /data
+      MITRA_COMPANION_DATABASE_PATH: /data/companion-runtime.db
+      MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/production
+      MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS: "false"
+      MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS: "false"
+      MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS: "false"
+      MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS: "false"
+      MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS: "true"
+      MITRA_COMPANION_ENVIRONMENT: production
+      MITRA_COMPANION_OTEL_ENABLED: "false"
+      MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON: ${MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON:-{"https://uni-guru.in":"http://uniguru:8000","https://trade-bot-api.onrender.com":"http://trade-bot:8000"}}
+      MITRA_ECOSYSTEM_TIMEOUT_SECONDS: "120"
+      MITRA_RAJ_WORKFLOW_BASE_URL: http://raj:8020
+      MITRA_RAJ_API_KEY: ${RAJ_API_KEY:-}
+      MITRA_BHIV_ASHMIT_BASE_URL: http://ashmit:8000
+      MITRA_BHIV_ASHMIT_API_KEY: ${ASHMIT_API_KEY:?set ASHMIT_API_KEY}
+      MITRA_BHIV_BUCKET_BASE_URL: http://bucket:8000
+      MITRA_BHIV_KESHAV_BASE_URL: http://keshav:5000
+      MITRA_BHIV_KARMA_BASE_URL: http://karma:8021
+      MITRA_BHIV_KARMA_PREVIOUS_HASH: ${KARMA_GENESIS_HASH:-0000000000000000000000000000000000000000000000000000000000000000}
+      MITRA_BHIV_PRANA_BASE_URL: http://prana:8022
+      MITRA_BHIV_INSIGHTFLOW_INGEST_URL: http://insightflow-bridge:8024/ingest/execution
+      MITRA_BHIV_INSIGHTFLOW_API_KEY: ${INSIGHTFLOW_BRIDGE_API_KEY:?set INSIGHTFLOW_BRIDGE_API_KEY}
+      MITRA_CENTRAL_DEPOSITORY_BASE_URL: http://bucket:8000
+      MITRA_PRODUCT_UNIGURU_BEARER_TOKEN: ${MITRA_PRODUCT_UNIGURU_BEARER_TOKEN:-}
+      MITRA_PRODUCT_UNIGURU_RAG_TOKEN: ${MITRA_PRODUCT_UNIGURU_RAG_TOKEN:-}
+    volumes:
+      - mitra-ecosystem-data:/data
+    ports:
+      - "127.0.0.1:8190:8090"
+    depends_on:
+      ashmit:
+        condition: service_healthy
+      bucket:
+        condition: service_healthy
+      keshav:
+        condition: service_healthy
+      karma:
+        condition: service_healthy
+      prana:
+        condition: service_healthy
+      raj:
+        condition: service_healthy
+      insightflow-bridge:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8090/ready', timeout=5)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - ecosystem
+
+volumes:
+  ashmit-mongo-data:
+  bucket-artifact-data:
+  bucket-redis-data:
+  insightflow-postgres-data:
+  karma-data:
+  mitra-ecosystem-data:
+
+networks:
+  ecosystem:
+    name: mitra-real-ecosystem

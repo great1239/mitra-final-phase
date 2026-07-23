@@ -1,0 +1,182 @@
+{
+  "evidence_status": "LIVE_PUBLIC_PERSISTENCE_EVIDENCE",
+  "simulation": false,
+  "storage_executed": true,
+  "validated_at_utc": "2026-07-23T09:27:09.5970031Z",
+  "bucket_base_url": "https://pratham-bhiv-bucket.onrender.com",
+  "topology": {
+    "web_service": "Render Free",
+    "runtime_state": "Render Key Value Free",
+    "artifact_ledger": "MongoDB Atlas",
+    "artifact_backend": "mongodb",
+    "secrets_recorded": false
+  },
+  "initial_health": {
+    "status": "healthy",
+    "artifact_count": 0,
+    "last_hash": null,
+    "mongodb": "connected",
+    "redis": "connected",
+    "append_only_storage": "active"
+  },
+  "append": {
+    "request": {
+      "method": "POST",
+      "url": "https://pratham-bhiv-bucket.onrender.com/bucket/artifact",
+      "body": {
+        "artifact_id": "mitra-persistence-9cb0e1b3fb144a978531dc32b627a257",
+        "trace_id": "trace-f0d7314bfa8f46f6b09e444cce655b3b",
+        "timestamp_utc": "2026-07-23T09:27:09.5970031Z",
+        "schema_version": "1.0.0",
+        "source_module_id": "mitra-runtime",
+        "artifact_type": "integration_validation",
+        "parent_hash": null,
+        "payload": {
+          "runtime": "Mitra",
+          "attached_products": [
+            "UniGuru",
+            "Samruddhi"
+          ],
+          "validation": "personal-persistent-bucket",
+          "environment": "render-hobby"
+        }
+      }
+    },
+    "response": {
+      "success": true,
+      "artifact_id": "mitra-persistence-9cb0e1b3fb144a978531dc32b627a257",
+      "hash": "8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca",
+      "parent_hash": null,
+      "timestamp": "2026-07-23T09:27:09.5970031Z",
+      "storage_type": "append_only",
+      "message": "Artifact stored successfully in append-only log"
+    }
+  },
+  "pre_restart_readback": {
+    "artifact": {
+      "artifact_id": "mitra-persistence-9cb0e1b3fb144a978531dc32b627a257",
+      "trace_id": "trace-f0d7314bfa8f46f6b09e444cce655b3b",
+      "timestamp_utc": "2026-07-23T09:27:09.5970031Z",
+      "schema_version": "1.0.0",
+      "source_module_id": "mitra-runtime",
+      "artifact_type": "integration_validation",
+      "parent_hash": null,
+      "payload": {
+        "runtime": "Mitra",
+        "attached_products": [
+          "UniGuru",
+          "Samruddhi"
+        ],
+        "validation": "personal-persistent-bucket",
+        "environment": "render-hobby"
+      }
+    },
+    "storage_type": "append_only",
+    "chain_verified": true
+  },
+  "canonical_hash_verification": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted keys, compact JSON separators, UTF-8",
+    "recomputed_hash": "8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca",
+    "matches_server": true
+  },
+  "pre_restart_replay": {
+    "valid": true,
+    "artifact_count": 1,
+    "last_hash": "8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca",
+    "storage_type": "append_only",
+    "message": "Chain integrity validation PASSED - no tampering detected"
+  },
+  "restart": {
+    "trigger": "Render Restart service",
+    "confirmation": "Your server has successfully restarted"
+  },
+  "post_restart": {
+    "health": {
+      "status": "healthy",
+      "artifact_count": 1,
+      "last_hash": "8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca",
+      "mongodb": "connected",
+      "redis": "connected",
+      "append_only_storage": "active"
+    },
+    "readback": {
+      "artifact": {
+        "artifact_id": "mitra-persistence-9cb0e1b3fb144a978531dc32b627a257",
+        "trace_id": "trace-f0d7314bfa8f46f6b09e444cce655b3b",
+        "timestamp_utc": "2026-07-23T09:27:09.5970031Z",
+        "schema_version": "1.0.0",
+        "source_module_id": "mitra-runtime",
+        "artifact_type": "integration_validation",
+        "parent_hash": null,
+        "payload": {
+          "runtime": "Mitra",
+          "attached_products": [
+            "UniGuru",
+            "Samruddhi"
+          ],
+          "validation": "personal-persistent-bucket",
+          "environment": "render-hobby"
+        }
+      },
+      "storage_type": "append_only",
+      "chain_verified": true
+    },
+    "replay": {
+      "valid": true,
+      "artifact_count": 1,
+      "last_hash": "8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca",
+      "storage_type": "append_only",
+      "message": "Chain integrity validation PASSED - no tampering detected"
+    }
+  },
+  "hosted_mitra_preflight": {
+    "mitra_base_url": "https://mitra-live-runtime-sprint.vercel.app",
+    "execution_id": "eco_325bd69eeeb44eea837bff952b228553",
+    "trace_id": "1d40923033911bf380fa78063ab8ba9fa1ea0d228bd0ba22230facae8b3e9d31",
+    "execution_status": "FAILED",
+    "stage": "dependency-preflight",
+    "preflight_status": "blocked",
+    "bucket": {
+      "status": "accepted",
+      "http_status": 200,
+      "url": "https://pratham-bhiv-bucket.onrender.com/health",
+      "response_status": "healthy",
+      "mongodb": "connected",
+      "redis": "connected",
+      "artifact_count": 1,
+      "last_hash": "8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca"
+    },
+    "central_depository": {
+      "status": "accepted",
+      "http_status": 200,
+      "url": "https://pratham-bhiv-bucket.onrender.com/bucket/latest-hash",
+      "artifact_count": 1,
+      "last_hash": "8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca"
+    },
+    "pending_modules": [
+      "raj",
+      "ashmit",
+      "karma",
+      "prana",
+      "insightflow"
+    ],
+    "unhealthy_modules": []
+  },
+  "verification": {
+    "health_http_200": true,
+    "append_http_200": true,
+    "append_only": true,
+    "exact_readback": true,
+    "canonical_hash_matches": true,
+    "replay_valid_before_restart": true,
+    "restart_confirmed": true,
+    "mongodb_reconnected": true,
+    "redis_reconnected": true,
+    "artifact_survived_restart": true,
+    "hash_survived_restart": true,
+    "replay_valid_after_restart": true,
+    "hosted_mitra_bucket_call_accepted": true,
+    "hosted_mitra_depository_call_accepted": true
+  }
+}

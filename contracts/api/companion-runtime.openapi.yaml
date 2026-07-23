@@ -10,7 +10,10 @@ info:
     logic, external evidence/replay authority, certification, or Central
     Depository acceptance.
 servers:
+  - url: https://mitra-live-runtime-sprint.vercel.app
+    description: User-assigned independent Mitra host
   - url: http://localhost:8090
+    description: Local development runtime
 paths:
   /health:
     get:
@@ -214,7 +217,102 @@ paths:
       operationId: getRuntimeIntegrations
       responses:
         "200":
-          description: Configured BHIV ecosystem integration endpoints and contract surfaces
+          description: Configured BHIV contracts plus TANTRA package and gateway handover readiness
+  /api/v1/runtime/integrations/tantra/deliveries:
+    get:
+      operationId: getTantraDeliveries
+      parameters:
+        - in: query
+          name: dispatch_id
+          schema: {type: string}
+        - in: query
+          name: status
+          schema: {type: string}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+      responses:
+        "200":
+          description: Durable TANTRA delivery states without request bodies or lease tokens
+  /api/v1/runtime/integrations/tantra/process:
+    post:
+      operationId: processTantraDeliveries
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Claimed delivery attempts and their actual gateway responses
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/runtime/integrations/tantra/health:
+    get:
+      operationId: getTantraGatewayHealth
+      responses:
+        "200":
+          description: Actual published gateway health response and retained observation identifier
+  /api/v1/runtime/integrations/tantra/reconcile:
+    post:
+      operationId: reconcileTantraTraces
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Actual remote trace responses with continuity and latency checks
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/runtime/continuity:
+    get:
+      operationId: getRuntimeContinuity
+      responses:
+        "200":
+          description: Latest persisted reconstruction, lineage, trace, dependency, lease, and delivery checks
+  /api/v1/runtime/continuity/check:
+    post:
+      operationId: checkRuntimeContinuity
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 25}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Newly executed continuity checks over immutable runtime data
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/runtime/dependencies/health:
+    get:
+      operationId: getRuntimeDependencyHealth
+      parameters:
+        - in: query
+          name: product_id
+          schema: {type: string}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+      responses:
+        "200":
+          description: Historical observed dependency health and latency patterns
   /api/v1/runtime/analysis:
     post:
       operationId: createRuntimeAnalysis
@@ -227,6 +325,106 @@ paths:
       responses:
         "200":
           description: Assignment, user expectation, product profile, and capability fit analysis
+        "422":
+          description: Invalid or incompatible contract
+  /api/v1/ecosystem/readiness:
+    get:
+      operationId: getEcosystemReadiness
+      responses:
+        "200":
+          description: Configuration status for every required owner contract
+  /api/v1/ecosystem/contracts:
+    get:
+      operationId: getEcosystemContracts
+      responses:
+        "200":
+          description: Published owner contracts, ordering, and authority boundaries
+  /api/v1/ecosystem/execute:
+    post:
+      operationId: executeEcosystemRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/ecosystem-execution.schema.json
+      responses:
+        "201":
+          description: Completed strict Raj, conditional KESHAV, and Central Depository execution checkpoints
+        "409":
+          description: Session, product, or idempotency conflict
+        "422":
+          description: No uniquely matching attached capability or invalid contract
+        "502":
+          description: An owner contract failed or rejected the execution
+        "503":
+          description: One or more required owner contracts are not configured
+  /api/v1/ecosystem/executions:
+    get:
+      operationId: listEcosystemExecutions
+      parameters:
+        - in: query
+          name: status
+          schema: {type: string}
+        - in: query
+          name: session_id
+          schema: {type: string}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+      responses:
+        "200":
+          description: Durable ecosystem executions
+  /api/v1/ecosystem/executions/{execution_id}:
+    get:
+      operationId: getEcosystemExecution
+      parameters:
+        - $ref: "#/components/parameters/ExecutionId"
+      responses:
+        "200":
+          description: Execution, stage checkpoints, attempts, and lineage
+        "404":
+          description: Ecosystem execution not found
+  /api/v1/ecosystem/executions/{execution_id}/recover:
+    post:
+      operationId: recoverEcosystemExecution
+      parameters:
+        - $ref: "#/components/parameters/ExecutionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VersionedContract"
+      responses:
+        "200":
+          description: Execution resumed from its first incomplete durable stage
+        "404":
+          description: Ecosystem execution not found
+        "502":
+          description: Recovery reached an owner contract that still fails
+  /api/v1/ecosystem/executions/{execution_id}/replay:
+    get:
+      operationId: getEcosystemReplay
+      parameters:
+        - $ref: "#/components/parameters/ExecutionId"
+      responses:
+        "200":
+          description: Portable immutable replay package and clean-state validation
+        "404":
+          description: Ecosystem execution not found
+  /api/v1/ecosystem/replay/validate:
+    post:
+      operationId: validateEcosystemReplay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/ecosystem-replay-validation.schema.json
+      responses:
+        "200":
+          description: Offline reconstruction using only the supplied package
         "422":
           description: Invalid or incompatible contract
   /api/v1/companion/messages:
@@ -820,6 +1018,20 @@ paths:
           description: Deterministic reconstruction package from immutable dispatch artifacts
         "404":
           description: Dispatch not found
+  /api/v1/reconstruction/validate:
+    post:
+      operationId: validateReconstructionPackage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconstructionValidationRequest"
+      responses:
+        "200":
+          description: Clean-state validation of an exported immutable reconstruction package
+        "422":
+          description: Invalid or incompatible contract
 components:
   schemas:
     VersionedContract:
@@ -835,6 +1047,16 @@ components:
         contract_version: {const: 1.0.0}
         runtime_version: {const: 1.0.0}
         compatibility_version: {const: mitra-companion-1}
+    ReconstructionValidationRequest:
+      allOf:
+        - $ref: "#/components/schemas/VersionedContract"
+        - type: object
+          required:
+            - package
+          properties:
+            package:
+              type: object
+              additionalProperties: true
   parameters:
     SessionId:
       in: path
@@ -844,5 +1066,10 @@ components:
     ProductId:
       in: path
       name: product_id
+      required: true
+      schema: {type: string}
+    ExecutionId:
+      in: path
+      name: execution_id
       required: true
       schema: {type: string}

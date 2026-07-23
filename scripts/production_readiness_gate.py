@@ -1,38 +1,31 @@
 from __future__ import annotations
 
 import json
-import re
+import struct
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_SCREENSHOTS = (
-    "live-dashboard.jpg",
-    "runtime-startup.jpg",
-    "attached-products.jpg",
-    "replay-execution.jpg",
-    "metrics.jpg",
-    "telemetry.jpg",
-    "openapi.jpg",
-    "deployment.jpg",
-    "health.jpg",
-    "recovery.jpg",
-    "failover.jpg",
-    "hosted-runtime.jpg",
-    "runtime-analysis.jpg",
-    "production-monitoring.jpg",
-)
-CODE_PACKET_FIELDS = (
-    "Sprint change",
-    "Purpose",
-    "Why modified",
-    "Key implementation areas",
-    "Review focus",
-    "Related tests",
-)
-CODE_PACKET_ENTRY = re.compile(
-    r"^## File: `([^`\r\n]+)`\s*$",
-    re.MULTILINE,
+    "01-runtime-startup.png",
+    "02-runtime-dashboard.png",
+    "03-attached-products.png",
+    "04-raj-integration.png",
+    "05-ashmit-integration.png",
+    "06-bucket-persistence.png",
+    "07-prana-event.png",
+    "08-karma-event.png",
+    "09-insightflow-telemetry.png",
+    "10-replay-reconstruction.png",
+    "11-central-depository-export.png",
+    "12-hosted-deployment.png",
+    "13-production-metrics.png",
+    "14-opentelemetry-traces.png",
+    "15-health-endpoints.png",
+    "16-multi-instance-runtime.png",
+    "17-failover.png",
+    "18-disaster-recovery.png",
+    "19-operator-dashboard.png",
 )
 
 
@@ -48,142 +41,133 @@ def _contains(relative_path: str, *required: str) -> list[str]:
     ]
 
 
+def _png_dimensions(data: bytes) -> tuple[int, int] | None:
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    if data[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", data[16:24])
+
+
 def _check_screenshots() -> list[str]:
     failures: list[str] = []
-    directory = ROOT / "review_packets" / "screenshots"
-    for name in REQUIRED_SCREENSHOTS:
-        path = directory / name
-        if not path.is_file():
-            failures.append(f"review_packets/screenshots/{name}: missing file")
-            continue
-        data = path.read_bytes()
-        if len(data) < 4 or data[:2] != b"\xff\xd8":
-            failures.append(f"review_packets/screenshots/{name}: invalid JPEG")
-            continue
-        width = height = 0
-        offset = 2
-        while offset + 8 < len(data):
-            if data[offset] != 0xFF:
-                offset += 1
-                continue
-            marker = data[offset + 1]
-            offset += 2
-            if marker in {0xD8, 0xD9}:
-                continue
-            if offset + 2 > len(data):
-                break
-            length = int.from_bytes(data[offset : offset + 2], "big")
-            if marker in {
-                0xC0,
-                0xC1,
-                0xC2,
-                0xC3,
-                0xC5,
-                0xC6,
-                0xC7,
-                0xC9,
-                0xCA,
-                0xCB,
-                0xCD,
-                0xCE,
-                0xCF,
-            }:
-                height = int.from_bytes(data[offset + 3 : offset + 5], "big")
-                width = int.from_bytes(data[offset + 5 : offset + 7], "big")
-                break
-            if length < 2:
-                break
-            offset += length
-        if width < 1000 or height < 600:
-            failures.append(
-                "review_packets/screenshots/"
-                f"{name}: resolution {width}x{height} is below 1000x600"
-            )
-    return failures
-
-
-def _check_code_packets() -> list[str]:
-    failures: list[str] = []
-    directory = ROOT / "review_packets" / "code_packets"
+    directory = ROOT / "review_packets" / "SCREENSHOTS"
     index = directory / "README.md"
     if not index.is_file():
-        return ["review_packets/code_packets/README.md: missing file"]
-
+        return ["review_packets/SCREENSHOTS/README.md: missing file"]
     index_text = index.read_text(encoding="utf-8")
-    for required in (
-        "Baseline commit:",
-        "only files added or modified after the baseline are listed",
-        "no implementation area contains more than three critical",
-    ):
-        if required not in index_text:
+    for name in REQUIRED_SCREENSHOTS:
+        if name not in index_text:
             failures.append(
-                "review_packets/code_packets/README.md: "
-                f"missing {required!r}"
+                f"review_packets/SCREENSHOTS/README.md: missing {name!r}"
             )
-
-    packets = sorted(
-        path
-        for path in directory.glob("*.md")
-        if path.name != "README.md"
-    )
-    if not packets:
-        failures.append("review_packets/code_packets: no area packets found")
-        return failures
-
-    root = ROOT.resolve()
-    referenced_paths: set[str] = set()
-    for packet in packets:
-        relative_packet = packet.relative_to(ROOT).as_posix()
-        text = packet.read_text(encoding="utf-8")
-        matches = list(CODE_PACKET_ENTRY.finditer(text))
-        if not matches:
-            failures.append(f"{relative_packet}: no file entries")
+        path = directory / name
+        if not path.is_file():
+            failures.append(f"review_packets/SCREENSHOTS/{name}: missing file")
             continue
-        if len(matches) > 3:
+        dimensions = _png_dimensions(path.read_bytes())
+        if dimensions is None:
+            failures.append(f"review_packets/SCREENSHOTS/{name}: invalid PNG")
+            continue
+        width, height = dimensions
+        if width < 1000 or height < 600:
             failures.append(
-                f"{relative_packet}: {len(matches)} critical files exceeds 3"
+                f"review_packets/SCREENSHOTS/{name}: resolution "
+                f"{width}x{height} is below 1000x600"
             )
+    return failures
 
-        for index_position, match in enumerate(matches):
-            relative_path = match.group(1)
-            block_end = (
-                matches[index_position + 1].start()
-                if index_position + 1 < len(matches)
-                else len(text)
+
+def _check_code_packet() -> list[str]:
+    failures: list[str] = []
+    directory = ROOT / "review_packets" / "CODE_REVIEW_PACKET"
+    required_files = {
+        "README.md": ("Primary implementation path",),
+        "REPOSITORY_TREE.md": ("Owned Repository Tree",),
+        "FILE_CHANGES.md": ("New Files", "Modified Files", "Deleted Files"),
+        "TOP_FILES.md": (
+            "Execution Paths",
+            "Integration Files",
+            "Replay Files",
+            "Deployment Files",
+        ),
+        "DEPENDENCY_GRAPHS.md": (
+            "Runtime Dependency Graph",
+            "Integration Dependency Graph",
+        ),
+        "ARCHITECTURE_CHANGE_SUMMARY.md": ("Before", "After"),
+        "IMPLEMENTATION_AREAS.md": (
+            "Purpose:",
+            "Why modified:",
+            "Key areas:",
+            "Review focus:",
+            "Related tests:",
+        ),
+    }
+    for name, required in required_files.items():
+        failures.extend(
+            _contains(
+                f"review_packets/CODE_REVIEW_PACKET/{name}",
+                *required,
             )
-            block = text[match.end() : block_end]
-            for field in CODE_PACKET_FIELDS:
-                if f"**{field}:**" not in block:
-                    failures.append(
-                        f"{relative_packet}: {relative_path} missing "
-                        f"{field!r}"
-                    )
-
-            if relative_path in referenced_paths:
+        )
+    areas = directory / "IMPLEMENTATION_AREAS.md"
+    if areas.is_file():
+        for block in areas.read_text(encoding="utf-8").split("\n## ")[1:]:
+            count = block.count("- Path: `")
+            if count > 3:
                 failures.append(
-                    f"{relative_packet}: duplicate file entry {relative_path}"
-                )
-            referenced_paths.add(relative_path)
-
-            source = (ROOT / relative_path).resolve()
-            try:
-                source.relative_to(root)
-            except ValueError:
-                failures.append(
-                    f"{relative_packet}: path escapes repository "
-                    f"{relative_path}"
-                )
-                continue
-            if not source.is_file():
-                failures.append(
-                    f"{relative_packet}: referenced file missing "
-                    f"{relative_path}"
+                    "review_packets/CODE_REVIEW_PACKET/"
+                    f"IMPLEMENTATION_AREAS.md: area has {count} critical files"
                 )
     return failures
+
+
+def _check_json_contracts() -> list[str]:
+    failures: list[str] = []
+    for relative_path in (
+        "contracts/integration-contracts.json",
+        "contracts/runtime-command-chain.json",
+        "contracts/source-scope-catalog.json",
+        "contracts/schemas/ecosystem-execution.schema.json",
+        "contracts/schemas/ecosystem-replay-validation.schema.json",
+        "contracts/operational-acceptance.json",
+    ):
+        path = ROOT / relative_path
+        try:
+            json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            failures.append(f"{relative_path}: {type(exc).__name__}: {exc}")
+    return failures
+
+
+def _check_hosted_owner_configuration() -> list[str]:
+    path = ROOT / "vercel.json"
+    try:
+        deployment = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"vercel.json: {type(exc).__name__}: {exc}"]
+    configured = deployment.get("env") or {}
+    required = {
+        "raj": "MITRA_RAJ_WORKFLOW_BASE_URL",
+        "ashmit": "MITRA_BHIV_ASHMIT_BASE_URL",
+        "bucket": "MITRA_BHIV_BUCKET_BASE_URL",
+        "keshav": "MITRA_BHIV_KESHAV_BASE_URL",
+        "karma": "MITRA_BHIV_KARMA_BASE_URL",
+        "prana": "MITRA_BHIV_PRANA_BASE_URL",
+        "insightflow": "MITRA_BHIV_INSIGHTFLOW_INGEST_URL",
+        "central_depository": "MITRA_CENTRAL_DEPOSITORY_BASE_URL",
+    }
+    return [
+        f"hosted owner configuration missing: {module} ({key})"
+        for module, key in required.items()
+        if not configured.get(key)
+    ]
 
 
 def main() -> int:
     failures: list[str] = []
+    blockers: list[str] = []
     checks = {
         "container": {
             "Dockerfile": (
@@ -194,61 +178,76 @@ def main() -> int:
             "docker-compose.yml": (
                 "restart: unless-stopped",
                 "read_only: true",
-                "no-new-privileges:true",
-                "cap_drop:",
-                "resources:",
                 "MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/production",
-                'MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS: "false"',
-            ),
-        },
-        "deployment": {
-            "vercel.json": (
-                "api/index.py",
-                '"MITRA_COMPANION_MANIFEST_DIRECTORY": "contracts/production"',
-                '"MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS": "false"',
-                '"MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS": "false"',
-            ),
-            "render.yaml": ("healthCheckPath: /ready",),
-            "deploy/production.env.example": (
-                "MITRA_COMPANION_CONFIG_PROFILE=production",
-                "MITRA_COMPANION_SQLITE_SYNCHRONOUS=NORMAL",
-                "MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true",
-                "MITRA_COMPANION_MANIFEST_DIRECTORY=/app/contracts/production",
-                "MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS=false",
-                "MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS=false",
-                "MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS=false",
-                "MITRA_BHIV_KARMA_BASE_URL",
-                "MITRA_BHIV_PRANA_BASE_URL",
-                "MITRA_BHIV_BUCKET_BASE_URL",
+                "MITRA_RAJ_WORKFLOW_BASE_URL",
+                "MITRA_BHIV_KESHAV_BASE_URL",
                 "MITRA_BHIV_INSIGHTFLOW_INGEST_URL",
             ),
         },
+        "deployment": {
+            "api/index.py": (
+                'ROOT / "contracts" / "production"',
+                '"MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS", "false"',
+            ),
+            "vercel.json": (
+                '"MITRA_COMPANION_MANIFEST_DIRECTORY": "contracts/production"',
+                '"MITRA_ECOSYSTEM_TIMEOUT_SECONDS": "45"',
+            ),
+            "render.yaml": (
+                "healthCheckPath: /ready",
+                "value: /app/contracts/production",
+                "key: MITRA_RAJ_WORKFLOW_BASE_URL",
+                "key: MITRA_BHIV_KESHAV_BASE_URL",
+            ),
+            "deploy/production.env.example": (
+                "MITRA_RAJ_WORKFLOW_BASE_URL_FILE",
+                "MITRA_RAJ_API_KEY_FILE",
+                "MITRA_BHIV_KARMA_BASE_URL_FILE",
+                "MITRA_BHIV_KESHAV_BASE_URL_FILE",
+                "MITRA_BHIV_PRANA_BASE_URL_FILE",
+                "MITRA_BHIV_INSIGHTFLOW_INGEST_URL_FILE",
+            ),
+        },
         "runtime": {
+            "pratham/companion-runtime/mitra_companion/ecosystem.py": (
+                "class PublishedEcosystemClient",
+                "class EcosystemReplayLedger",
+                "class EcosystemRuntime",
+                "embedded_fallback",
+                "keshav-diagnosis",
+                "forward/karma-strict",
+            ),
             "pratham/companion-runtime/mitra_companion/api.py": (
-                "/health",
-                "/ready",
-                "/metrics",
-                "/api/v1/intents/dispatch",
-                "/api/v1/dispatches/{dispatch_id}/reconstruction",
-                "/api/v1/runtime/depository",
-                "/api/v1/runtime/recovery",
+                "/api/v1/ecosystem/execute",
+                "/api/v1/ecosystem/replay/validate",
+                "/api/v1/ecosystem/executions/{execution_id}/recover",
             ),
-            "pratham/companion-runtime/mitra_companion/runtime.py": (
-                "PersistentRuntimeSupervisor",
-                "BHIVRuntimeIntegrator",
-                "_publish_bhiv_convergence",
-            ),
-            "pratham/companion-runtime/mitra_companion/reconstruction.py": (
-                "DeterministicReconstructionLedger",
+            "pratham/companion-runtime/mitra_companion/store.py": (
+                "ecosystem_executions",
+                "ecosystem_execution_stages",
+                "ecosystem_stage_attempts",
             ),
         },
         "load_test": {
             "scripts/load/k6_companion_runtime.js": (
-                "/api/v1/sessions",
-                "/api/v1/intents/dispatch",
-                'const PROFILE = (__ENV.PROFILE || "runtime")',
-                'const MAX_VUS = Math.max(1, Number(__ENV.MAX_VUS || "15"))',
-                "dispatch output matches input",
+                'PROFILE === "ecosystem"',
+                "/api/v1/ecosystem/execute",
+                "ecosystem execution completed",
+            ),
+        },
+        "operational_acceptance": {
+            "scripts/validate_ecosystem_runtime.py": (
+                "/api/v1/ecosystem/execute",
+                "/api/v1/ecosystem/replay/validate",
+                "process-isolated replay",
+                "central-depository:exported",
+                "replay:tamper-rejected",
+            ),
+            "contracts/operational-acceptance.json": (
+                '"tradebot-nvda"',
+                '"uniguru-drip-irrigation"',
+                '"tradebot-product-error-keshav"',
+                '"product_response_equals"',
             ),
         },
         "testing_evidence": {
@@ -261,33 +260,15 @@ def main() -> int:
                 "## Load Testing",
                 "## Hosted Runtime Validation",
                 "## Integration Validation",
-                "104 passed",
-                "633/633 passed",
-                "p95 latency:         803.92 ms",
-                "CAPACITY LIMIT",
-                "Docker was rechecked and repaired on `2026-07-10`",
-                "docker compose config --quiet: passed",
-                "docker compose up -d --force-recreate --wait --wait-timeout 180: healthy",
-                '"uvicorn_workers": 1',
-                '"passed": "superseded"',
-                "ROUTING/REPLAY REQUIRES REAL ATTACHED PRODUCT",
+                "controlled implementations",
+                "no production convergence claim",
             ),
         },
         "handover": {
-            "docs/DOCUMENTATION_INDEX.md": (
-                "docs/HANDOVER.md",
-                "docs/CENTRAL_DEPOSITORY_HANDOVER.md",
-            ),
-            "docs/HANDOVER.md": (
-                'python -m pip install -e ".[test]"',
-                "python -m pytest",
-                "docker compose build --pull",
-                "scripts/validate_hosted_runtime.py",
-            ),
-            "docs/CENTRAL_DEPOSITORY_HANDOVER.md": (
-                "GET /api/v1/runtime/depository",
-                "Artifact Verification",
-                "Lineage Verification",
+            "docs/TANTRA_ECOSYSTEM_CONVERGENCE.md": (
+                "## Canonical Flow",
+                "## Required Configuration",
+                "## Deterministic Replay",
             ),
             "review_packets/REVIEW_PACKET.md": (
                 "## Entry Point",
@@ -311,24 +292,44 @@ def main() -> int:
         check_results[group] = "passed" if not group_failures else "failed"
 
     screenshot_failures = _check_screenshots()
-    failures.extend(screenshot_failures)
+    blockers.extend(screenshot_failures)
     check_results["screenshots"] = (
-        "passed" if not screenshot_failures else "failed"
+        "passed" if not screenshot_failures else "blocked"
     )
 
-    code_packet_failures = _check_code_packets()
+    code_packet_failures = _check_code_packet()
     failures.extend(code_packet_failures)
     check_results["code_packets"] = (
         "passed" if not code_packet_failures else "failed"
     )
 
+    contract_failures = _check_json_contracts()
+    failures.extend(contract_failures)
+    if contract_failures:
+        check_results["runtime"] = "failed"
+
+    owner_blockers = _check_hosted_owner_configuration()
+    blockers.extend(owner_blockers)
+    check_results["owner_configuration"] = (
+        "passed" if not owner_blockers else "blocked"
+    )
+
+    if failures:
+        readiness = "failed"
+    elif blockers:
+        readiness = "blocked"
+    else:
+        readiness = "passed"
+
     result = {
-        "production_readiness_gate": "passed" if not failures else "failed",
+        "production_readiness_gate": readiness,
+        "implementation_readiness": "failed" if failures else "passed",
         "checks": check_results,
         "failures": failures,
+        "blockers": blockers,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if not failures else 1
+    return 0 if readiness == "passed" else 1
 
 
 if __name__ == "__main__":

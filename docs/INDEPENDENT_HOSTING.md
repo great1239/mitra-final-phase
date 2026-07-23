@@ -46,9 +46,9 @@ GET  /api/companion/capabilities
 POST /api/workflow/run
 ```
 
-Those routes translate the website contract into the full Mitra connector
-flow: session continuity, capability analysis, manifest-based routing,
-dispatch, telemetry, replay reconstruction, and Central Depository export.
+Those routes preserve the existing companion contract. The final strict
+cross-owner flow is `POST /api/v1/ecosystem/execute`; the frontend can call it
+directly or proxy it under its own API when full TANTRA convergence is needed.
 
 Default hosted runtime variable:
 
@@ -82,6 +82,8 @@ Confirm these endpoints:
 /docs
 /api/v1/runtime/status
 /api/v1/runtime/integrations
+/api/v1/ecosystem/readiness
+/api/v1/ecosystem/contracts
 /api/v1/dispatches
 ```
 
@@ -113,16 +115,20 @@ show no attached products until a real module connects through
 `POST /api/v1/products/connect` or an approved manifest is added under
 `contracts/production`.
 
-Optional live BHIV endpoints:
+Required for live `POST /api/v1/ecosystem/execute` acceptance:
 
 ```text
+MITRA_RAJ_WORKFLOW_BASE_URL
+MITRA_RAJ_API_KEY
 MITRA_BHIV_ASHMIT_BASE_URL
 MITRA_BHIV_BUCKET_BASE_URL
 MITRA_BHIV_INSIGHTFLOW_INGEST_URL
+MITRA_BHIV_INSIGHTFLOW_API_KEY
 MITRA_BHIV_KARMA_BASE_URL
 MITRA_BHIV_PRANA_BASE_URL
 MITRA_BHIV_BUCKET_PARENT_HASH
 MITRA_BHIV_KARMA_PREVIOUS_HASH
+MITRA_ECOSYSTEM_TIMEOUT_SECONDS
 ```
 
 ## Evidence Boundary

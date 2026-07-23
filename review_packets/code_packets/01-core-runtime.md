@@ -11,40 +11,49 @@ recovery, companion, reconstruction, and ecosystem handoff orchestration.
 artifacts, BHIV publication, capability planning, companion continuity, and
 multi-instance recovery to the live dispatch path. Added production attachment
 policy enforcement so example, simulated, loopback, and localhost manifests are
-not accepted by default in production.
+not accepted by default in production. Added the TANTRA handover after the
+product result and portable reconstruction package are committed. Added one
+lease-owned maintenance cycle for health, delivery retry, trace reconciliation,
+continuity checks, stale-peer handling, and interrupted-task recovery.
+Supplies the validated product-origin map to the shared capability transport.
 
 **Key implementation areas:** Runtime startup and supervisor; dispatch phase
 journal; reconstruction recording; BHIV convergence publication; capability
 graph and plan; companion memory; subject-filtered depository export;
-attachment policy validation.
+attachment policy validation; shared-maintenance lease; external TANTRA
+handover ordering and telemetry; product-neutral transport configuration.
 
 **Review focus:** Transaction and failure boundaries, ordering of immutable
 artifact creation versus external publication, fail-closed integration
-behavior, production rejection of fixture manifests, and the absence of
-product-specific branching.
+behavior for configured BHIV modules, isolation of TANTRA gateway failure from
+the committed product result, production rejection of fixture manifests, and
+the absence of product-specific branching.
 
 **Related tests:** `pratham/tests/test_replay_convergence_and_graph.py`,
 `pratham/tests/test_bhiv_integrations.py`,
-`pratham/tests/test_companion_interaction.py`.
+`pratham/tests/test_companion_interaction.py`,
+`pratham/tests/test_tantra_handover.py`, and
+`pratham/tests/test_bhiv_product_integration.py`.
 
 ## File: `pratham/companion-runtime/mitra_companion/store.py`
 
 **Sprint change:** Modified
 
-**Purpose:** Provides durable SQLite state for runtime instances, dispatch
-phases, artifacts, lineage, messages, tasks, and operational recovery.
+**Purpose:** Provides durable SQLite state for runtime instances, leases,
+dispatch phases, artifacts, lineage, messages, tasks, integration deliveries,
+dependency observations, continuity snapshots, and operational recovery.
 
 **Why modified:** Added the persistence primitives required for immutable
 reconstruction, content-addressed artifacts, hash-chain lineage, companion
 continuity, and stale-instance reconciliation.
 
 **Key implementation areas:** Schema migrations; artifact and lineage tables;
-runtime heartbeat state; dispatch phase persistence; companion message and task
-records.
+atomic lease/outbox claims; fencing tokens; bounded observations; runtime
+heartbeat state; dispatch phase persistence; companion message and task records.
 
 **Review focus:** Migration safety, transaction boundaries, deterministic
-ordering, JSON serialization, lineage sequence integrity, and concurrent
-instance access.
+ordering, JSON serialization, lineage sequence integrity, stale-claim fencing,
+and concurrent instance access.
 
 **Related tests:** `pratham/tests/test_replay_convergence_and_graph.py`,
 `pratham/tests/test_production_hardening.py`,

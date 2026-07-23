@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import socket
 from dataclasses import dataclass, field
@@ -22,10 +23,18 @@ _SECRET_VALUE_KEYS: Final[set[str]] = {
     "MITRA_COMPANION_AI_ANALYSIS_URL",
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "MITRA_BHIV_ASHMIT_BASE_URL",
+    "MITRA_BHIV_ASHMIT_API_KEY",
     "MITRA_BHIV_BUCKET_BASE_URL",
     "MITRA_BHIV_INSIGHTFLOW_INGEST_URL",
+    "MITRA_BHIV_INSIGHTFLOW_API_KEY",
+    "MITRA_BHIV_KESHAV_BASE_URL",
     "MITRA_BHIV_KARMA_BASE_URL",
     "MITRA_BHIV_PRANA_BASE_URL",
+    "MITRA_CENTRAL_DEPOSITORY_BASE_URL",
+    "MITRA_RAJ_WORKFLOW_BASE_URL",
+    "MITRA_RAJ_API_KEY",
+    "MITRA_TANTRA_GATEWAY_URL",
+    "MITRA_TANTRA_API_KEY",
 }
 _DEFAULT_CORS_ALLOWED_ORIGINS: Final[list[str]] = [
     "https://mitra.blackholeinfiverse.com",
@@ -78,6 +87,39 @@ def _csv_values(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _endpoint_overrides(value: str | None) -> dict[str, str]:
+    if value is None or not value.strip():
+        return {}
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON must be valid JSON"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError(
+            "MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON must be a JSON object"
+        )
+    overrides: dict[str, str] = {}
+    for source, target in payload.items():
+        if not isinstance(source, str) or not isinstance(target, str):
+            raise ValueError(
+                "MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON keys and values "
+                "must be strings"
+            )
+        source = source.strip().rstrip("/")
+        target = target.strip().rstrip("/")
+        if not source.startswith(("http://", "https://")) or not target.startswith(
+            ("http://", "https://")
+        ):
+            raise ValueError(
+                "MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON entries must use "
+                "absolute HTTP(S) URLs"
+            )
+        overrides[source] = target
+    return overrides
+
+
 def _sqlite_synchronous(value: str | None) -> str:
     normalized = (value or "FULL").strip().upper()
     if normalized not in _SQLITE_SYNCHRONOUS_VALUES:
@@ -115,6 +157,8 @@ class RuntimeSettings:
     data_root: Path
     database_path: Path
     sqlite_synchronous: str = "FULL"
+    runtime_version: str = "1.0.0"
+    compatibility_version: str = "mitra-companion-1"
     telemetry_log_path: Path | None = None
     http_timeout_seconds: float = 10.0
     manifest_directory: Path | None = None
@@ -134,25 +178,43 @@ class RuntimeSettings:
     ai_resolver_timeout_seconds: float = 8.0
     ai_analysis_url: str | None = None
     ai_analysis_timeout_seconds: float = 8.0
+    endpoint_overrides: dict[str, str] = field(default_factory=dict)
     persistent_runtime_enabled: bool = True
     persistent_heartbeat_interval_seconds: float = 5.0
     persistent_stale_after_seconds: float = 30.0
     persistent_maintenance_interval_seconds: float = 60.0
     persistent_task_timeout_seconds: float = 300.0
+    persistent_coordination_lease_seconds: float = 20.0
+    runtime_continuity_dispatch_limit: int = 25
     production_config_profile: str = "production"
     production_config_file: Path | None = None
     production_log_path: Path | None = None
     production_log_level: str = "INFO"
     production_log_to_stdout: bool = True
     bhiv_integration_timeout_seconds: float = 10.0
-    bhiv_integration_fail_closed: bool = False
+    bhiv_integration_fail_closed: bool = True
     bhiv_ashmit_base_url: str | None = None
+    bhiv_ashmit_api_key: str | None = None
     bhiv_bucket_base_url: str | None = None
     bhiv_bucket_parent_hash: str | None = None
     bhiv_insightflow_ingest_url: str | None = None
+    bhiv_insightflow_api_key: str | None = None
+    bhiv_keshav_base_url: str | None = None
     bhiv_karma_base_url: str | None = None
     bhiv_karma_previous_hash: str | None = None
     bhiv_prana_base_url: str | None = None
+    central_depository_base_url: str | None = None
+    ecosystem_timeout_seconds: float = 45.0
+    raj_workflow_base_url: str | None = None
+    raj_api_key: str | None = None
+    tantra_integration_timeout_seconds: float = 15.0
+    tantra_gateway_url: str | None = None
+    tantra_api_key: str | None = None
+    tantra_delivery_lease_seconds: float = 30.0
+    tantra_delivery_initial_backoff_seconds: float = 5.0
+    tantra_delivery_max_backoff_seconds: float = 300.0
+    tantra_delivery_max_attempts: int = 8
+    tantra_delivery_batch_size: int = 20
     cors_allowed_origins: list[str] = field(
         default_factory=lambda: list(_DEFAULT_CORS_ALLOWED_ORIGINS)
     )
@@ -236,18 +298,40 @@ class RuntimeSettings:
         )
         otel_endpoint = get_secret("OTEL_EXPORTER_OTLP_ENDPOINT")
         bhiv_ashmit_base_url = get_secret("MITRA_BHIV_ASHMIT_BASE_URL")
+        bhiv_ashmit_api_key = get_secret("MITRA_BHIV_ASHMIT_API_KEY")
         bhiv_bucket_base_url = get_secret("MITRA_BHIV_BUCKET_BASE_URL")
         bhiv_insightflow_ingest_url = get_secret(
             "MITRA_BHIV_INSIGHTFLOW_INGEST_URL"
         )
+        bhiv_insightflow_api_key = get_secret(
+            "MITRA_BHIV_INSIGHTFLOW_API_KEY"
+        )
+        bhiv_keshav_base_url = get_secret("MITRA_BHIV_KESHAV_BASE_URL")
         bhiv_karma_base_url = get_secret("MITRA_BHIV_KARMA_BASE_URL")
         bhiv_prana_base_url = get_secret("MITRA_BHIV_PRANA_BASE_URL")
+        central_depository_base_url = get_secret(
+            "MITRA_CENTRAL_DEPOSITORY_BASE_URL"
+        )
+        raj_workflow_base_url = get_secret("MITRA_RAJ_WORKFLOW_BASE_URL")
+        raj_api_key = get_secret("MITRA_RAJ_API_KEY")
+        tantra_gateway_url = get_secret("MITRA_TANTRA_GATEWAY_URL")
+        tantra_api_key = get_secret("MITRA_TANTRA_API_KEY")
         return cls(
             service_root=service_root,
             data_root=data_root,
             database_path=database_path,
             sqlite_synchronous=_sqlite_synchronous(
                 get("MITRA_COMPANION_SQLITE_SYNCHRONOUS", "FULL")
+            ),
+            runtime_version=(
+                get("MITRA_COMPANION_RUNTIME_VERSION", "1.0.0") or "1.0.0"
+            ),
+            compatibility_version=(
+                get(
+                    "MITRA_COMPANION_COMPATIBILITY_VERSION",
+                    "mitra-companion-1",
+                )
+                or "mitra-companion-1"
             ),
             telemetry_log_path=Path(
                 get(
@@ -321,6 +405,9 @@ class RuntimeSettings:
                 get("MITRA_COMPANION_AI_ANALYSIS_TIMEOUT_SECONDS", "8")
                 or "8"
             ),
+            endpoint_overrides=_endpoint_overrides(
+                get("MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON")
+            ),
             persistent_runtime_enabled=_bool_value(
                 get("MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED", "true"),
                 True,
@@ -353,6 +440,23 @@ class RuntimeSettings:
                 )
                 or "300"
             ),
+            persistent_coordination_lease_seconds=float(
+                get(
+                    "MITRA_COMPANION_COORDINATION_LEASE_SECONDS",
+                    "20",
+                )
+                or "20"
+            ),
+            runtime_continuity_dispatch_limit=max(
+                1,
+                int(
+                    get(
+                        "MITRA_COMPANION_CONTINUITY_DISPATCH_LIMIT",
+                        "25",
+                    )
+                    or "25"
+                ),
+            ),
             production_config_profile=production_config_profile,
             production_config_file=production_config_file,
             production_log_path=Path(
@@ -373,16 +477,48 @@ class RuntimeSettings:
                 get("MITRA_BHIV_INTEGRATION_TIMEOUT_SECONDS", "10") or "10"
             ),
             bhiv_integration_fail_closed=_bool_value(
-                get("MITRA_BHIV_INTEGRATION_FAIL_CLOSED", "false"),
-                False,
+                get("MITRA_BHIV_INTEGRATION_FAIL_CLOSED", "true"),
+                True,
             ),
             bhiv_ashmit_base_url=bhiv_ashmit_base_url,
+            bhiv_ashmit_api_key=bhiv_ashmit_api_key,
             bhiv_bucket_base_url=bhiv_bucket_base_url,
             bhiv_bucket_parent_hash=get("MITRA_BHIV_BUCKET_PARENT_HASH"),
             bhiv_insightflow_ingest_url=bhiv_insightflow_ingest_url,
+            bhiv_insightflow_api_key=bhiv_insightflow_api_key,
+            bhiv_keshav_base_url=bhiv_keshav_base_url,
             bhiv_karma_base_url=bhiv_karma_base_url,
             bhiv_karma_previous_hash=get("MITRA_BHIV_KARMA_PREVIOUS_HASH"),
             bhiv_prana_base_url=bhiv_prana_base_url,
+            central_depository_base_url=central_depository_base_url,
+            ecosystem_timeout_seconds=float(
+                get("MITRA_ECOSYSTEM_TIMEOUT_SECONDS", "45") or "45"
+            ),
+            raj_workflow_base_url=raj_workflow_base_url,
+            raj_api_key=raj_api_key,
+            tantra_integration_timeout_seconds=float(
+                get("MITRA_TANTRA_INTEGRATION_TIMEOUT_SECONDS", "15")
+                or "15"
+            ),
+            tantra_gateway_url=tantra_gateway_url,
+            tantra_api_key=tantra_api_key,
+            tantra_delivery_lease_seconds=float(
+                get("MITRA_TANTRA_DELIVERY_LEASE_SECONDS", "30") or "30"
+            ),
+            tantra_delivery_initial_backoff_seconds=float(
+                get("MITRA_TANTRA_INITIAL_BACKOFF_SECONDS", "5") or "5"
+            ),
+            tantra_delivery_max_backoff_seconds=float(
+                get("MITRA_TANTRA_MAX_BACKOFF_SECONDS", "300") or "300"
+            ),
+            tantra_delivery_max_attempts=max(
+                1,
+                int(get("MITRA_TANTRA_MAX_ATTEMPTS", "8") or "8"),
+            ),
+            tantra_delivery_batch_size=max(
+                1,
+                int(get("MITRA_TANTRA_DELIVERY_BATCH_SIZE", "20") or "20"),
+            ),
             cors_allowed_origins=_csv_values(
                 get(
                     "MITRA_COMPANION_CORS_ORIGINS",
@@ -403,6 +539,42 @@ class RuntimeSettings:
             self.production_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def production_summary(self) -> dict[str, object]:
+        bhiv_configured = {
+            "ashmit": bool(
+                self.bhiv_ashmit_base_url and self.bhiv_ashmit_api_key
+            ),
+            "bucket": bool(self.bhiv_bucket_base_url),
+            "central_depository": bool(
+                self.central_depository_base_url
+            ),
+            "insightflow": bool(self.bhiv_insightflow_ingest_url),
+            "keshav": bool(self.bhiv_keshav_base_url),
+            "karma": bool(self.bhiv_karma_base_url),
+            "prana": bool(self.bhiv_prana_base_url),
+        }
+        bhiv_pending = [
+            name
+            for name, is_configured in bhiv_configured.items()
+            if not is_configured
+        ]
+        tantra_gateway_configured = bool(self.tantra_gateway_url)
+        canonical_ecosystem_configured = {
+            "raj": bool(self.raj_workflow_base_url),
+            "ashmit": bool(
+                self.bhiv_ashmit_base_url and self.bhiv_ashmit_api_key
+            ),
+            "bucket": bool(self.bhiv_bucket_base_url),
+            "keshav": bool(self.bhiv_keshav_base_url),
+            "prana": bool(self.bhiv_prana_base_url),
+            "karma": bool(self.bhiv_karma_base_url),
+            "insightflow": bool(self.bhiv_insightflow_ingest_url),
+            "central_depository": bool(self.central_depository_base_url),
+        }
+        canonical_pending = [
+            name
+            for name, configured in canonical_ecosystem_configured.items()
+            if not configured
+        ]
         return {
             "profile": self.production_config_profile,
             "environment": self.deployment_environment,
@@ -446,6 +618,11 @@ class RuntimeSettings:
             ),
             "ai_resolver_configured": bool(self.ai_resolver_url),
             "ai_analysis_configured": bool(self.ai_analysis_url),
+            "product_endpoint_overrides": {
+                "configured": bool(self.endpoint_overrides),
+                "count": len(self.endpoint_overrides),
+                "published_origins": sorted(self.endpoint_overrides),
+            },
             "persistent_runtime": {
                 "enabled": self.persistent_runtime_enabled,
                 "heartbeat_interval_seconds": (
@@ -458,23 +635,118 @@ class RuntimeSettings:
                 "task_timeout_seconds": (
                     self.persistent_task_timeout_seconds
                 ),
+                "coordination_lease_seconds": (
+                    self.persistent_coordination_lease_seconds
+                ),
+                "continuity_dispatch_limit": (
+                    self.runtime_continuity_dispatch_limit
+                ),
             },
             "bhiv_integrations": {
                 "timeout_seconds": self.bhiv_integration_timeout_seconds,
                 "fail_closed": self.bhiv_integration_fail_closed,
-                "ashmit_configured": bool(self.bhiv_ashmit_base_url),
-                "bucket_configured": bool(self.bhiv_bucket_base_url),
-                "insightflow_configured": bool(
-                    self.bhiv_insightflow_ingest_url
-                ),
-                "karma_configured": bool(self.bhiv_karma_base_url),
-                "prana_configured": bool(self.bhiv_prana_base_url),
+                "readiness": "ready" if not bhiv_pending else "blocked",
+                "required_modules": [
+                    "ashmit",
+                    "bucket",
+                    "central_depository",
+                    "insightflow",
+                    "keshav",
+                    "karma",
+                    "prana",
+                ],
+                "active_modules": [
+                    name
+                    for name, is_configured in bhiv_configured.items()
+                    if is_configured
+                ],
+                "external_endpoints_configured": [
+                    name
+                    for name, is_configured in bhiv_configured.items()
+                    if is_configured
+                ],
+                "embedded_contract_modules": [],
+                "unavailable_owner_modules": bhiv_pending,
+                "external_settings_pending": [
+                    {
+                        "ashmit": "MITRA_BHIV_ASHMIT_BASE_URL",
+                        "bucket": "MITRA_BHIV_BUCKET_BASE_URL",
+                        "central_depository": (
+                            "MITRA_CENTRAL_DEPOSITORY_BASE_URL"
+                        ),
+                        "insightflow": (
+                            "MITRA_BHIV_INSIGHTFLOW_INGEST_URL"
+                        ),
+                        "keshav": "MITRA_BHIV_KESHAV_BASE_URL",
+                        "karma": "MITRA_BHIV_KARMA_BASE_URL",
+                        "prana": "MITRA_BHIV_PRANA_BASE_URL",
+                    }[name]
+                    for name in bhiv_pending
+                ],
+                "ashmit_configured": bhiv_configured["ashmit"],
+                "bucket_configured": bhiv_configured["bucket"],
+                "central_depository_configured": bhiv_configured[
+                    "central_depository"
+                ],
+                "insightflow_configured": bhiv_configured["insightflow"],
+                "keshav_configured": bhiv_configured["keshav"],
+                "karma_configured": bhiv_configured["karma"],
+                "prana_configured": bhiv_configured["prana"],
                 "bucket_parent_hash_configured": bool(
                     self.bhiv_bucket_parent_hash
                 ),
                 "karma_previous_hash_configured": bool(
                     self.bhiv_karma_previous_hash
                 ),
+            },
+            "ecosystem_convergence": {
+                "mode": "strict-published-contracts",
+                "timeout_seconds": self.ecosystem_timeout_seconds,
+                "ready": not canonical_pending,
+                "required_flow": [
+                    "mitra.capability-selection",
+                    "raj.workflow-execution",
+                    "keshav.conditional-diagnosis",
+                    "bucket.truth-persistence",
+                    "karma.integrity-append",
+                    "prana.strict-forwarding",
+                    "insightflow.telemetry",
+                    "mitra.deterministic-replay",
+                    "central-depository.export",
+                ],
+                "configured_modules": [
+                    name
+                    for name, configured in canonical_ecosystem_configured.items()
+                    if configured
+                ],
+                "pending_modules": canonical_pending,
+                "embedded_fallback": False,
+                "raj_contract": "POST /api/workflow/execute (version 1.0.0)",
+                "raj_url_configured": bool(self.raj_workflow_base_url),
+                "raj_api_key_configured": bool(self.raj_api_key),
+                "insightflow_api_key_configured": bool(
+                    self.bhiv_insightflow_api_key
+                ),
+            },
+            "tantra_integration": {
+                "timeout_seconds": self.tantra_integration_timeout_seconds,
+                "package_production": "active",
+                "mode": "gateway"
+                if tantra_gateway_configured
+                else "package-only",
+                "gateway_configured": tantra_gateway_configured,
+                "api_key_configured": bool(self.tantra_api_key),
+                "delivery_outbox": {
+                    "lease_seconds": self.tantra_delivery_lease_seconds,
+                    "initial_backoff_seconds": (
+                        self.tantra_delivery_initial_backoff_seconds
+                    ),
+                    "max_backoff_seconds": (
+                        self.tantra_delivery_max_backoff_seconds
+                    ),
+                    "max_attempts": self.tantra_delivery_max_attempts,
+                    "batch_size": self.tantra_delivery_batch_size,
+                },
             },
             "secrets": self.secrets_summary(),
         }
@@ -507,12 +779,40 @@ class RuntimeSettings:
                     and self.bhiv_insightflow_ingest_url
                 )
                 or (
+                    key == "MITRA_BHIV_INSIGHTFLOW_API_KEY"
+                    and self.bhiv_insightflow_api_key
+                )
+                or (
+                    key == "MITRA_BHIV_KESHAV_BASE_URL"
+                    and self.bhiv_keshav_base_url
+                )
+                or (
                     key == "MITRA_BHIV_KARMA_BASE_URL"
                     and self.bhiv_karma_base_url
                 )
                 or (
                     key == "MITRA_BHIV_PRANA_BASE_URL"
                     and self.bhiv_prana_base_url
+                )
+                or (
+                    key == "MITRA_CENTRAL_DEPOSITORY_BASE_URL"
+                    and self.central_depository_base_url
+                )
+                or (
+                    key == "MITRA_RAJ_WORKFLOW_BASE_URL"
+                    and self.raj_workflow_base_url
+                )
+                or (
+                    key == "MITRA_RAJ_API_KEY"
+                    and self.raj_api_key
+                )
+                or (
+                    key == "MITRA_TANTRA_GATEWAY_URL"
+                    and self.tantra_gateway_url
+                )
+                or (
+                    key == "MITRA_TANTRA_API_KEY"
+                    and self.tantra_api_key
                 )
             )
         )

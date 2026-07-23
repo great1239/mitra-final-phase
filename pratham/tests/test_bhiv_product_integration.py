@@ -737,3 +737,83 @@ async def test_manifest_health_translator_normalizes_service_suspended_page(
         assert check["attachment"]["state"] == "DEGRADED"
     finally:
         runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_endpoint_override_rewrites_health_and_dispatch_urls():
+    requested: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        assert request.url.host == "uniguru"
+        if request.url.path == "/health":
+            return httpx.Response(
+                200,
+                json={"status": "ok", "service": "uniguru-live-reasoning"},
+                headers={"content-type": "application/json"},
+            )
+        if request.url.path == "/ask":
+            return httpx.Response(
+                200,
+                json={
+                    "decision": "accept",
+                    "answer": "Runtime endpoint override reached UniGuru.",
+                    "verification_status": "PASSED",
+                },
+            )
+        return httpx.Response(404, json={"path": request.url.path})
+
+    manifest = _production_manifest("product-samruddhi-uniguru.json")
+    manifest_payload = manifest.model_dump(mode="json")
+    transport = CapabilityTransport(
+        default_timeout_seconds=0.2,
+        http_transport=httpx.MockTransport(handler),
+        endpoint_overrides={
+            "https://uni-guru.in": "http://uniguru:8000"
+        },
+    )
+
+    health = await transport.check_manifest_health(manifest_payload)
+    intent = manifest_payload["capabilities"][0]["intents"][0]
+    response = await transport.dispatch(
+        route={"dispatch": intent["dispatch"]},
+        envelope={
+            "contract_version": "1.0.0",
+            "session_id": "session-override",
+            "correlation_id": "correlation-override",
+            "payload": {"query": "Check runtime transport"},
+        },
+        manifest=manifest_payload,
+    )
+
+    assert health["status"] == "healthy"
+    assert health["endpoint"] == "http://uniguru:8000/health"
+    assert health["published_endpoint"] == "https://uni-guru.in/health"
+    assert response["decision"] == "accept"
+    assert requested == [
+        "http://uniguru:8000/health",
+        "http://uniguru:8000/ask",
+    ]
+
+
+def test_runtime_settings_parse_endpoint_overrides(monkeypatch, tmp_path):
+    monkeypatch.delenv("MITRA_COMPANION_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("MITRA_COMPANION_ENV_FILE", raising=False)
+    monkeypatch.setenv("MITRA_COMPANION_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv(
+        "MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON",
+        json.dumps(
+            {"https://uni-guru.in/": "http://uniguru:8000/"}
+        ),
+    )
+
+    settings = RuntimeSettings.from_environment()
+
+    assert settings.endpoint_overrides == {
+        "https://uni-guru.in": "http://uniguru:8000"
+    }
+    assert settings.production_summary()["product_endpoint_overrides"] == {
+        "configured": True,
+        "count": 1,
+        "published_origins": ["https://uni-guru.in"],
+    }

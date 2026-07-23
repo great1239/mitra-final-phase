@@ -1,6 +1,27 @@
 {
   "source": "previous-assignment-pdfs",
   "runtime_position": "Mitra receives the user request, preserves session/context, selects a published capability, and routes execution. It does not replace product runtimes or downstream authority systems.",
+  "canonical_ecosystem_execution_path": [
+    "Mitra capability selection",
+    "Raj, KESHAV, Bucket, Ashmit, PRANA, and depository preflight",
+    "Raj workflow execution",
+    "Manifest-selected product runtime",
+    "KESHAV conditional product-failure diagnosis",
+    "Ashmit Mongo-backed provenance acceptance",
+    "Bucket truth persistence and validation",
+    "Karma integrity acceptance",
+    "PRANA strict byte and trace forwarding",
+    "InsightFlow execution telemetry",
+    "Mitra deterministic reconstruction",
+    "Central Depository immutable export"
+  ],
+  "ordering_note": "KESHAV is invoked only after Raj returns a trace-preserving typed product error; successful product responses record a no-call skip. The supplied KESHAV /analyze wrapper internally runs its bundled TANTRA chain but returns only the diagnosis contract, so Mitra records no independent RAJYA, Sarathi, Core, or internal Bucket authority claim. Karma must accept before PRANA forwarding.",
+  "execution_contract": {
+    "endpoint": "POST /api/v1/ecosystem/execute",
+    "mode": "strict-published-contracts",
+    "embedded_fallback": false,
+    "checkpoint_model": "one immutable response-bearing checkpoint per stage"
+  },
   "systems": [
     {
       "system": "Mitra",
@@ -25,6 +46,27 @@
       ]
     },
     {
+      "system": "Raj",
+      "role": "workflow execution owner",
+      "owns": [
+        "workflow planning",
+        "workflow execution",
+        "execution result"
+      ],
+      "hands_to": ["attached product runtime", "Mitra"]
+    },
+    {
+      "system": "Ashmit",
+      "role": "governance and Mongo-backed provenance owner",
+      "owns": [
+        "policy evaluation",
+        "enforcement decision",
+        "Bucket audit persistence",
+        "Ashmit trace identity"
+      ],
+      "hands_to": ["Mitra", "Bucket", "Central Depository"]
+    },
+    {
       "system": "attached product runtime",
       "role": "product-owned capability implementation",
       "owns": [
@@ -33,7 +75,7 @@
         "product data access",
         "native API behavior"
       ],
-      "hands_to": ["Mitra"]
+      "hands_to": ["Mitra", "KESHAV on typed product error"]
     },
     {
       "system": "TANTRA",
@@ -96,23 +138,23 @@
     },
     {
       "system": "PRANA",
-      "role": "runtime vitality consumer",
+      "role": "strict byte and trace-preserving forwarding owner",
       "owns": [
-        "vitality posture",
-        "liveness interpretation",
-        "ecosystem health decision"
+        "exact Karma-byte forwarding",
+        "payload SHA-256 response",
+        "Core trace identity verification"
       ],
-      "hands_to": ["Karma", "SARATHI"]
+      "hands_to": ["Core", "Mitra"]
     },
     {
       "system": "Karma",
-      "role": "accountability event consumer",
+      "role": "replay-safe integrity layer",
       "owns": [
-        "event ledger",
-        "action accountability",
-        "downstream action posture"
+        "canonical JSON hash chain",
+        "event and artifact replay keys",
+        "append or append-violation decision"
       ],
-      "hands_to": ["Parikshak"]
+      "hands_to": ["PRANA after status=appended", "Mitra"]
     },
     {
       "system": "SETU",
@@ -126,13 +168,20 @@
     },
     {
       "system": "KESHAV",
-      "role": "external knowledge provider",
+      "role": "deterministic dependency intelligence and resolution proposal",
       "owns": [
-        "knowledge retrieval",
-        "reference quality",
-        "knowledge source policy"
+        "blocked-task detection",
+        "dependency root-cause analysis",
+        "bottleneck impact analysis",
+        "resolution signal proposal"
       ],
-      "hands_to": ["SARATHI", "reviewer"]
+      "does_not_own": [
+        "Mitra routing",
+        "product execution",
+        "resolution authorization",
+        "Mitra Bucket or Central Depository acceptance"
+      ],
+      "hands_to": ["Mitra", "RAJYA/Sarathi in KESHAV's native TANTRA topology"]
     },
     {
       "system": "SARATHI",

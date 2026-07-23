@@ -12,14 +12,15 @@ reconstruction covering lifecycle, sessions, routing, attachments, context,
 dispatch, telemetry, recovery, and failures.
 
 **Key implementation areas:** Component snapshot recording; package hashing;
-artifact-only loading; scope coverage; hash verification; lineage verification;
-execution reconstruction.
+portable immutable package export; clean-state package validation; scope
+coverage; hash verification; lineage verification; execution reconstruction.
 
 **Review focus:** Whether mutable runtime state can influence replay, canonical
 hash stability, missing-artifact behavior, chain validation, and fidelity of
 the reconstructed request and response.
 
-**Related tests:** `pratham/tests/test_replay_convergence_and_graph.py::test_dispatch_records_verified_reconstruction_and_depository`.
+**Related tests:** `pratham/tests/test_replay_convergence_and_graph.py::test_dispatch_records_verified_reconstruction_and_depository`,
+`pratham/tests/test_replay_convergence_and_graph.py::test_clean_state_replay_uses_only_immutable_package`.
 
 ## File: `pratham/companion-runtime/mitra_companion/depository.py`
 
@@ -52,9 +53,10 @@ exports, capability composition, companion continuity, and scale.
 **Why modified:** Added executable checks for the principal gaps identified in
 the prior sprint feedback.
 
-**Key implementation areas:** Clean artifact reconstruction; schema validation;
-lineage continuity; 200-product catalog scale; graph planning; identity,
-preference, and trust continuity.
+**Key implementation areas:** Clean artifact reconstruction; clean-runtime
+package validation; artifact corruption rejection; schema validation; lineage
+continuity; 200-product catalog scale; graph planning; identity, preference,
+and trust continuity.
 
 **Review focus:** Strength of assertions, clean-state independence, negative
 coverage, fixture realism, and whether tests verify outputs rather than merely
@@ -63,4 +65,3 @@ the presence of APIs.
 **Related tests:** This file is the focused test suite; it is complemented by
 `pratham/tests/test_bhiv_integrations.py` and
 `pratham/tests/test_dispatch_and_failures.py`.
-

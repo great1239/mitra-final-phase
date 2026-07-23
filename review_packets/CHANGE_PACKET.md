@@ -13,8 +13,8 @@
 - Added dynamic capability graph and candidate multi-capability planning.
 - Added companion identity continuity, preference, trust, and bounded
   relationship profile memory.
-- Added BHIV convergence consumer manifests for Bucket Insight, PRANA, Karma,
-  SETU, KESHAV, and SARATHI.
+- Added example-only BHIV convergence consumer manifests for Bucket Insight,
+  PRANA, Karma, SETU, KESHAV, and SARATHI; production does not attach them.
 - Added optional AI resolver settings:
   - `MITRA_COMPANION_AI_RESOLVER_URL`
   - `MITRA_COMPANION_AI_RESOLVER_TIMEOUT_SECONDS`

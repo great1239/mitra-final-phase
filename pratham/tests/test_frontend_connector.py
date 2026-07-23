@@ -113,7 +113,9 @@ def test_frontend_connector_routes_into_mitra_runtime(settings_factory):
         assert memory_body["messages"][-1]["status"] == "COMPLETED"
 
 
-def test_frontend_workflow_uses_runtime_analyzer_and_dispatch(settings_factory):
+def test_frontend_workflow_uses_canonical_ecosystem_and_fails_closed(
+    settings_factory,
+):
     app = create_app(settings_factory())
 
     with TestClient(app) as client:
@@ -125,16 +127,37 @@ def test_frontend_workflow_uses_runtime_analyzer_and_dispatch(settings_factory):
                 "workflow_name": "market-prediction",
                 "user_id": "workflow-user",
                 "message": "Show my market prediction for TCS",
+                "payload": {
+                    "symbols": ["TCS"],
+                    "raj_workflow": {
+                        "action_type": "task",
+                        "title": "Run market prediction",
+                    },
+                },
             },
         )
 
-        assert workflow.status_code == 200, workflow.text
+        assert workflow.status_code == 503, workflow.text
         body = workflow.json()
-        assert body["workflow_name"] == "market-prediction"
-        assert body["status"] == "COMPLETED"
-        assert body["result"]["intent"] == "predict.market"
-        assert body["result"]["mitra_runtime"]["dispatch_id"].startswith(
-            "dsp_"
+        assert body["error"]["code"] == "ECOSYSTEM_INTEGRATION_NOT_READY"
+        assert (
+            "missing: raj, ashmit, keshav, bucket, karma, prana, "
+            "insightflow, central_depository"
+        ) in body["error"]["message"]
+        executions = client.get("/api/v1/ecosystem/executions")
+        assert executions.status_code == 200, executions.text
+        rows = executions.json()["executions"]
+        assert len(rows) == 1
+        assert rows[0]["status"] == "FAILED"
+        assert rows[0]["current_stage"] == "dependency-preflight"
+        assert rows[0]["request"]["payload"]["raj_workflow"][
+            "action_type"
+        ] == "task"
+        dispatches = client.get("/api/v1/dispatches")
+        assert dispatches.status_code == 200, dispatches.text
+        assert dispatches.json()["dispatches"] == []
+        assert rows[0]["request"]["metadata"]["frontend_route"] == (
+            "/api/workflow/run"
         )
 
 

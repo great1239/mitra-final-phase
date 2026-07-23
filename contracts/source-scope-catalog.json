@@ -133,7 +133,9 @@
       "copied_or_mapped_features": [
         "runtime command-chain contract",
         "Mitra-to-product-to-downstream boundary model",
-        "trace handoff vocabulary"
+        "trace handoff vocabulary",
+        "deterministic four-bundle TANTRA handover projection",
+        "gateway-compatible wire-byte hashes"
       ],
       "externalized_systems": [
         "TANTRA",
@@ -177,6 +179,35 @@
       "externalized_systems": [
         "UniGuru teaching logic",
         "Samruddhi market prediction logic"
+      ]
+    },
+    {
+      "submission_id": "tantra-ecosystem-production-activation",
+      "local_folder": "Mitra-Live-Runtime-Sprint",
+      "useful_systems": [
+        "Raj published workflow contract",
+        "Ashmit health contract",
+        "Bucket truth contracts",
+        "Karma integrity contract",
+        "PRANA strict forwarding contracts",
+        "InsightFlow ingest contract",
+        "Central Depository package convention"
+      ],
+      "copied_or_mapped_features": [
+        "strict owner-contract execution",
+        "durable response-bearing checkpoints",
+        "trace bridge between Mitra and Raj",
+        "content-addressed stage artifacts",
+        "offline full-chain deterministic reconstruction",
+        "checkpoint recovery and idempotency"
+      ],
+      "externalized_systems": [
+        "Raj workflow logic",
+        "Ashmit and Bucket authority logic",
+        "Karma integrity decisions",
+        "PRANA intelligence",
+        "InsightFlow interpretation",
+        "Central Depository acceptance"
       ]
     }
   ],
@@ -307,6 +338,27 @@
       "boundary": "external-capability"
     },
     {
+      "feature_id": "tantra-published-handover",
+      "source_submission_ids": [
+        "runtime-evidence-producer",
+        "constitutional-runtime-convergence",
+        "TANTRA-Evidence-Consumer-Integration-Sprint"
+      ],
+      "implemented_in": [
+        "mitra_companion.tantra_handover.TantraHandoverAdapter",
+        "contracts/schemas/tantra-handover.schema.json",
+        "mitra_companion.bhiv_integrations.BHIVRuntimeIntegrator.publish_dispatch"
+      ],
+      "runtime_surface": "post-dispatch immutable handover recorded in the BHIV convergence packet and Central Depository",
+      "used_for": [
+        "project verified clean-state execution facts into the published four-bundle contract",
+        "preserve one trace identifier across every handover bundle",
+        "deliver the package through the TANTRA gateway when configured",
+        "record factual package and delivery receipts without generating authority decisions"
+      ],
+      "boundary": "external-capability"
+    },
+    {
       "feature_id": "real-product-contract-fixtures",
       "source_submission_ids": ["accessible-bhiv-product-fixtures"],
       "implemented_in": [
@@ -346,6 +398,31 @@
         "avoid implicit product-private context copying"
       ],
       "boundary": "contract-only"
+    },
+    {
+      "feature_id": "strict-tantra-ecosystem-convergence",
+      "source_submission_ids": [
+        "tantra-ecosystem-production-activation",
+        "constitutional-runtime-convergence",
+        "accessible-bhiv-product-fixtures"
+      ],
+      "implemented_in": [
+        "mitra_companion.ecosystem.PublishedEcosystemClient",
+        "mitra_companion.ecosystem.EcosystemRuntime",
+        "mitra_companion.ecosystem.EcosystemReplayLedger",
+        "/api/v1/ecosystem/execute",
+        "/api/v1/ecosystem/executions/{execution_id}/recover",
+        "/api/v1/ecosystem/executions/{execution_id}/replay",
+        "/api/v1/ecosystem/replay/validate"
+      ],
+      "runtime_surface": "strict Raj-to-Central-Depository execution, recovery, telemetry, lineage, and offline replay",
+      "used_for": [
+        "execute every required owner handoff through published contracts",
+        "stop downstream calls after rejection",
+        "resume without repeating accepted owner work",
+        "reconstruct the complete execution without runtime state or live services"
+      ],
+      "boundary": "external-capability"
     }
   ],
   "external_systems": [
@@ -357,8 +434,8 @@
         "tantra-evidence-integration"
       ],
       "runtime_relationship": "downstream trace chain coordinator after Mitra has routed product execution",
-      "integration_method": "consume dispatch proof, phase journal, or published product response handoff",
-      "not_copied_reason": "Trace orchestration belongs after Mitra's product routing boundary."
+      "integration_method": "consume the four-bundle handover through POST /api/v1/execute/evidence-package",
+      "not_copied_reason": "The contract adapter is ported; downstream trace and authority orchestration remains outside Mitra."
     },
     {
       "system_id": "SHAKTI",

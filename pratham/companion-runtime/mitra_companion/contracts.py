@@ -195,6 +195,49 @@ class RuntimeAnalysisRequest(VersionedContract):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ReconstructionValidationRequest(VersionedContract):
+    package: dict[str, Any]
+
+
+class EcosystemExecutionRequest(VersionedContract):
+    session_id: str | None = Field(default=None, min_length=1)
+    actor_id: str | None = Field(default=None, min_length=1, max_length=200)
+    client_type: Literal[
+        "standalone",
+        "embedded",
+        "mobile",
+        "xr",
+        "robotics",
+    ] = "standalone"
+    workspace_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+    )
+    product_id: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9-]{2,63}$",
+    )
+    capability_id: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9-]{2,63}$",
+    )
+    message: str = Field(min_length=1, max_length=4000)
+    assignment: str | None = Field(default=None, min_length=1, max_length=12000)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=200,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class EcosystemReplayValidationRequest(VersionedContract):
+    package: dict[str, Any]
+
+
 def validate_contract(contract: VersionedContract) -> None:
     expected = {
         "schema_version": SCHEMA_VERSION,

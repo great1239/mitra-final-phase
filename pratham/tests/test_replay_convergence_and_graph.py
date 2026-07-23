@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from mitra_companion.contracts import (
     IntentDispatchRequest,
     ProductAttachmentManifest,
 )
+from mitra_companion.runtime import CompanionRuntime
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -187,6 +189,88 @@ async def test_dispatch_records_verified_reconstruction_and_depository(runtime):
     assert reconstruction_lineage[0]["chain_hash"] == result[
         "reconstruction"
     ]["chain_hash"]
+
+
+@pytest.mark.asyncio
+async def test_clean_state_replay_uses_only_immutable_package(
+    runtime,
+    settings_factory,
+):
+    runtime.attach(_manifest("product-bucket-insight.json"))
+    session = runtime.sessions.create(
+        actor_id="clean-replay-reviewer",
+        client_type="standalone",
+        workspace_id="acceptance",
+        product_id="bucket-insight",
+    )
+    original = await runtime.dispatch(
+        IntentDispatchRequest(
+            session_id=session["session_id"],
+            product_id="bucket-insight",
+            capability_id="artifact-insight",
+            intent_id="bucket.lookup-artifact",
+            payload={
+                "artifact_hash": "clean123456789def0",
+                "review_depth": "full",
+            },
+            correlation_id="clean-state-replay-001",
+        )
+    )
+    dispatch_id = original["dispatch"]["dispatch_id"]
+    exported_package = runtime.dispatch_reconstruction(dispatch_id)
+    original_reconstruction = copy.deepcopy(
+        exported_package["reconstructed_execution"]
+    )
+
+    clean_settings = settings_factory()
+    clean_settings.data_root = clean_settings.data_root / "clean-replay"
+    clean_settings.database_path = (
+        clean_settings.data_root / "companion-runtime.db"
+    )
+    clean_settings.telemetry_log_path = (
+        clean_settings.data_root / "runtime-telemetry.jsonl"
+    )
+    clean_runtime = CompanionRuntime(clean_settings)
+    clean_runtime.start()
+    try:
+        assert clean_runtime.store.list_dispatches(limit=10) == []
+        replay = clean_runtime.validate_reconstruction_package(
+            exported_package
+        )
+        assert clean_runtime.store.list_dispatches(limit=10) == []
+
+        tampered_package = copy.deepcopy(exported_package)
+        tampered_package["components"]["dispatch.response"][
+            "tampered"
+        ] = True
+        tampered = clean_runtime.validate_reconstruction_package(
+            tampered_package
+        )
+    finally:
+        clean_runtime.stop()
+
+    assert replay["status"] == "verified"
+    assert replay["state_dependency"] == "none"
+    assert replay["runtime_state_read"] is False
+    assert replay["package_hash"] == exported_package["package_hash"]
+    assert replay["reconstructed_execution"] == original_reconstruction
+    assert replay["verification"]["deterministic"] is True
+    assert all(replay["verification"]["scope_coverage"].values())
+    assert any(
+        check["check"] == "dispatch-identical-hash" and check["passed"]
+        for check in replay["verification"]["checks"]
+    )
+    assert any(
+        check["check"] == "reconstructed-response-hash" and check["passed"]
+        for check in replay["verification"]["checks"]
+    )
+
+    assert tampered["status"] == "failed"
+    assert any(
+        check["check"] == "component-hash:dispatch.response"
+        and not check["passed"]
+        for check in tampered["verification"]["checks"]
+    )
 
 
 def test_capability_graph_and_plan_cover_bhiv_convergence_products(runtime):

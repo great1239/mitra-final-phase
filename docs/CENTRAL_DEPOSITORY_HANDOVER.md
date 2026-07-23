@@ -12,10 +12,51 @@ Mitra owns creation and export of runtime facts:
 - route, manifest, context, and phase snapshots;
 - deterministic reconstruction package;
 - telemetry and recovery state included by reconstruction;
-- content hashes and dispatch-scoped lineage.
+- content hashes and dispatch-scoped lineage;
+- ecosystem stage requests/responses, artifacts, and execution-scoped lineage;
+- portable full-chain replay and Central Depository handover package.
 
 The external Central Depository owns cross-system retention, acceptance,
 certification, and any policy applied after receipt.
+
+## Current Physical Backend
+
+The current local topology configures `MITRA_CENTRAL_DEPOSITORY_BASE_URL` to the
+local Bucket owner service, backed by persistent artifact and Redis volumes.
+The reproducible acceptance run on 2026-07-20 appended and read back these
+actual handover packages through that path:
+
+| Product case | Execution | Depository artifact | Depository package hash |
+|---|---|---|---|
+| Trade Bot NVDA | `eco_1ac97452891c43bdad40b786eb5b9089` | `8243a2c25cac41caac7771bf36cc9b6448ef99d99158be0fdb2b0ce6b64717da` | `1eab86b577c535ef8ce56fc41bf8e7025e3b45417b49bc92bfa5d0b6d9240f6b` |
+| UniGuru drip irrigation | `eco_07fa5401aaf94ebfb2cfd6ead3cd5424` | `9c18d4226fc8bc6ebaa03c95c017d4f5278917d5320ceace3d00ec41e2538686` | `cab6c4ecdf50f0fdc8dabc069c36079f55280a01697556e48910cde3169ce433` |
+| Trade Bot typed error and KESHAV diagnosis | `eco_6e30b5bb66c549d6a691c4bc35b0582a` | `1dc3e9c905630abbf9af81325c62d143b9e5a59c2991edb636af04fe9703b7cf` | `aa9fb537c62462ecf0da3cfa28b8888a6cfe0cd18bf3ae762225fb207040dd0f` |
+
+The exact retained replay files are independently identifiable:
+
+| Product case | Replay package hash | Retained file SHA-256 |
+|---|---|---|
+| Trade Bot NVDA | `c77d72e0e1cbc6f9445807066be5472d9d433bc61614e2491f4e51583c05fb86` | `28f2c07d22e6db406ccd6559999f72e8afa6b3bf2d8667d98efd67e0d0263764` |
+| UniGuru drip irrigation | `0bd258b0759bc2680d964c46ea2e6c771a19e1b17cd32cd08ec7e76586bd8583` | `6ca07901691c149640e5d25718094f53f41cc4b4078bdf0e31ae61380527ddb7` |
+| Trade Bot typed error and KESHAV diagnosis | `eb73fecea94d23e15e952e094edd9b55033e8fb6915eab33796c237200fe2553` | `461858501dd89229efba11da2d1be791f9fe40d1c1905faed9299af50da79f75` |
+
+Each Central Depository stage received HTTP 200 for latest hash, append, exact
+read-back, and global replay validation. Each execution exposed eleven
+content-addressed artifacts and eleven ordered lineage entries. The same run
+validated its portable replay in an isolated Python process with 123/123
+checks, zero database reads, and zero live service calls, then confirmed that
+a changed Raj response was rejected.
+
+This proves the handover storage protocol. It does not claim that a separate
+Central Depository owner service accepted or certified the package. The
+available `sl_validator_parity` repository is a language validator/compiler,
+not a depository HTTP service. Replace the configured base URL when the actual
+owner contract is published.
+
+Run with `--require-independent-central-depository` in the canonical validator
+when the receiving organization requires an independently hosted depository.
+That mode correctly fails while Bucket and Central Depository resolve to the
+same endpoint.
 
 ## API Contract
 
@@ -36,6 +77,12 @@ For a dispatch handover:
 
 ```http
 GET /api/v1/runtime/depository?subject_type=dispatch&subject_id={dispatch_id}&limit=500
+```
+
+For final ecosystem acceptance:
+
+```http
+GET /api/v1/runtime/depository?subject_type=ecosystem_execution&subject_id={execution_id}&limit=500
 ```
 
 When subject filters are present, the response includes only artifacts
@@ -71,6 +118,20 @@ The arrays contain the actual records; the empty arrays above only abbreviate
 the shape.
 
 ## Required Handover Set
+
+For every completed ecosystem execution, transfer these three API responses:
+
+1. `POST /api/v1/ecosystem/execute`
+2. `GET /api/v1/ecosystem/executions/{execution_id}/replay`
+3. `GET /api/v1/runtime/depository?subject_type=ecosystem_execution&subject_id={execution_id}`
+
+The execution details contain every owner response. The replay package
+reconstructs the complete chain without database or network access. The
+depository response supplies the content-addressed stage artifacts and
+lineage. A standard completed ecosystem execution has ten stage artifacts and
+one replay artifact, with eleven corresponding lineage entries.
+
+The following is the retained legacy direct-dispatch handover:
 
 For every dispatch, transfer these three API responses together:
 
@@ -148,7 +209,19 @@ or hash mismatches.
 
 ## Replay Alignment
 
-The receiving engineer must compare:
+For an ecosystem execution, the receiving engineer must compare:
+
+- the original request component against the submitted message and payload;
+- its reconstructed request hash against `execution.request_hash`;
+- selected product, capability, and intent against the capability-selection
+  component;
+- Raj product output and all subsequent stage responses against their
+  component response hashes;
+- reconstructed status, trace IDs, artifact IDs, and package hashes against
+  the original execution;
+- package hash and every stage artifact hash against depository lineage.
+
+For a retained legacy direct dispatch, compare:
 
 - submitted dispatch payload against
   `reconstructed_execution.request.payload`;
@@ -162,12 +235,15 @@ An HTTP 200 alone is not acceptance.
 
 ## Response Handling
 
-Every configured BHIV module operation must produce one of:
+Every BHIV module operation must produce one of:
 
 - an accepted response;
 - an explicit rejection;
-- an explicit transport failure;
-- an explicit `skipped` result when the endpoint is not configured.
+- an explicit transport failure when an external endpoint is configured and
+  unavailable.
+
+The canonical ecosystem endpoint returns 503 when an owner contract is not
+configured. It never creates an accepted response through an embedded adapter.
 
 Karma must return `appended` before Mitra forwards the exact request bytes to
 PRANA. A rejection or replay result must not be forwarded.
@@ -186,14 +262,33 @@ PRANA. A rejection or replay result must not be forwarded.
 
 ## Operator Procedure
 
-1. Confirm `/health` and `/ready`.
-2. Submit a real dispatch.
-3. Confirm the dispatch status and output values.
-4. Fetch deterministic reconstruction.
-5. Fetch the subject-filtered depository export.
-6. Verify artifact hashes and lineage.
-7. Confirm counts match array lengths.
-8. Submit the three-response handover set to the external depository.
+1. Rebuild the owner topology by following `docs/HANDOVER.md` from section 7.
+2. Confirm `/health`, `/ready`, and `/api/v1/ecosystem/readiness`.
+3. Run:
+
+   ```powershell
+   docker compose -f docker-compose.ecosystem.yml exec -T mitra python scripts/validate_ecosystem_runtime.py http://127.0.0.1:8090 --package-directory /data/operational-acceptance-keshav-final --summary
+   ```
+
+4. Require `passed=true` for all three cases. Inspect the non-summary output
+   when any assertion fails.
+5. Retain each original execution response, replay response, subject-filtered
+   depository response, and
+   `/data/operational-acceptance-keshav-final/*.replay.json` file.
+6. Verify the retained files independently:
+
+   ```powershell
+   docker compose -f docker-compose.ecosystem.yml exec -T mitra python scripts/validate_ecosystem_runtime.py --validate-package /data/operational-acceptance-keshav-final --summary
+   ```
+
+   Require every original package to be `verified` with zero database reads
+   and zero live calls. Require every altered copy to be `failed`.
+7. Verify artifact hashes, lineage, clean-state reconstruction, and tamper
+   rejection. Confirm counts match array lengths. The 2026-07-20 retained v2
+   packages each passed 123 checks in isolated mode and rejected their altered
+   copies. The two earlier v1 packages also remained valid at 112 checks each.
+8. Submit the three-response handover set and exact replay package to the
+   external depository.
 9. Record the external acceptance or rejection in the external system.
 
 Mitra must not claim external acceptance before step 9 succeeds.

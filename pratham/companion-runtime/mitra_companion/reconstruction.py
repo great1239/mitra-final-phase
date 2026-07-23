@@ -12,11 +12,13 @@ class DeterministicReconstructionLedger:
 
     SNAPSHOT_TYPE = "dispatch-reconstruction.snapshot"
     REPLAY_TYPE = "mitra-true-deterministic-replay-v1"
+    PORTABLE_PACKAGE_TYPE = "mitra-portable-replay-package-v1"
     REQUIRED_SCOPES = (
         "lifecycle",
         "sessions",
         "routing",
         "attachments",
+        "dependencies",
         "context",
         "dispatch",
         "telemetry",
@@ -39,6 +41,7 @@ class DeterministicReconstructionLedger:
         sessions: dict[str, Any] | None = None,
         routing: dict[str, Any] | None = None,
         attachments: dict[str, Any] | None = None,
+        dependencies: dict[str, Any] | None = None,
         telemetry: dict[str, Any] | None = None,
         recovery: dict[str, Any] | None = None,
         failures: dict[str, Any] | None = None,
@@ -49,6 +52,7 @@ class DeterministicReconstructionLedger:
             "sessions.snapshot": sessions or {},
             "routing.snapshot": routing or {"selected_route": route},
             "attachments.snapshot": attachments or {},
+            "dependencies.snapshot": dependencies or {},
             "dispatch.receipt": dispatch,
             "dispatch.request": dispatch.get("request") or {},
             "dispatch.response": dispatch.get("response") or {},
@@ -96,8 +100,8 @@ class DeterministicReconstructionLedger:
             "external_consumer_boundary": (
                 "This reconstructs the exact Mitra runtime execution from "
                 "content-addressed artifacts for lifecycle, sessions, routing, "
-                "attachments, context, dispatch, telemetry, recovery, and "
-                "failures. External systems may consume the package for replay "
+                "attachments, dependencies, context, dispatch, telemetry, "
+                "recovery, and failures. External systems may consume the package for replay "
                 "authority; Mitra does not re-execute product business logic."
             ),
             "component_artifacts": component_artifacts,
@@ -110,6 +114,7 @@ class DeterministicReconstructionLedger:
                 "response_hash": sha256_json(dispatch.get("response") or {}),
                 "route_hash": sha256_json(route),
                 "manifest_hash": sha256_json(manifest),
+                "dependencies_hash": sha256_json(dependencies or {}),
                 "context_hash": sha256_json(context),
                 "phase_journal_hash": sha256_json({"phases": phases}),
             },
@@ -183,15 +188,26 @@ class DeterministicReconstructionLedger:
             lineage=lineage,
             components=components,
         )
+        immutable_artifacts = self._portable_artifacts(
+            snapshot=snapshot,
+            components=components,
+        )
         return {
+            "package_format": self.PORTABLE_PACKAGE_TYPE,
             "dispatch_id": dispatch_id,
             "status": verification["status"],
             "package_hash": root["artifact_hash"],
             "lineage": lineage,
             "snapshot": snapshot,
             "components": components,
+            "immutable_artifacts": immutable_artifacts,
             "reconstructed_execution": self._reconstruct(components),
             "verification": verification,
+            "clean_state_replay": {
+                "required_runtime_state": "none",
+                "validation_endpoint": "/api/v1/reconstruction/validate",
+                "replay_authority": "portable immutable artifact package",
+            },
         }
 
     def verify_snapshot(
@@ -202,25 +218,128 @@ class DeterministicReconstructionLedger:
         lineage: list[dict[str, Any]],
         components: dict[str, Any],
     ) -> dict[str, Any]:
+        return self.verify_portable_artifacts(
+            snapshot=snapshot,
+            root_hash=root_hash,
+            lineage=lineage,
+            components=components,
+        )
+
+    @classmethod
+    def validate_portable_package(
+        cls,
+        package: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Reconstruct an execution with no runtime store or depository.
+
+        This is the true deterministic replay surface: it accepts the exported
+        package as an immutable artifact bundle and never reads local runtime
+        state, dispatch tables, sessions, telemetry logs, or attachment stores.
+        """
+
+        normalized = cls._normalize_portable_package(package)
+        snapshot = normalized["snapshot"]
+        components = normalized["components"]
+        lineage = normalized["lineage"]
+        root_hash = normalized["package_hash"]
+        verification = cls.verify_portable_artifacts(
+            snapshot=snapshot,
+            root_hash=root_hash,
+            lineage=lineage,
+            components=components,
+        )
+        reconstructed = cls._reconstruct(components)
+        execution_fidelity = cls._execution_fidelity(
+            snapshot=snapshot,
+            components=components,
+            reconstructed=reconstructed,
+        )
+        verification["checks"].extend(execution_fidelity)
+        verification["status"] = (
+            "verified"
+            if verification["status"] == "verified"
+            and all(item["passed"] for item in execution_fidelity)
+            else "failed"
+        )
+        verification["deterministic"] = verification["status"] == "verified"
+        return {
+            "package_format": cls.PORTABLE_PACKAGE_TYPE,
+            "dispatch_id": snapshot.get("dispatch_id"),
+            "status": verification["status"],
+            "package_hash": root_hash,
+            "replay_mode": "clean-state-portable-artifact-replay",
+            "state_dependency": "none",
+            "runtime_state_read": False,
+            "snapshot": snapshot,
+            "components": components,
+            "immutable_artifacts": cls._portable_artifacts(
+                snapshot=snapshot,
+                components=components,
+            ),
+            "reconstructed_execution": reconstructed,
+            "verification": verification,
+        }
+
+    @classmethod
+    def verify_portable_artifacts(
+        cls,
+        *,
+        snapshot: dict[str, Any],
+        root_hash: str,
+        lineage: list[dict[str, Any]],
+        components: dict[str, Any],
+    ) -> dict[str, Any]:
         checks: list[dict[str, Any]] = [
             {
                 "check": "root-package-hash",
                 "passed": sha256_json(snapshot) == root_hash,
+                "expected": root_hash,
+                "actual": sha256_json(snapshot),
+            },
+            {
+                "check": "replay-type",
+                "passed": snapshot.get("replay_type") == cls.REPLAY_TYPE,
+                "expected": cls.REPLAY_TYPE,
+                "actual": snapshot.get("replay_type"),
+            },
+            {
+                "check": "replay-authority",
+                "passed": (
+                    snapshot.get("replay_authority")
+                    == "immutable-runtime-artifacts-only"
+                ),
+                "expected": "immutable-runtime-artifacts-only",
+                "actual": snapshot.get("replay_authority"),
             }
         ]
         expected_hashes = snapshot.get("expected_hashes") or {}
         expected_components = expected_hashes.get("component_hashes") or {}
+        component_references = snapshot.get("component_artifacts") or {}
         for artifact_type, expected_hash in sorted(
             expected_components.items()
         ):
+            actual_hash = (
+                sha256_json(components[artifact_type])
+                if artifact_type in components
+                else None
+            )
+            reference_hash = (
+                component_references.get(artifact_type) or {}
+            ).get("artifact_hash")
             checks.append(
                 {
                     "check": f"component-hash:{artifact_type}",
-                    "passed": (
-                        artifact_type in components
-                        and sha256_json(components[artifact_type])
-                        == expected_hash
-                    ),
+                    "passed": actual_hash == expected_hash,
+                    "expected": expected_hash,
+                    "actual": actual_hash,
+                }
+            )
+            checks.append(
+                {
+                    "check": f"component-reference:{artifact_type}",
+                    "passed": reference_hash == expected_hash,
+                    "expected": expected_hash,
+                    "actual": reference_hash,
                 }
             )
         compatibility_hash_checks = {
@@ -228,6 +347,7 @@ class DeterministicReconstructionLedger:
             "response_hash": components.get("dispatch.response") or {},
             "route_hash": components.get("route.snapshot") or {},
             "manifest_hash": components.get("manifest.snapshot") or {},
+            "dependencies_hash": components.get("dependencies.snapshot") or {},
             "context_hash": components.get("context.snapshot") or {},
             "phase_journal_hash": components.get("phase-journal.snapshot") or {},
         }
@@ -238,9 +358,11 @@ class DeterministicReconstructionLedger:
                         "check": name,
                         "passed": sha256_json(artifact)
                         == expected_hashes.get(name),
+                        "expected": expected_hashes.get(name),
+                        "actual": sha256_json(artifact),
                     }
                 )
-        scope_coverage = self._scope_coverage(snapshot, components)
+        scope_coverage = cls._scope_coverage(snapshot, components)
         for scope, passed_scope in scope_coverage.items():
             checks.append(
                 {
@@ -248,7 +370,7 @@ class DeterministicReconstructionLedger:
                     "passed": passed_scope,
                 }
             )
-        checks.extend(self._verify_lineage(lineage))
+        checks.extend(cls._verify_lineage(lineage))
         passed = all(item["passed"] for item in checks)
         return {
             "status": "verified" if passed else "failed",
@@ -258,6 +380,147 @@ class DeterministicReconstructionLedger:
             "scope_coverage": scope_coverage,
             "checks": checks,
         }
+
+    @classmethod
+    def _normalize_portable_package(
+        cls,
+        package: dict[str, Any],
+    ) -> dict[str, Any]:
+        candidate = package.get("package") if "package" in package else package
+        snapshot = candidate.get("snapshot")
+        root_hash = candidate.get("package_hash")
+        if not isinstance(snapshot, dict) or not isinstance(root_hash, str):
+            return {
+                "snapshot": {},
+                "components": {},
+                "lineage": [],
+                "package_hash": root_hash or "",
+            }
+        components = candidate.get("components")
+        if not isinstance(components, dict):
+            components = {}
+        if not components and isinstance(candidate.get("immutable_artifacts"), list):
+            components = {
+                item["artifact_type"]: item["artifact"]
+                for item in candidate["immutable_artifacts"]
+                if isinstance(item, dict)
+                and isinstance(item.get("artifact_type"), str)
+                and isinstance(item.get("artifact"), dict)
+            }
+        lineage = candidate.get("lineage")
+        if not isinstance(lineage, list):
+            lineage = []
+        return {
+            "snapshot": snapshot,
+            "components": components,
+            "lineage": lineage,
+            "package_hash": root_hash,
+        }
+
+    @classmethod
+    def _portable_artifacts(
+        cls,
+        *,
+        snapshot: dict[str, Any],
+        components: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        references = snapshot.get("component_artifacts") or {}
+        artifacts: list[dict[str, Any]] = []
+        for artifact_type, artifact in sorted(components.items()):
+            reference = references.get(artifact_type) or {}
+            artifacts.append(
+                {
+                    "artifact_type": artifact_type,
+                    "artifact_hash": reference.get(
+                        "artifact_hash",
+                        sha256_json(artifact),
+                    ),
+                    "artifact": artifact,
+                }
+            )
+        return artifacts
+
+    @classmethod
+    def _execution_fidelity(
+        cls,
+        *,
+        snapshot: dict[str, Any],
+        components: dict[str, Any],
+        reconstructed: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        receipt = components.get("dispatch.receipt") or {}
+        request = components.get("dispatch.request") or {}
+        response = components.get("dispatch.response") or {}
+        route = components.get("route.snapshot") or {}
+        manifest = components.get("manifest.snapshot") or {}
+        context = components.get("context.snapshot") or {}
+        dependencies = components.get("dependencies.snapshot") or {}
+        phase_journal = components.get("phase-journal.snapshot") or {}
+        expected_hashes = snapshot.get("expected_hashes") or {}
+        checks = [
+            {
+                "check": "dispatch-id-fidelity",
+                "passed": reconstructed.get("dispatch_id")
+                == snapshot.get("dispatch_id")
+                == receipt.get("dispatch_id"),
+            },
+            {
+                "check": "terminal-status-fidelity",
+                "passed": reconstructed.get("status")
+                == snapshot.get("terminal_status")
+                == receipt.get("status"),
+            },
+            {
+                "check": "request-fidelity",
+                "passed": reconstructed.get("request") == request,
+            },
+            {
+                "check": "response-fidelity",
+                "passed": reconstructed.get("response") == response,
+            },
+            {
+                "check": "route-fidelity",
+                "passed": reconstructed.get("route") == route,
+            },
+            {
+                "check": "manifest-fidelity",
+                "passed": reconstructed.get("manifest") == manifest,
+            },
+            {
+                "check": "context-fidelity",
+                "passed": reconstructed.get("context") == context,
+            },
+            {
+                "check": "dependencies-fidelity",
+                "passed": reconstructed.get("dependencies") == dependencies,
+            },
+            {
+                "check": "phase-journal-fidelity",
+                "passed": reconstructed.get("phase_journal")
+                == phase_journal.get("phases", []),
+            },
+            {
+                "check": "dispatch-identical-hash",
+                "passed": sha256_json(receipt)
+                == sha256_json(reconstructed.get("dispatch", {}).get("receipt") or {}),
+            },
+            {
+                "check": "reconstructed-request-hash",
+                "passed": sha256_json(reconstructed.get("request") or {})
+                == expected_hashes.get("request_hash"),
+            },
+            {
+                "check": "reconstructed-response-hash",
+                "passed": sha256_json(reconstructed.get("response") or {})
+                == expected_hashes.get("response_hash"),
+            },
+            {
+                "check": "reconstructed-route-hash",
+                "passed": sha256_json(reconstructed.get("route") or {})
+                == expected_hashes.get("route_hash"),
+            },
+        ]
+        return checks
 
     @classmethod
     def _scope_coverage(
@@ -271,6 +534,7 @@ class DeterministicReconstructionLedger:
             "sessions": ("sessions.snapshot",),
             "routing": ("routing.snapshot", "route.snapshot"),
             "attachments": ("attachments.snapshot", "manifest.snapshot"),
+            "dependencies": ("dependencies.snapshot",),
             "context": ("context.snapshot",),
             "dispatch": (
                 "dispatch.receipt",
@@ -351,6 +615,7 @@ class DeterministicReconstructionLedger:
             "sessions": components.get("sessions.snapshot") or {},
             "routing": components.get("routing.snapshot") or {},
             "attachments": components.get("attachments.snapshot") or {},
+            "dependencies": components.get("dependencies.snapshot") or {},
             "context": components.get("context.snapshot") or {},
             "dispatch": dispatch,
             "telemetry": components.get("telemetry.snapshot") or {},

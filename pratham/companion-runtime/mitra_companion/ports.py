@@ -90,6 +90,8 @@ class AttachmentStorePort(Protocol):
         self,
         product_id: str,
         manifest: dict[str, Any],
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]: ...
 
     def get_attachment(self, product_id: str) -> dict[str, Any] | None: ...

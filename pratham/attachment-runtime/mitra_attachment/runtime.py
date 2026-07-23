@@ -61,18 +61,26 @@ class AttachmentRuntime:
     def attach(
         self,
         manifest: ProductAttachmentManifest,
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]:
         self._validate_manifest(manifest)
         return self.store.attach_product(
             manifest.product_id,
             manifest.model_dump(mode="json"),
+            replace_existing=replace_existing,
         )
 
     def attach_many(
         self,
         manifests: Iterable[ProductAttachmentManifest],
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]:
-        attachments = [self.attach(manifest) for manifest in manifests]
+        attachments = [
+            self.attach(manifest, replace_existing=replace_existing)
+            for manifest in manifests
+        ]
         return {
             "attached_count": len(attachments),
             "attachments": attachments,

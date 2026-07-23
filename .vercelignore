@@ -1,4 +1,7 @@
 .git
+.env
+.env.*
+!.env.example
 .pytest_cache
 .codex-tmp
 .mitra-data

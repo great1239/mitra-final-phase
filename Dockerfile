@@ -13,12 +13,13 @@ RUN groupadd --system mitra \
 
 COPY requirements.txt pyproject.toml ./
 COPY pratham ./pratham
-COPY contracts ./contracts
-COPY scripts ./scripts
 
 RUN pip install --no-cache-dir . \
     && mkdir -p /data /tmp/mitra \
     && chown -R mitra:mitra /app /data /tmp/mitra
+
+COPY --chown=mitra:mitra contracts ./contracts
+COPY --chown=mitra:mitra scripts ./scripts
 
 EXPOSE 8090
 VOLUME ["/data"]

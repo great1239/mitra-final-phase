@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0.0",
+  "cases": [
+    {
+      "case_id": "tradebot-nvda",
+      "message": "show me NVDA stock",
+      "assignment": "Select the attached market prediction capability and execute it through every configured ecosystem owner contract.",
+      "payload": {
+        "symbols": [
+          "NVDA"
+        ],
+        "horizon": "short",
+        "raj_workflow": {
+          "action_type": "task",
+          "title": "Validate NVDA market prediction",
+          "description": "Execute the manifest-selected product contract with the supplied symbol."
+        }
+      },
+      "expected": {
+        "product_id": "samruddhi-trade-bot",
+        "capability_id": "market-prediction",
+        "intent_id": "samruddhi.tradebot.predict",
+        "required_product_response_paths": [
+          "predictions"
+        ],
+        "product_response_equals": {
+          "predictions.0.symbol": "NVDA"
+        }
+      }
+    },
+    {
+      "case_id": "uniguru-drip-irrigation",
+      "message": "reduce water consumption via drip irrigation",
+      "assignment": "Select the attached learning capability and execute it through every configured ecosystem owner contract.",
+      "payload": {
+        "query": "reduce water consumption via drip irrigation",
+        "context": {
+          "source": "operational-acceptance",
+          "topic": "water conservation"
+        },
+        "allow_web": false,
+        "session_id": "operational-acceptance-drip-irrigation",
+        "raj_workflow": {
+          "action_type": "task",
+          "title": "Validate governed learning request",
+          "description": "Execute the manifest-selected UniGuru contract with the supplied query."
+        }
+      },
+      "expected": {
+        "product_id": "samruddhi-uniguru",
+        "capability_id": "learning-reasoning",
+        "intent_id": "samruddhi.uniguru.ask",
+        "required_product_response_paths": [
+          "decision",
+          "verification_status"
+        ],
+        "product_response_equals": {}
+      }
+    },
+    {
+      "case_id": "tradebot-product-error-keshav",
+      "product_id": "samruddhi-trade-bot",
+      "capability_id": "market-prediction",
+      "message": "run a deliberately incomplete market prediction request",
+      "assignment": "Prove that a product-owned validation error invokes KESHAV before the failure and diagnosis continue through storage, integrity, telemetry, replay, and handover.",
+      "payload": {
+        "symbols": [],
+        "horizon": "short",
+        "raj_workflow": {
+          "action_type": "task",
+          "title": "Validate conditional KESHAV diagnosis",
+          "description": "Execute the selected product with an explicitly empty symbols list so its published API returns a typed validation error instead of applying its AAPL default."
+        }
+      },
+      "expected": {
+        "product_id": "samruddhi-trade-bot",
+        "capability_id": "market-prediction",
+        "intent_id": "samruddhi.tradebot.predict",
+        "product_success": false,
+        "product_error_type": "product_rejected_workflow",
+        "required_product_response_paths": [],
+        "product_response_equals": {}
+      }
+    }
+  ]
+}

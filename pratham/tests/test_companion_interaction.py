@@ -423,8 +423,10 @@ def test_companion_api_exposes_message_memory_task_and_stream(
         chain = client.get("/api/v1/runtime/chain")
         assert chain.status_code == 200, chain.text
         systems = [item["system"] for item in chain.json()["chain"]["systems"]]
-        assert systems[:7] == [
+        assert systems[:9] == [
             "Mitra",
+            "Raj",
+            "Ashmit",
             "attached product runtime",
             "TANTRA",
             "SHAKTI",

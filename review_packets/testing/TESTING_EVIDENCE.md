@@ -1,313 +1,181 @@
-# Testing Evidence
+# Runtime Validation Results
 
-Execution date: `2026-07-09`
+Snapshot date: 2026-07-23
 
-This packet records observed runtime outputs. It is not produced by an
-evidence generator. Every result below comes from an install, test process,
-HTTP request, or load process that was actually executed.
+This report records outputs returned by running owner services. Tests are
+listed separately and are not presented as production integration evidence.
+
+## Automated Validation
+
+| Run | Result | Scope |
+| --- | --- | --- |
+| Current complete regression | 161 passed on 2026-07-23 | `pratham/tests`, `contracts/integration-tests`, and `integration_services/tests` |
+| Previous complete regression | 156 passed on 2026-07-20 | Same three suites before the public persistent Bucket integration |
+| KESHAV and ecosystem focused regression | 29 passed | success bypass, typed product error, diagnosis, trace rejection, replay v1/v2, contracts, and operational validator |
+| Previous complete repository regression | 145 passed on 2026-07-17 | `pratham/tests` and `contracts/integration-tests` before the final routing regression was added |
+| Historical focused ecosystem baseline | 15 passed on 2026-07-16 | retained acceptance-gate provenance; superseded by the current focused run |
+| Historical complete baseline | 144 passed on 2026-07-16 | retained acceptance-gate provenance; superseded by later complete runs |
+
+The only warning was the installed Starlette `TestClient` deprecation notice.
+
+Focused regression tests use controlled implementations of the published
+contracts. Their portable replay check records `database_reads=0` and
+`live_service_calls=0`. Those controlled tests have no production convergence claim;
+the separate live executions below provide the owner-service result.
 
 ## Clean Deployment
 
-**Result:** PASS for clean Python deployment and Docker Compose deployment.
+Mitra returned `ready=true` with no pending owner modules. The running topology
+contained Raj, KESHAV, Ashmit and authenticated MongoDB, Bucket and private
+authenticated Redis, Karma, PRANA, the InsightFlow owner registry and
+PostgreSQL bridge, UniGuru, Trade Bot, and Bucket-backed Central Depository.
 
-The final source was built and installed into a new virtual environment:
-
-```powershell
-python -m venv C:\tmp\mitra-testing-optimized-20260709
-C:\tmp\mitra-testing-optimized-20260709\Scripts\python.exe -m pip install ".[test]"
-```
-
-Observed wheel:
-
-```text
-mitra_companion_runtime-1.0.0-py3-none-any.whl
-sha256=f40744881083d7b18398d31810112a45f2490ed6771306466cfef6956d27e5af
-```
-
-Final installed CLI validation used a brand-new data root:
-
-```json
-{
-  "valid": true,
-  "database_path": "C:\\tmp\\mitra-clean-validation-final-20260709\\runtime.db",
-  "data_root": "C:\\tmp\\mitra-clean-validation-final-20260709"
-}
-```
-
-Docker was rechecked and repaired on `2026-07-10`. The earlier Docker Desktop
-engine/socket failure no longer blocks deployment.
-
-Observed Docker repair and deployment path:
-
-```text
-docker desktop status: running
-wsl docker-desktop state: Running
-docker compose config --quiet: passed
-docker compose build --pull --progress plain: built
-docker compose up -d --force-recreate --wait --wait-timeout 180: healthy
-```
-
-The Compose issue exposed after Docker Desktop recovered was fixed by replacing
-invalid top-level `pids_limit` keys with Compose v5-compatible
-`deploy.resources.limits.pids` values, and by using one Uvicorn worker per
-SQLite-backed container. After recreation:
-
-```text
-companion-runtime: Up, healthy, port 8090
-otel-collector: Up, port 4318 and 8889
-```
-
-Runtime API checks from the Docker deployment:
-
-```json
-{
-  "ready": true,
-  "health_status": "healthy",
-  "state": "READY",
-  "accepting": true,
-  "uvicorn_workers": 1,
-  "manifest_directory": "/app/contracts/production",
-  "attached_products": 0,
-  "container_validate": {
-    "valid": true,
-    "database_path": "/data/companion-runtime.db",
-    "data_root": "/data"
-  }
-}
-```
-
-## Replay Validation
-
-**Result:** PASS.
-
-After sustained load, the latest real dispatch was reconstructed through:
-
-```http
-GET /api/v1/dispatches/dsp_56c275785d2f4a43b01ba288f2d81acc/reconstruction
-```
-
-Observed output:
-
-```json
-{
-  "dispatch_status": "COMPLETED",
-  "replay_status": "verified",
-  "deterministic": true,
-  "replay_type": "mitra-true-deterministic-replay-v1",
-  "verification_checks": 32,
-  "failed_checks": 0,
-  "input_message": "k6 runtime load 1-85",
-  "output_message": "k6 runtime load 1-85"
-}
-```
-
-All nine scopes were `true`: lifecycle, sessions, routing, attachments,
-context, dispatch, telemetry, recovery, and failures.
-
-## Production Validation
-
-**Result:** PASS for runtime execution; external remote-product health remains
-environment-dependent.
-
-The final complete test suite executed from the isolated installation:
-
-```text
-104 passed
-1 StarletteDeprecationWarning
-```
-
-After stress and acceptance load runs, the clean local runtime reported:
-
-```json
-{
-  "accepting": true,
-  "dispatches": 502,
-  "failed_dispatches": 0,
-  "dispatch_completed_total": 502,
-  "dispatch_failed_total": 0
-}
-```
-
-The aggregate health state became `DEGRADED` because the earlier local run
-used the example manifest directory, including local product endpoints that
-were not running. That fixture profile is no longer accepted as a production
-bootstrap source. Production now uses `contracts/production` and rejects
-example, simulated, loopback, and localhost manifests by default.
-
-## Failover Validation
-
-**Result:** PASS.
-
-Focused tests executed two runtime instances against shared state, dispatched
-through the second instance, stopped the first instance, and completed another
-dispatch through the survivor. A separate stale-peer test allowed a peer
-heartbeat to expire and verified that it was moved to `STOPPED`.
-
-```text
-test_multiple_runtime_instances_share_state_routes_and_dispatch PASSED
-test_persistent_runtime_marks_stale_peer_instances PASSED
-```
-
-The real-process failover capture is
-`review_packets/screenshots/failover.jpg`.
-
-## Recovery Validation
-
-**Result:** PASS.
-
-The recovery test received an unhealthy product response, persisted a failed
-dispatch, moved the attachment to `DEGRADED`, restored the fixture, returned
-the attachment to `ATTACHED`, and completed a new dispatch. The interrupted
-task test restarted a runtime and converted an orphaned `RUNNING` task to a
-terminal recovered failure.
-
-```text
-test_attachment_health_monitoring_and_recovery_validation PASSED
-test_persistent_runtime_recovers_interrupted_tasks_on_restart PASSED
-```
-
-Live operator recovery after load returned:
-
-```json
-{
-  "http_status": 200,
-  "recovery_status": "recovered",
-  "completed_at": "2026-07-09T13:13:04.164476+00:00",
-  "stale_instances": 0,
-  "recovered_tasks": 0
-}
-```
-
-## Load Testing
-
-**Result:** PASS at the tested 5-VU sustained envelope. CAPACITY LIMIT observed
-at 15 VUs.
-
-The test used real HTTP requests, sessions, dispatch receipts, and
-input/output equality checks for two minutes against the local runtime load
-profile. It is a runtime capacity test, not proof that an external BHIV
-product consumed the request.
-
-Passing command:
-
-```powershell
-$env:BASE_URL="http://127.0.0.1:8094"
-$env:PROFILE="runtime"
-$env:MAX_VUS="5"
-k6 run scripts/load/k6_companion_runtime.js
-```
-
-Passing result:
-
-```text
-max VUs:             5
-iterations:          210
-HTTP requests:       213
-checks:              633/633 passed
-HTTP failures:       0.00%
-average latency:     434.80 ms
-p90 latency:         653.00 ms
-p95 latency:         803.92 ms
-maximum latency:     1.28 s
-threshold result:    PASS
-```
-
-The unchanged 15-VU stress ceiling returned 0% HTTP failures and 879/879
-successful checks, but p95 was `3.74s`, exceeding the `1.5s` SLO. This is the
-current verified capacity boundary for the SQLite deployment, not a passing
-production claim.
-
-Load discovery led to two runtime changes: replay components are now written
-in one transaction, and replay snapshots contain dispatch-scoped state instead
-of an expanding copy of unrelated runtime history.
-
-## Hosted Runtime Validation
-
-**Result:** READ-SURFACE PASS; ROUTING/REPLAY REQUIRES REAL ATTACHED PRODUCT.
-
-Observed against
-`https://mitra-live-runtime-sprint.vercel.app` at
-`2026-07-09T12:44:11Z` before the production manifest-policy correction:
-
-```json
-{
-  "passed": "superseded",
-  "request_count": 22,
-  "failed_results": [],
-  "https": true,
-  "api": true,
-  "dashboard": true,
-  "openapi": true,
-  "routing": true,
-  "attachments": true,
-  "health": true,
-  "metrics": true,
-  "telemetry": true,
-  "replay": true,
-  "recovery": true
-}
-```
-
-That prior run used a validator-created Echo Lab loopback fixture and is no
-longer treated as production routing/replay evidence. The validator now
-discovers an already attached real product and ignores example, simulated,
-loopback, and localhost manifests. If no real product is attached, it reports
-routing and replay as blocked instead of creating fixture data. The public host
-uses ephemeral Vercel storage, so it also does not prove durable
-multi-instance continuity.
-
-Corrected validation after redeploy at `2026-07-10T07:24:13Z`:
-
-```json
-{
-  "passed": false,
-  "request_count": 16,
-  "failed_results": [
-    {
-      "name": "validation-target",
-      "http_status": null,
-      "error": "no real attached product was available; examples, simulated manifests, loopback dispatches, and localhost manifests are ignored"
-    }
-  ],
-  "https": true,
-  "api": true,
-  "dashboard": true,
-  "openapi": true,
-  "attachments": true,
-  "health": true,
-  "metrics": true,
-  "telemetry": true,
-  "recovery": true,
-  "routing": false,
-  "replay": false
-}
-```
+UniGuru's Supabase client initialized from ignored secrets. A request from the
+owner container to Supabase Auth returned HTTP 200, service `GoTrue`, with a
+version present. No secret value appears in this report or a tracked image.
 
 ## Integration Validation
 
-**Result:** PASS for published-contract interoperability. Live external
-acceptance remains unproven where endpoint credentials were unavailable.
+| Product | Execution | Owner result | Runtime result |
+| --- | --- | --- | --- |
+| UniGuru | `eco_07fa5401aaf94ebfb2cfd6ead3cd5424` | published response contract accepted the drip-irrigation result; KESHAV not called | `COMPLETED` |
+| Trade Bot | `eco_1ac97452891c43bdad40b786eb5b9089` | returned a prediction for the requested `NVDA` symbol; KESHAV not called | `COMPLETED` |
+| Trade Bot error | `eco_6e30b5bb66c549d6a691c4bc35b0582a` | real HTTP 422 preserved as `product_error`; KESHAV returned a trace-preserving resolution proposal | `COMPLETED` |
 
-Twelve focused tests passed in `30.01s`. They verified:
+The UniGuru trace was
+`4d0226817166d18f9023acf94b4bdb1e2a9e87df11c3f08df44bba5551e8ba54`.
+The Trade Bot trace was
+`b9701df1f6cb82e674f4d1401dfb0523610d22d73c4a014ba00b2882269ffa44`.
+The KESHAV error trace was
+`a5a09d63ce920ceb2c28f278f6159035c05c2d413c3e0858ab5759f6083a62b3`.
+Mitra preserved each product's semantic response instead of converting a
+product rejection into runtime acceptance.
 
-- every catalog operation declares a response contract;
-- every test/documentation manifest publishes response schemas;
-- Ashmit, Bucket, InsightFlow, Karma, PRANA, and Central Depository responses
-  are captured;
-- PRANA strict forwarding preserves exact Karma-accepted bytes;
-- PRANA forwarding is suppressed after Karma rejection;
-- cross-product context transfer and dispatch complete through published
-  manifests.
+Each execution recorded six dependency preflight responses. The success cases
+recorded 15 owner operations; the product-error case recorded 16 because it
+called KESHAV `/analyze`:
 
-No test imports downstream product business logic. Controlled transports
-implement the published HTTP contracts; they do not claim live external
-deployment consumption.
+- Raj workflow execution;
+- KESHAV health plus conditional dependency diagnosis;
+- Ashmit evaluation;
+- Bucket latest hash, append, exact read-back, and global replay;
+- Karma health head and integrity append;
+- PRANA strict-byte and core forwarding;
+- InsightFlow execution ingest;
+- Central Depository latest hash, append, exact read-back, and global replay.
 
-## Verification Commands
+Across the three executions all 64 preflight and owner operations retained a
+response. Mitra-facing owner calls returned HTTP 2xx, a response SHA-256, and
+accepted transport status. Raj separately preserved the product's HTTP 422 as
+a typed response. Owner statuses included
+Ashmit `ALLOW`, Karma `appended`, PRANA `forwarded`, InsightFlow `accepted`,
+and Bucket replay `valid=true`.
+
+## Public Bucket Storage Validation
+
+The personal public endpoint is
+[`https://pratham-bhiv-bucket.onrender.com`](https://pratham-bhiv-bucket.onrender.com).
+Its free Render web service uses free Render Key Value for runtime state and
+MongoDB Atlas as the authoritative append-only ledger. `/health` returned
+`healthy` with both MongoDB and Redis connected.
+
+With explicit publication approval, one minimal validation envelope was
+submitted on 2026-07-23. It contains the runtime and attached-product names
+only; it contains no prompt, product output, credential, or private execution
+state.
+
+| Artifact | Append and read-back |
+| --- | --- |
+| [`mitra-persistence-9cb0e1b3fb144a978531dc32b627a257`](https://pratham-bhiv-bucket.onrender.com/bucket/artifact/mitra-persistence-9cb0e1b3fb144a978531dc32b627a257) | POST 200 with `storage_type=append_only`; GET 200 with exact body and `chain_verified=true` |
+
+Independent sorted-key compact-JSON SHA-256 recomputation matched server hash
+`8d8bf07bd8f5aee5da2a6491cd2c747f796d5404a4b5a325ece0a151d7b62dca`.
+`POST /bucket/validate-replay` returned `valid=true`, artifact count `1`, and
+that hash as the chain head.
+
+The Render service was then restarted. The post-restart health response still
+reported MongoDB and Redis connected; the same artifact remained readable with
+the same body and hash; replay remained valid with the same count and chain
+head. The exact request, responses, and verification results are retained in
+`review_packets/testing/bucket-public-storage-live-evidence.json`. This is
+observed live behavior, not a simulated response or a proof generator.
+
+The redeployed Vercel Mitra runtime then executed preflight
+`eco_325bd69eeeb44eea837bff952b228553`. Its own recorded calls returned HTTP
+200 and `accepted` for Bucket `/health` and the Bucket-backed Central
+Depository `/bucket/latest-hash`, with the same artifact count and chain head.
+The execution subsequently failed closed because Raj, Ashmit, Karma, PRANA,
+and InsightFlow still lack public endpoint configuration; Bucket was not an
+unhealthy module.
+
+## Replay Validation
+
+| Execution | Package hash | Result |
+| --- | --- | --- |
+| UniGuru | `0bd258b0759bc2680d964c46ea2e6c771a19e1b17cd32cd08ec7e76586bd8583` | 11 components, 123/123 checks, isolated process, zero DB/live calls, mutation rejected |
+| Trade Bot | `c77d72e0e1cbc6f9445807066be5472d9d433bc61614e2491f4e51583c05fb86` | 11 components, 123/123 checks, isolated process, zero DB/live calls, mutation rejected |
+| Trade Bot error and KESHAV | `eb73fecea94d23e15e952e094edd9b55033e8fb6915eab33796c237200fe2553` | 11 components, 123/123 checks, isolated process, zero DB/live calls, mutation rejected |
+
+`scripts/validate_ecosystem_runtime.py` passed 425 assertions over the three
+actual executions and persisted their exact replay packages under
+`/data/operational-acceptance-keshav-final`. It did not generate narrative
+evidence or screenshots.
+
+The retained files were then re-read with:
 
 ```powershell
-python -m pytest -q
-python scripts/production_readiness_gate.py
-python scripts/validate_hosted_runtime.py --summary
-$env:MAX_VUS="5"; k6 run scripts/load/k6_companion_runtime.js
+docker compose -f docker-compose.ecosystem.yml exec -T mitra python scripts/validate_ecosystem_runtime.py --validate-package /data/operational-acceptance-keshav-final --summary
 ```
+
+All three v2 packages returned `verified`, 123/123 checks, deterministic
+reconstruction, zero database reads, and zero live calls in Python isolated
+mode. Their altered copies returned `failed`. Two retained pre-KESHAV v1
+packages were also validated by the current reader at 112/112 checks. The
+retained files were not rewritten by validation.
+
+Windows PowerShell 5 altered high-precision market numbers during one JSON
+round-trip and correctly caused 15 hash checks to fail. Native validation and
+a precision-preserving Python resubmission both passed 112/112. This is a
+client serialization limitation, not replay acceptance of changed data.
+
+## Recovery Validation
+
+Before and after restarting private Redis and Bucket, workflow artifacts
+`d25a8e32b1f6313cdf41e5ab71daf7423498be60b478a03f2b4e5db80ad7b766`
+and `ec8c668b4888eab37164cfb3151da402bcce79c7103b33b28f9a253c6b7c31e5`
+remained readable with `chain_verified=true`. Artifact count stayed `3`,
+global replay stayed valid, and last hash stayed
+`004bf46f1d9bf70ac85cd37e5f6439fb8d68df342b2ec17f5cd2e80fc431f2ea`.
+
+Checkpoint recovery remains covered by the automated suites. The live Bucket
+and Redis restart preserved their durable state as recorded above.
+
+## Failover Validation
+
+Shared-database lease takeover remains covered by the automated suites. No
+live cross-host network-partition or leader-election test was run.
+
+## Production Validation
+
+Docker Desktop 4.82.0, Engine 29.6.1, and Compose 5.3.0 built and ran the owner
+topology. Trade Bot uses the official `xgboost-cpu==3.2.0` package to avoid an
+unused GPU/NCCL runtime. Both products reported healthy and were `ATTACHED`.
+
+After a fresh Mitra image rebuild and container recreation, the three-case
+operational validator passed, `/ready` reported `READY`, recovery reported
+`recovered`, and the deployment-surface validator passed all 21 requests.
+
+Central Depository is Bucket-backed, not an independently deployed certifying
+authority. Full local customer convergence is validated without claiming
+external certification.
+
+## Load Testing
+
+No new sustained-load or long-duration result is claimed in this pass.
+
+## Hosted Runtime Validation
+
+The independent Vercel host still serves HTTPS dashboard and API surfaces, but
+cannot resolve local Docker service names. Therefore full local convergence is
+validated; public full-chain convergence and cross-host disaster recovery are
+not claimed.

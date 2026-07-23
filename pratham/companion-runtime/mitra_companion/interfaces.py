@@ -145,6 +145,8 @@ class AttachmentRuntimeInterface(Protocol):
     def attach(
         self,
         manifest: ProductAttachmentManifest,
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]: ...
 
     def get(self, product_id: str) -> dict[str, Any]: ...
@@ -152,6 +154,8 @@ class AttachmentRuntimeInterface(Protocol):
     def attach_many(
         self,
         manifests: Iterable[ProductAttachmentManifest],
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]: ...
 
     def list(
@@ -205,11 +209,15 @@ class CompanionRuntimeInterface(
     def attach(
         self,
         manifest: ProductAttachmentManifest,
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]: ...
 
     def attach_many(
         self,
         manifests: Iterable[ProductAttachmentManifest],
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]: ...
 
     def detach(self, product_id: str) -> dict[str, Any]: ...

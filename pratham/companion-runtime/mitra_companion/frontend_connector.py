@@ -5,7 +5,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from .contracts import CompanionMessageRequest
+from .contracts import CompanionMessageRequest, EcosystemExecutionRequest
 from .runtime import CompanionRuntime
 from .utils import utc_now
 
@@ -35,12 +35,19 @@ class FrontendWorkflowRequest(BaseModel):
     workflow_name: str = Field(min_length=1, max_length=200)
     user_id: str = Field(min_length=1, max_length=200)
     message: str | None = Field(default=None, min_length=1, max_length=4000)
+    assignment: str | None = Field(default=None, min_length=1, max_length=12000)
     platform: str = "web"
     session_id: str | None = Field(default=None, min_length=1)
     workspace_id: str | None = Field(default=None, min_length=1, max_length=200)
     product_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     capability_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     payload: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=200,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -108,34 +115,81 @@ def create_frontend_connector_router(
     async def frontend_workflow(
         request: FrontendWorkflowRequest,
     ) -> dict[str, Any]:
-        chat_request = FrontendChatRequest(
-            user_id=request.user_id,
-            message=request.message or _workflow_message(request.workflow_name),
-            platform=request.platform,
-            session_id=request.session_id,
-            workspace_id=request.workspace_id,
-            product_id=request.product_id,
-            capability_id=request.capability_id,
-            payload=request.payload,
-            metadata={
-                **request.metadata,
-                "frontend_workflow_name": request.workflow_name,
-                "frontend_route": "/api/workflow/run",
-            },
+        payload = _workflow_payload(request)
+        metadata = {
+            **request.metadata,
+            "frontend_connector": "mitra-command-center",
+            "frontend_workflow_name": request.workflow_name,
+            "frontend_route": "/api/workflow/run",
+            "frontend_platform": request.platform,
+        }
+        if request.model_extra:
+            metadata["frontend_extra"] = dict(request.model_extra)
+        result = await companion.execute_ecosystem(
+            EcosystemExecutionRequest(
+                session_id=request.session_id,
+                actor_id=request.user_id,
+                client_type=_client_type(request.platform),
+                workspace_id=(
+                    request.workspace_id or f"frontend:{request.user_id}"
+                ),
+                product_id=request.product_id,
+                capability_id=request.capability_id,
+                message=(
+                    request.message
+                    or _workflow_message(request.workflow_name)
+                ),
+                assignment=request.assignment,
+                payload=payload,
+                idempotency_key=request.idempotency_key,
+                metadata=metadata,
+            )
         )
-        result = await companion.companion_message(
-            _to_companion_request(chat_request)
-        )
+        execution = result["execution"]
         return {
             "workflow_name": request.workflow_name,
-            "status": result["status"],
-            "session_id": result["session"]["session_id"],
-            "message": result["message"]["content"],
-            "result": _chat_response(result),
-            "connector": _connector_summary(),
+            "status": execution["status"],
+            "execution_id": execution["execution_id"],
+            "trace_id": execution["trace_id"],
+            "session_id": execution.get("session_id"),
+            "current_stage": execution.get("current_stage"),
+            "result": result,
+            "connector": {
+                **_connector_summary(),
+                "workflow_target": "/api/v1/ecosystem/execute",
+            },
         }
 
     return router
+
+
+def _workflow_payload(request: FrontendWorkflowRequest) -> dict[str, Any]:
+    payload = dict(request.payload)
+    raj_workflow = payload.get("raj_workflow")
+    if isinstance(raj_workflow, dict):
+        payload["raj_workflow"] = {
+            **raj_workflow,
+            "workflow_name": request.workflow_name,
+            "user_id": request.user_id,
+        }
+        return payload
+
+    action_type = payload.get("action_type")
+    if not isinstance(action_type, str) and request.workflow_name in {
+        "ai",
+        "email",
+        "task",
+        "whatsapp",
+    }:
+        action_type = request.workflow_name
+    if isinstance(action_type, str) and action_type:
+        payload["raj_workflow"] = {
+            **payload,
+            "action_type": action_type,
+            "workflow_name": request.workflow_name,
+            "user_id": request.user_id,
+        }
+    return payload
 
 
 def _to_companion_request(

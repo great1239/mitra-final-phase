@@ -11,6 +11,9 @@ import httpx
 
 
 DEFAULT_HOSTED_RUNTIME_URL = "https://mitra-live-runtime-sprint.vercel.app"
+DEFAULT_TIMEOUT_SECONDS = float(
+    os.getenv("MITRA_VALIDATION_TIMEOUT_SECONDS", "180")
+)
 
 
 READ_ENDPOINTS = (
@@ -186,6 +189,25 @@ def _require(
 
 
 def _sample_value(name: str, schema: dict[str, Any]) -> Any:
+    if "const" in schema:
+        return schema["const"]
+    enum = schema.get("enum")
+    if isinstance(enum, list) and enum:
+        return enum[0]
+    for composition in ("oneOf", "anyOf"):
+        choices = schema.get(composition)
+        if isinstance(choices, list) and choices:
+            choice = next(
+                (
+                    item
+                    for item in choices
+                    if isinstance(item, dict)
+                    and item.get("type") != "null"
+                ),
+                choices[0],
+            )
+            if isinstance(choice, dict):
+                return _sample_value(name, choice)
     value_type = schema.get("type", "string")
     if isinstance(value_type, list):
         value_type = next((item for item in value_type if item != "null"), "string")
@@ -196,10 +218,31 @@ def _sample_value(name: str, schema: dict[str, Any]) -> Any:
     if value_type == "boolean":
         return True
     if value_type == "array":
-        return []
+        item_schema = schema.get("items")
+        if not isinstance(item_schema, dict):
+            item_schema = {"type": "string"}
+        item_count = max(1, int(schema.get("minItems", 0)))
+        return [
+            _sample_value(f"{name}-item-{index + 1}", item_schema)
+            for index in range(item_count)
+        ]
     if value_type == "object":
-        return {}
-    return f"hosted-runtime-validation-{name}"
+        return _payload_from_schema(schema)
+    if value_type == "string":
+        lowered = name.lower()
+        if "symbol" in lowered:
+            value = "AAPL"
+        elif "session" in lowered:
+            value = "hosted-validation"
+        else:
+            value = f"validation-{name}"
+        min_length = max(0, int(schema.get("minLength", 0)))
+        max_length = int(schema.get("maxLength", max(len(value), min_length, 64)))
+        value = value[:max_length]
+        if len(value) < min_length:
+            value += "x" * (min_length - len(value))
+        return value
+    return f"validation-{name}"
 
 
 def _payload_from_schema(schema: dict[str, Any] | None) -> dict[str, Any]:
@@ -532,7 +575,13 @@ def _runtime_flow(client: httpx.Client, base_url: str) -> list[dict[str, Any]]:
 
 def main() -> int:
     base_url = _target_url()
-    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+    target_host = (urlparse(base_url).hostname or "").lower()
+    https_observed = base_url.startswith("https://")
+    https_required = target_host not in LOCALHOSTS
+    with httpx.Client(
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+        follow_redirects=True,
+    ) as client:
         read_results = [
             _probe(client, base_url, name, path)
             for name, path in READ_ENDPOINTS
@@ -549,7 +598,7 @@ def main() -> int:
         results = [*read_results, *flow_results, *post_flow_results]
     coverage = {
         "live_runtime": any(item["name"] == "api-status" and item["status"] == "ok" for item in results),
-        "https": base_url.startswith("https://"),
+        "https": https_observed or not https_required,
         "api": any(item["url"].endswith("/api/v1/runtime/status") and item["status"] == "ok" for item in results),
         "dashboard": any(item["name"] == "dashboard" and item["status"] == "ok" for item in results),
         "openapi": any(item["name"] == "openapi-json" and item["status"] == "ok" for item in results),
@@ -573,6 +622,11 @@ def main() -> int:
         "validation_type": "mitra-hosted-runtime-output-validation",
         "hosted_runtime_url": base_url,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "transport_security": {
+            "https_observed": https_observed,
+            "https_required": https_required,
+            "loopback_exception": not https_required and not https_observed,
+        },
         "required_coverage": coverage,
         "results": results,
         "passed": all(item["status"] == "ok" for item in results)
@@ -595,6 +649,7 @@ def main() -> int:
                     "hosted_runtime_url": base_url,
                     "generated_at": packet["generated_at"],
                     "passed": packet["passed"],
+                    "transport_security": packet["transport_security"],
                     "required_coverage": coverage,
                     "request_count": len(results),
                     "failed_results": failed_results,

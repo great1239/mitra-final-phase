@@ -33,7 +33,15 @@ os.environ.setdefault(
 )
 os.environ.setdefault(
     "MITRA_COMPANION_MANIFEST_DIRECTORY",
-    str(ROOT / "contracts" / "examples"),
+    str(ROOT / "contracts" / "production"),
+)
+os.environ.setdefault("MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS", "false")
+os.environ.setdefault("MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS", "false")
+os.environ.setdefault("MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS", "false")
+os.environ.setdefault("MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS", "false")
+os.environ.setdefault(
+    "MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS",
+    "true",
 )
 os.environ.setdefault("MITRA_COMPANION_OTEL_ENABLED", "false")
 os.environ.setdefault("MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED", "false")
@@ -45,4 +53,3 @@ from mitra_companion.config import RuntimeSettings  # noqa: E402
 
 
 app = create_app(settings=RuntimeSettings.from_environment())
-

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import uuid4
 
 from .store import RuntimeStore
 from .utils import sha256_json
@@ -57,12 +56,33 @@ class CentralDepository:
         artifact_hash: str,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        normalized_metadata = metadata or {}
+        lineage_id = "lin_" + sha256_json(
+            {
+                "subject_type": subject_type,
+                "subject_id": subject_id,
+                "artifact_hash": artifact_hash,
+                "metadata": normalized_metadata,
+            }
+        )[:32]
+        existing = self.store.get_central_lineage_entry(lineage_id)
+        if existing is not None:
+            if (
+                existing["subject_type"] != subject_type
+                or existing["subject_id"] != subject_id
+                or existing["artifact_hash"] != artifact_hash
+                or existing.get("metadata", {}) != normalized_metadata
+            ):
+                raise ValueError(
+                    "Deterministic lineage identity resolved to different content"
+                )
+            return existing
         return self.store.append_central_lineage(
-            lineage_id=f"lin_{uuid4().hex}",
+            lineage_id=lineage_id,
             subject_type=subject_type,
             subject_id=subject_id,
             artifact_hash=artifact_hash,
-            metadata=metadata,
+            metadata=normalized_metadata,
         )
 
     def artifact(self, artifact_hash: str) -> dict[str, Any] | None:

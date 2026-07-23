@@ -16,6 +16,22 @@ from .ports import TransportAdapter
 TransportHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
+def _normalize_endpoint_overrides(
+    overrides: dict[str, str] | None,
+) -> dict[str, str]:
+    return {
+        source.rstrip("/"): target.rstrip("/")
+        for source, target in (overrides or {}).items()
+    }
+
+
+def _rewrite_endpoint(endpoint: str, overrides: dict[str, str]) -> str:
+    for source in sorted(overrides, key=len, reverse=True):
+        if endpoint == source or endpoint.startswith(source + "/"):
+            return overrides[source] + endpoint[len(source) :]
+    return endpoint
+
+
 class LoopbackTransportAdapter:
     """In-memory adapter for tests, demos, and embedded host bindings."""
 
@@ -84,9 +100,13 @@ class HttpTransportAdapter:
         *,
         default_timeout_seconds: float,
         http_transport: httpx.AsyncBaseTransport | None = None,
+        endpoint_overrides: dict[str, str] | None = None,
     ):
         self.default_timeout_seconds = default_timeout_seconds
         self.http_transport = http_transport
+        self.endpoint_overrides = _normalize_endpoint_overrides(
+            endpoint_overrides
+        )
 
     def validate_target(
         self,
@@ -194,6 +214,14 @@ class HttpTransportAdapter:
         if not base_url:
             raise TransportError("Relative HTTP endpoint requires product base_url")
         return urljoin(base_url.rstrip("/") + "/", endpoint.lstrip("/"))
+
+    def _resolve_runtime_endpoint(
+        self,
+        endpoint: str,
+        base_url: str | None,
+    ) -> str:
+        published = self._resolve_endpoint(endpoint, base_url)
+        return _rewrite_endpoint(published, self.endpoint_overrides)
 
     @staticmethod
     def _request_kwargs(
@@ -365,7 +393,7 @@ class HttpTransportAdapter:
                 continue
             if not self._matches_response_condition(primary_payload, condition):
                 continue
-            fallback_endpoint = self._resolve_endpoint(
+            fallback_endpoint = self._resolve_runtime_endpoint(
                 str(fallback["endpoint"]),
                 base_url,
             )
@@ -405,7 +433,7 @@ class HttpTransportAdapter:
         target = route["dispatch"]
         endpoint = target["endpoint"]
         base_url = manifest.get("base_url")
-        endpoint = self._resolve_endpoint(endpoint, base_url)
+        endpoint = self._resolve_runtime_endpoint(endpoint, base_url)
         timeout = (
             target.get("timeout_seconds")
             or self.default_timeout_seconds
@@ -634,9 +662,13 @@ class CapabilityTransport:
         default_timeout_seconds: float,
         http_transport: httpx.AsyncBaseTransport | None = None,
         adapters: list[TransportAdapter] | None = None,
+        endpoint_overrides: dict[str, str] | None = None,
     ):
         self.default_timeout_seconds = default_timeout_seconds
         self.http_transport = http_transport
+        self.endpoint_overrides = _normalize_endpoint_overrides(
+            endpoint_overrides
+        )
         self._adapters: dict[str, TransportAdapter] = {}
         self.loopback_adapter = LoopbackTransportAdapter()
         self.register_adapter(self.loopback_adapter)
@@ -644,6 +676,7 @@ class CapabilityTransport:
             HttpTransportAdapter(
                 default_timeout_seconds=default_timeout_seconds,
                 http_transport=http_transport,
+                endpoint_overrides=self.endpoint_overrides,
             )
         )
         for adapter in adapters or []:
@@ -730,6 +763,8 @@ class CapabilityTransport:
                 str(base_url).rstrip("/") + "/",
                 endpoint.lstrip("/"),
             )
+        published_endpoint = endpoint
+        endpoint = _rewrite_endpoint(endpoint, self.endpoint_overrides)
         started = time.perf_counter()
         try:
             async with httpx.AsyncClient(
@@ -780,6 +815,8 @@ class CapabilityTransport:
                 "response": payload,
                 "health_contract": health_contract,
             }
+            if endpoint != published_endpoint:
+                result["published_endpoint"] = published_endpoint
             if str(response.url) != endpoint:
                 result["final_endpoint"] = str(response.url)
             if response.history:
@@ -798,7 +835,7 @@ class CapabilityTransport:
             return result
         except (httpx.HTTPError, httpx.TimeoutException) as exc:
             latency_ms = (time.perf_counter() - started) * 1000
-            return {
+            result = {
                 "product_id": product_id,
                 "status": "unhealthy",
                 "transport": "http",
@@ -806,3 +843,6 @@ class CapabilityTransport:
                 "endpoint": endpoint,
                 "error": f"{type(exc).__name__}: {exc}",
             }
+            if endpoint != published_endpoint:
+                result["published_endpoint"] = published_endpoint
+            return result

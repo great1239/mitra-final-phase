@@ -42,7 +42,22 @@
       "/api/v1/runtime/capability-plan",
       "/api/v1/runtime/depository",
       "/api/v1/runtime/integrations",
+      "/api/v1/runtime/integrations/tantra/deliveries",
+      "/api/v1/runtime/integrations/tantra/process",
+      "/api/v1/runtime/integrations/tantra/health",
+      "/api/v1/runtime/integrations/tantra/reconcile",
+      "/api/v1/runtime/continuity",
+      "/api/v1/runtime/continuity/check",
+      "/api/v1/runtime/dependencies/health",
       "/api/v1/runtime/analysis",
+      "/api/v1/ecosystem/readiness",
+      "/api/v1/ecosystem/contracts",
+      "/api/v1/ecosystem/execute",
+      "/api/v1/ecosystem/executions",
+      "/api/v1/ecosystem/executions/{execution_id}",
+      "/api/v1/ecosystem/executions/{execution_id}/recover",
+      "/api/v1/ecosystem/executions/{execution_id}/replay",
+      "/api/v1/ecosystem/replay/validate",
       "/api/v1/companion/messages",
       "/api/v1/companion/messages/stream",
       "/api/v1/companion/sessions/{session_id}/memory",
@@ -75,7 +90,8 @@
       "/api/v1/dispatches/{dispatch_id}",
       "/api/v1/dispatches/{dispatch_id}/phases",
       "/api/v1/dispatches/{dispatch_id}/proof",
-      "/api/v1/dispatches/{dispatch_id}/reconstruction"
+      "/api/v1/dispatches/{dispatch_id}/reconstruction",
+      "/api/v1/reconstruction/validate"
     ]
   },
   "schemas": [
@@ -140,6 +156,16 @@
       "version": "1.0.0"
     },
     {
+      "id": "ecosystem-execution",
+      "path": "contracts/schemas/ecosystem-execution.schema.json",
+      "version": "1.0.0"
+    },
+    {
+      "id": "ecosystem-replay-validation",
+      "path": "contracts/schemas/ecosystem-replay-validation.schema.json",
+      "version": "1.0.0"
+    },
+    {
       "id": "runtime-depository-export",
       "path": "contracts/schemas/runtime-depository-export.schema.json",
       "version": "1.0.0"
@@ -195,6 +221,11 @@
       "version": "1.0.0"
     },
     {
+      "id": "tantra-handover-package",
+      "path": "contracts/schemas/tantra-handover.schema.json",
+      "version": "1.0.0"
+    },
+    {
       "id": "integration-contracts",
       "path": "contracts/schemas/integration-contracts.schema.json",
       "version": "1.0.0"
@@ -210,6 +241,16 @@
       "port": "TransportAdapter",
       "python_protocol": "mitra_companion.ports.TransportAdapter",
       "purpose": "dispatch versioned envelopes through product-owned transports"
+    },
+    {
+      "port": "TantraHandoverAdapter",
+      "python_protocol": "mitra_companion.tantra_handover.TantraHandoverAdapter",
+      "purpose": "project immutable dispatch facts into the published TANTRA gateway package and deliver through a lease-fenced durable outbox without importing downstream authority logic"
+    },
+    {
+      "port": "PublishedEcosystemClient",
+      "python_protocol": "mitra_companion.ecosystem.PublishedEcosystemClient",
+      "purpose": "execute the strict Raj, conditional KESHAV, Ashmit, Bucket, Karma, PRANA, and InsightFlow owner contracts without embedded fallback or owner-logic imports"
     }
   ],
   "examples": [
@@ -250,7 +291,7 @@
       "path": "contracts/examples/product-setu-bridge.json"
     },
     {
-      "name": "KESHAV knowledge provider manifest",
+      "name": "KESHAV deterministic dependency intelligence manifest",
       "path": "contracts/examples/product-keshav-knowledge.json"
     },
     {

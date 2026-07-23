@@ -12,11 +12,15 @@ Bearer token injection, strict health-contract validation, declared health
 translation, and manifest-driven response fallback dispatch so real product
 APIs can be attached without embedding credentials or accepting frontend HTML
 fallbacks as healthy APIs.
+Added product-neutral published-origin rewriting for both health and dispatch,
+while retaining the manifest URL in response facts.
 
 **Key implementation areas:** `dispatch.options.headers`;
 `dispatch.options.secret_headers`; `dispatch.options.bearer_token_env`;
 `dispatch.options.response_fallbacks`; `*_FILE` secret loading; JSON
 health-contract enforcement; `metadata.health_contract.translator`.
+health-contract enforcement; `metadata.health_contract.translator`; normalized
+origin matching; effective and published endpoint receipts.
 
 **Review focus:** Header precedence, absence of hardcoded product branches,
 secret redaction, behavior when secret files are missing, and whether declared

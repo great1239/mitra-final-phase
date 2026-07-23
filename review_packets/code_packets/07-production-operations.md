@@ -10,11 +10,17 @@ companion settings from the environment.
 **Why modified:** Added the final convergence endpoints, hashes, failure
 policy, production profiles, instance controls, and companion analysis
 configuration. Added manifest policy settings that default production away from
-examples, simulations, loopback dispatch, and localhost product URLs.
+examples, simulations, loopback dispatch, and localhost product URLs. Added
+TANTRA gateway URL, optional API key, timeout, and redacted readiness fields.
+Added coordination lease, continuity scan, and durable delivery retry bounds.
+Added validated published-origin endpoint overrides with redacted summary
+counts for private owner-network deployment.
 
 **Key implementation areas:** Environment parsing; manifest policy defaults;
 BHIV URLs; Karma and Bucket hash state; fail-closed mode; runtime instance
-identity; production paths; secret redaction.
+identity; production paths; TANTRA package-only/gateway mode; `_FILE` secret
+loading; lease duration; retry/backoff limits; endpoint-map validation; secret
+redaction.
 
 **Review focus:** Secure defaults, fixture-manifest rejection, boolean and
 timeout parsing, environment precedence, accidental secret exposure, and
@@ -22,7 +28,9 @@ behavior when integrations are partially configured.
 
 **Related tests:** `pratham/tests/test_bhiv_integrations.py`,
 `pratham/tests/test_production_readiness_gate.py`,
-`pratham/tests/test_production_hardening.py`.
+`pratham/tests/test_production_hardening.py`,
+`pratham/tests/test_tantra_handover.py`, and
+`pratham/tests/test_bhiv_product_integration.py`.
 
 ## File: `pratham/companion-runtime/mitra_companion/telemetry.py`
 

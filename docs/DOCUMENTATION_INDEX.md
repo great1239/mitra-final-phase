@@ -13,6 +13,10 @@ Runtime. Incoming engineers should follow the documents in the order below.
 | Integrate a product | `docs/INTEGRATION_GUIDE.md` |
 | Integrate BHIV runtime consumers | `docs/BHIV_PRODUCT_INTEGRATION.md` |
 | Export artifacts to Central Depository | `docs/CENTRAL_DEPOSITORY_HANDOVER.md` |
+| Connect Mitra execution to TANTRA | `docs/TANTRA_INTEGRATION.md` |
+| Execute the final TANTRA ecosystem chain | `docs/TANTRA_ECOSYSTEM_CONVERGENCE.md` |
+| Check live integration status and pitfalls | `docs/ECOSYSTEM_CONFIGURATION_STATUS.md` |
+| Run and connect the Ashmit owner service | `docs/ASHMIT_OWNER_RUNTIME.md` |
 | Deploy to the durable host | `docs/INDEPENDENT_HOSTING.md` |
 | Deploy the public serverless host | `docs/VERCEL_DEPLOYMENT.md` |
 | Review SLOs and capacity | `docs/SLO_AND_CAPACITY.md` |

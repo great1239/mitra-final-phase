@@ -2,23 +2,25 @@
 
 ## File: `pratham/companion-runtime/mitra_companion/bhiv_integrations.py`
 
-**Sprint change:** Added
+**Sprint change:** Replaced legacy executor with a non-executing compatibility recorder
 
-**Purpose:** Publishes Mitra runtime outputs to Ashmit, Bucket, InsightFlow,
-Karma, PRANA, and the Central Depository export through declared contracts.
+**Purpose:** Preserves the ordinary dispatch response shape while directing all
+owner execution to `EcosystemRuntime`. It never calls or emulates an owner.
 
-**Why modified:** Completed the assigned ecosystem handoffs while preserving
-Mitra's ownership boundary and the required Karma-before-PRANA ordering.
+**Why modified:** The previous implementation duplicated the canonical chain
+and could produce local owner successes. That path conflicted with the required
+no-mock, owner-contract-only workflow.
 
-**Key implementation areas:** API call catalog; canonical JSON and SHA-256;
-Karma append acceptance; strict-byte PRANA forwarding; Bucket artifact
-publication; InsightFlow envelope; Ashmit health; normalized responses.
+**Key implementation areas:** canonical endpoint declaration; redacted
+configuration status; zero-I/O `not_executed` results; immutable compatibility
+record and lineage.
 
-**Review focus:** Exact request bytes, trace ID preservation, replay keys,
-previous/parent hash handling, forwarding suppression after Karma rejection,
-timeout behavior, and response capture for every call.
+**Review focus:** Confirm no HTTP method is reachable from this compatibility
+class, no embedded owner implementation remains, and ordinary dispatch points
+reviewers to `/api/v1/ecosystem/execute`.
 
-**Related tests:** `pratham/tests/test_bhiv_integrations.py`.
+**Related tests:** `pratham/tests/test_bhiv_integrations.py`,
+`pratham/tests/test_tantra_handover.py`.
 
 ## File: `contracts/integration-contracts.json`
 
@@ -38,27 +40,24 @@ integration ownership; source-scope entries; contract versioning.
 response fields, version consistency, and whether external authority remains
 outside Mitra.
 
-**Related tests:** `pratham/tests/test_bhiv_integrations.py::test_bhiv_integration_catalog_declares_response_contracts`,
+**Related tests:** `pratham/tests/test_bhiv_integrations.py::test_legacy_exporter_declares_canonical_owner_workflow`,
 `contracts/integration-tests/test_contract_examples.py`.
 
 ## File: `pratham/tests/test_bhiv_integrations.py`
 
 **Sprint change:** Added
 
-**Purpose:** Exercises real integration sequencing against contract transports
-and validates each captured module response.
+**Purpose:** Proves the compatibility exporter performs zero owner I/O and that
+ordinary dispatch cannot be mistaken for ecosystem convergence.
 
-**Why modified:** Added interoperability checks for all available assigned
-modules, including strict forwarding and rejection paths.
+**Why modified:** Removed tests whose expected result was a successful embedded
+owner flow. Canonical sequencing is tested in `test_ecosystem_convergence.py`.
 
-**Key implementation areas:** API response catalog; canonical request hashes;
-Karma and PRANA sequencing; Bucket and InsightFlow payloads; Ashmit health;
-depository references.
+**Key implementation areas:** API catalog; canonical-only readiness; zero HTTP
+calls even when endpoint settings are populated; `not_executed` response shape.
 
-**Review focus:** Byte identity assertions, rejection-path isolation, response
-schema coverage, and whether mocks emulate published contracts without hiding
-runtime branching.
+**Review focus:** Absence of local owner behavior and separation between product
+dispatch and canonical ecosystem execution.
 
 **Related tests:** This file is the focused suite; contract examples are
 validated by `contracts/integration-tests/test_contract_examples.py`.
-

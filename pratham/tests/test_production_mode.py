@@ -14,6 +14,7 @@ from mitra_companion.constants import (
     SCHEMA_VERSION,
 )
 from mitra_companion.runtime import CompanionRuntime
+from mitra_companion.contracts import ProductAttachmentManifest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -162,6 +163,46 @@ def test_runtime_operations_api_exposes_production_mode(settings_factory):
         assert restarted.status_code == 200
         assert restarted.json()["restart"]["status"] == "restarted"
         assert client.get("/ready").status_code == 200
+
+
+def test_startup_source_reconciles_a_persisted_manifest_revision(
+    settings_factory,
+):
+    settings = settings_factory()
+    settings.persistent_runtime_enabled = False
+    original = ProductAttachmentManifest.model_validate_json(
+        (ROOT / "contracts" / "examples" / "product-uniguru-runtime.json")
+        .read_text(encoding="utf-8")
+    )
+    revised = original.model_copy(update={"product_version": "1.0.1"})
+
+    class ManifestSource:
+        def __init__(self, manifest):
+            self.manifest = manifest
+
+        def load(self):
+            return [self.manifest]
+
+    first = CompanionRuntime(settings)
+    first.startup_manager.start([ManifestSource(original)])
+    first.stop()
+
+    restarted = CompanionRuntime(settings)
+    try:
+        report = restarted.startup_manager.start([ManifestSource(revised)])
+        attachment = restarted.attachments.get(original.product_id)
+        assert attachment["state"] == "ATTACHED"
+        assert attachment["manifest"]["product_version"] == "1.0.1"
+        source_phase = next(
+            phase
+            for phase in report["phases"]
+            if phase["name"] == "manifest_sources_loaded"
+        )
+        assert source_phase["detail"]["sources"][0][
+            "attachment_count"
+        ] == 1
+    finally:
+        restarted.stop()
 
 
 def test_production_policy_does_not_bootstrap_example_manifests(

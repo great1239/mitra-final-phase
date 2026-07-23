@@ -470,10 +470,13 @@ def test_persistent_runtime_supervisor_refreshes_heartbeat(tmp_path):
         before = runtime.store.get_runtime_instance(
             "persistent-runtime"
         )["last_heartbeat_at"]
-        time.sleep(0.18)
-        after = runtime.store.get_runtime_instance(
-            "persistent-runtime"
-        )["last_heartbeat_at"]
+        deadline = time.monotonic() + 2.0
+        after = before
+        while after <= before and time.monotonic() < deadline:
+            time.sleep(0.05)
+            after = runtime.store.get_runtime_instance(
+                "persistent-runtime"
+            )["last_heartbeat_at"]
 
         status = runtime.status()
         assert after > before

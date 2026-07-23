@@ -73,6 +73,17 @@ class RuntimeStore:
                     stopped_at TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS runtime_leases (
+                    lease_name TEXT PRIMARY KEY,
+                    holder_instance_id TEXT NOT NULL,
+                    lease_token TEXT NOT NULL,
+                    acquired_at TEXT NOT NULL,
+                    renewed_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_runtime_leases_holder
+                    ON runtime_leases(holder_instance_id, expires_at);
+
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
                     parent_session_id TEXT,
@@ -122,6 +133,18 @@ class RuntimeStore:
                     last_error TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS dependency_observations (
+                    observation_id TEXT PRIMARY KEY,
+                    product_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    latency_ms REAL,
+                    detail_json TEXT NOT NULL,
+                    runtime_instance_id TEXT NOT NULL,
+                    observed_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_dependency_observations_product
+                    ON dependency_observations(product_id, observed_at);
+
                 CREATE TABLE IF NOT EXISTS dispatches (
                     dispatch_id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL,
@@ -138,6 +161,78 @@ class RuntimeStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_dispatches_session
                     ON dispatches(session_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS ecosystem_executions (
+                    execution_id TEXT PRIMARY KEY,
+                    idempotency_key TEXT UNIQUE,
+                    trace_id TEXT NOT NULL UNIQUE,
+                    session_id TEXT,
+                    actor_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    current_stage TEXT,
+                    request_hash TEXT NOT NULL,
+                    request_json TEXT NOT NULL,
+                    capability_json TEXT,
+                    replay_package_hash TEXT,
+                    replay_package_json TEXT,
+                    last_error TEXT,
+                    runtime_instance_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ecosystem_executions_status
+                    ON ecosystem_executions(status, created_at);
+                CREATE INDEX IF NOT EXISTS idx_ecosystem_executions_session
+                    ON ecosystem_executions(session_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS ecosystem_execution_stages (
+                    execution_id TEXT NOT NULL,
+                    stage_name TEXT NOT NULL,
+                    stage_index INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    request_hash TEXT,
+                    request_json TEXT,
+                    response_hash TEXT,
+                    response_json TEXT,
+                    artifact_hash TEXT,
+                    lineage_id TEXT,
+                    chain_hash TEXT,
+                    last_error TEXT,
+                    started_at TEXT,
+                    finished_at TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(execution_id, stage_name),
+                    FOREIGN KEY(execution_id)
+                        REFERENCES ecosystem_executions(execution_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ecosystem_stages_status
+                    ON ecosystem_execution_stages(status, stage_name);
+
+                CREATE TABLE IF NOT EXISTS ecosystem_stage_attempts (
+                    execution_id TEXT NOT NULL,
+                    stage_name TEXT NOT NULL,
+                    attempt INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    request_hash TEXT,
+                    request_json TEXT,
+                    response_hash TEXT,
+                    response_json TEXT,
+                    last_error TEXT,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    PRIMARY KEY(execution_id, stage_name, attempt),
+                    FOREIGN KEY(execution_id, stage_name)
+                        REFERENCES ecosystem_execution_stages(
+                            execution_id, stage_name
+                        )
+                );
+                CREATE INDEX IF NOT EXISTS idx_ecosystem_attempts_execution
+                    ON ecosystem_stage_attempts(
+                        execution_id, stage_name, attempt
+                    );
 
                 CREATE TABLE IF NOT EXISTS dispatch_phases (
                     dispatch_id TEXT NOT NULL,
@@ -261,6 +356,46 @@ class RuntimeStore:
                     ON central_lineage(subject_type, subject_id, sequence);
                 CREATE INDEX IF NOT EXISTS idx_central_lineage_subject
                     ON central_lineage(subject_type, subject_id, sequence);
+
+                CREATE TABLE IF NOT EXISTS integration_outbox (
+                    delivery_id TEXT PRIMARY KEY,
+                    integration_name TEXT NOT NULL,
+                    dispatch_id TEXT NOT NULL,
+                    trace_id TEXT NOT NULL,
+                    request_hash TEXT NOT NULL,
+                    request_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TEXT,
+                    lease_owner_id TEXT,
+                    lease_token TEXT,
+                    lease_expires_at TEXT,
+                    last_error TEXT,
+                    last_response_json TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    UNIQUE(integration_name, dispatch_id, request_hash)
+                );
+                CREATE INDEX IF NOT EXISTS idx_integration_outbox_due
+                    ON integration_outbox(
+                        integration_name, status, next_attempt_at
+                    );
+                CREATE INDEX IF NOT EXISTS idx_integration_outbox_dispatch
+                    ON integration_outbox(dispatch_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS continuity_snapshots (
+                    snapshot_id TEXT PRIMARY KEY,
+                    runtime_instance_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    checked_count INTEGER NOT NULL,
+                    issue_count INTEGER NOT NULL,
+                    snapshot_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_continuity_snapshots_created
+                    ON continuity_snapshots(created_at);
+
                 """
             )
             self._migrate_legacy_workspace_contexts(connection)
@@ -400,6 +535,121 @@ class RuntimeStore:
                     ),
                 )
         return stale
+
+    def claim_runtime_lease(
+        self,
+        *,
+        lease_name: str,
+        instance_id: str,
+        lease_seconds: float,
+    ) -> dict[str, Any]:
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
+        expires_at = (
+            now_dt + timedelta(seconds=max(0.1, lease_seconds))
+        ).isoformat()
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT * FROM runtime_leases WHERE lease_name = ?",
+                    (lease_name,),
+                ).fetchone()
+                current = bool(row and row["expires_at"] > now)
+                held_by_caller = bool(
+                    row and row["holder_instance_id"] == instance_id
+                )
+                if current and not held_by_caller:
+                    connection.execute("COMMIT")
+                    result = dict(row)
+                    result.pop("lease_token", None)
+                    result["acquired"] = False
+                    return result
+
+                lease_token = (
+                    row["lease_token"]
+                    if current and held_by_caller
+                    else sha256_json(
+                        {
+                            "lease_name": lease_name,
+                            "instance_id": instance_id,
+                            "claimed_at": now,
+                        }
+                    )
+                )
+                acquired_at = (
+                    row["acquired_at"]
+                    if current and held_by_caller
+                    else now
+                )
+                connection.execute(
+                    """
+                    INSERT INTO runtime_leases(
+                        lease_name, holder_instance_id, lease_token,
+                        acquired_at, renewed_at, expires_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(lease_name) DO UPDATE SET
+                        holder_instance_id = excluded.holder_instance_id,
+                        lease_token = excluded.lease_token,
+                        acquired_at = excluded.acquired_at,
+                        renewed_at = excluded.renewed_at,
+                        expires_at = excluded.expires_at
+                    """,
+                    (
+                        lease_name,
+                        instance_id,
+                        lease_token,
+                        acquired_at,
+                        now,
+                        expires_at,
+                    ),
+                )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return {
+            "lease_name": lease_name,
+            "holder_instance_id": instance_id,
+            "lease_token": lease_token,
+            "acquired_at": acquired_at,
+            "renewed_at": now,
+            "expires_at": expires_at,
+            "acquired": True,
+        }
+
+    def get_runtime_lease(self, lease_name: str) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM runtime_leases WHERE lease_name = ?",
+                (lease_name,),
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result.pop("lease_token", None)
+        result["expired"] = result["expires_at"] <= utc_now()
+        return result
+
+    def list_runtime_leases(self) -> list[dict[str, Any]]:
+        now = utc_now()
+        with self.connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM runtime_leases ORDER BY lease_name"
+            ).fetchall()
+        leases = [dict(row) for row in rows]
+        for lease in leases:
+            lease.pop("lease_token", None)
+            lease["expired"] = lease["expires_at"] <= now
+        return leases
+
+    def release_runtime_leases(self, instance_id: str) -> int:
+        with self.connection() as connection:
+            cursor = connection.execute(
+                "DELETE FROM runtime_leases WHERE holder_instance_id = ?",
+                (instance_id,),
+            )
+        return cursor.rowcount
 
     @staticmethod
     def _migrate_legacy_workspace_contexts(
@@ -822,6 +1072,8 @@ class RuntimeStore:
         self,
         product_id: str,
         manifest: dict[str, Any],
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]:
         now = utc_now()
         encoded = json.dumps(manifest, sort_keys=True, ensure_ascii=False)
@@ -832,10 +1084,26 @@ class RuntimeStore:
             ).fetchone()
             if row and row["state"] != AttachmentState.DETACHED.value:
                 if row["manifest_json"] != encoded:
-                    raise ResourceConflictError(
-                        f"Product is already attached with a different manifest: "
-                        f"{product_id}"
+                    if not replace_existing:
+                        raise ResourceConflictError(
+                            "Product is already attached with a different "
+                            f"manifest: {product_id}"
+                        )
+                    connection.execute(
+                        """
+                        UPDATE attachments
+                        SET state = ?, manifest_json = ?, last_error = NULL,
+                            updated_at = ?
+                        WHERE product_id = ?
+                        """,
+                        (
+                            AttachmentState.ATTACHED.value,
+                            encoded,
+                            now,
+                            product_id,
+                        ),
                     )
+                    return self.get_attachment(product_id) or {}
                 if row["state"] == AttachmentState.DEGRADED.value:
                     connection.execute(
                         """
@@ -921,6 +1189,651 @@ class RuntimeStore:
             if cursor.rowcount != 1:
                 raise KeyError(product_id)
         return self.get_attachment(product_id) or {}
+
+    def record_dependency_observation(
+        self,
+        *,
+        product_id: str,
+        status: str,
+        latency_ms: float | None,
+        detail: dict[str, Any],
+        runtime_instance_id: str,
+    ) -> dict[str, Any]:
+        observed_at = utc_now()
+        observation_id = "dep_" + sha256_json(
+            {
+                "product_id": product_id,
+                "status": status,
+                "detail": detail,
+                "runtime_instance_id": runtime_instance_id,
+                "observed_at": observed_at,
+            }
+        )[:32]
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO dependency_observations(
+                    observation_id, product_id, status, latency_ms,
+                    detail_json, runtime_instance_id, observed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    observation_id,
+                    product_id,
+                    status,
+                    latency_ms,
+                    json.dumps(detail, sort_keys=True, ensure_ascii=False),
+                    runtime_instance_id,
+                    observed_at,
+                ),
+            )
+            connection.execute(
+                """
+                DELETE FROM dependency_observations
+                WHERE product_id = ?
+                  AND observation_id IN (
+                    SELECT observation_id
+                    FROM dependency_observations
+                    WHERE product_id = ?
+                    ORDER BY observed_at DESC
+                    LIMIT -1 OFFSET 1000
+                  )
+                """,
+                (product_id, product_id),
+            )
+        return self.get_dependency_observation(observation_id) or {}
+
+    @staticmethod
+    def _decode_dependency_observation(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        result = dict(row)
+        result["detail"] = json.loads(result.pop("detail_json"))
+        return result
+
+    def get_dependency_observation(
+        self,
+        observation_id: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM dependency_observations
+                WHERE observation_id = ?
+                """,
+                (observation_id,),
+            ).fetchone()
+        return self._decode_dependency_observation(row)
+
+    def list_dependency_observations(
+        self,
+        *,
+        product_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM dependency_observations"
+        params: tuple[Any, ...]
+        if product_id:
+            query += " WHERE product_id = ?"
+            params = (product_id, limit)
+        else:
+            params = (limit,)
+        query += " ORDER BY observed_at DESC LIMIT ?"
+        with self.connection() as connection:
+            rows = connection.execute(query, params).fetchall()
+        return [
+            self._decode_dependency_observation(row) or {} for row in rows
+        ]
+
+    @staticmethod
+    def _decode_ecosystem_execution(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        result = dict(row)
+        result["request"] = json.loads(result.pop("request_json"))
+        capability_json = result.pop("capability_json")
+        result["capability"] = (
+            json.loads(capability_json) if capability_json else None
+        )
+        replay_json = result.pop("replay_package_json")
+        result["replay_package"] = (
+            json.loads(replay_json) if replay_json else None
+        )
+        return result
+
+    def create_ecosystem_execution(
+        self,
+        *,
+        execution_id: str,
+        idempotency_key: str | None,
+        trace_id: str,
+        session_id: str | None,
+        actor_id: str,
+        request: dict[str, Any],
+        runtime_instance_id: str,
+    ) -> dict[str, Any]:
+        request_hash = sha256_json(request)
+        now = utc_now()
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                if idempotency_key:
+                    existing = connection.execute(
+                        """
+                        SELECT * FROM ecosystem_executions
+                        WHERE idempotency_key = ?
+                        """,
+                        (idempotency_key,),
+                    ).fetchone()
+                    if existing is not None:
+                        if existing["request_hash"] != request_hash:
+                            raise ResourceConflictError(
+                                "The ecosystem idempotency key is already "
+                                "bound to a different request"
+                            )
+                        connection.execute("COMMIT")
+                        decoded = self._decode_ecosystem_execution(existing)
+                        return {**(decoded or {}), "idempotent_reuse": True}
+                connection.execute(
+                    """
+                    INSERT INTO ecosystem_executions(
+                        execution_id, idempotency_key, trace_id, session_id,
+                        actor_id, status, current_stage, request_hash,
+                        request_json, capability_json, replay_package_hash,
+                        replay_package_json, last_error, runtime_instance_id,
+                        created_at, updated_at, completed_at
+                    ) VALUES (?, ?, ?, ?, ?, 'PENDING', NULL, ?, ?, NULL,
+                              NULL, NULL, NULL, ?, ?, ?, NULL)
+                    """,
+                    (
+                        execution_id,
+                        idempotency_key,
+                        trace_id,
+                        session_id,
+                        actor_id,
+                        request_hash,
+                        json.dumps(request, sort_keys=True, ensure_ascii=False),
+                        runtime_instance_id,
+                        now,
+                        now,
+                    ),
+                )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        created = self.get_ecosystem_execution(execution_id) or {}
+        return {**created, "idempotent_reuse": False}
+
+    def get_ecosystem_execution(
+        self,
+        execution_id: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM ecosystem_executions WHERE execution_id = ?",
+                (execution_id,),
+            ).fetchone()
+        return self._decode_ecosystem_execution(row)
+
+    def get_ecosystem_execution_by_idempotency(
+        self,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM ecosystem_executions
+                WHERE idempotency_key = ?
+                """,
+                (idempotency_key,),
+            ).fetchone()
+        return self._decode_ecosystem_execution(row)
+
+    def list_ecosystem_executions(
+        self,
+        *,
+        status: str | None = None,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        filters: list[str] = []
+        values: list[Any] = []
+        if status:
+            filters.append("status = ?")
+            values.append(status)
+        if session_id:
+            filters.append("session_id = ?")
+            values.append(session_id)
+        query = "SELECT * FROM ecosystem_executions"
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        values.append(limit)
+        with self.connection() as connection:
+            rows = connection.execute(query, tuple(values)).fetchall()
+        return [
+            self._decode_ecosystem_execution(row) or {} for row in rows
+        ]
+
+    def update_ecosystem_execution(
+        self,
+        *,
+        execution_id: str,
+        status: str,
+        current_stage: str | None,
+        capability: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        completed_at = now if status in {"COMPLETED", "FAILED"} else None
+        capability_json = (
+            json.dumps(capability, sort_keys=True, ensure_ascii=False)
+            if capability is not None
+            else None
+        )
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE ecosystem_executions
+                SET status = ?, current_stage = ?,
+                    capability_json = COALESCE(?, capability_json),
+                    last_error = ?, updated_at = ?, completed_at = ?
+                WHERE execution_id = ?
+                """,
+                (
+                    status,
+                    current_stage,
+                    capability_json,
+                    error,
+                    now,
+                    completed_at,
+                    execution_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(execution_id)
+        return self.get_ecosystem_execution(execution_id) or {}
+
+    def set_ecosystem_replay_package(
+        self,
+        *,
+        execution_id: str,
+        package: dict[str, Any],
+    ) -> dict[str, Any]:
+        package_hash = str(package["package_hash"])
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE ecosystem_executions
+                SET replay_package_hash = ?, replay_package_json = ?,
+                    updated_at = ?
+                WHERE execution_id = ?
+                """,
+                (
+                    package_hash,
+                    json.dumps(package, sort_keys=True, ensure_ascii=False),
+                    utc_now(),
+                    execution_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(execution_id)
+        return self.get_ecosystem_execution(execution_id) or {}
+
+    @staticmethod
+    def _decode_ecosystem_stage(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        result = dict(row)
+        request_json = result.pop("request_json")
+        response_json = result.pop("response_json")
+        result["request"] = json.loads(request_json) if request_json else None
+        result["response"] = (
+            json.loads(response_json) if response_json else None
+        )
+        return result
+
+    def get_ecosystem_stage(
+        self,
+        execution_id: str,
+        stage_name: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM ecosystem_execution_stages
+                WHERE execution_id = ? AND stage_name = ?
+                """,
+                (execution_id, stage_name),
+            ).fetchone()
+        return self._decode_ecosystem_stage(row)
+
+    def list_ecosystem_stages(
+        self,
+        execution_id: str,
+    ) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM ecosystem_execution_stages
+                WHERE execution_id = ? ORDER BY stage_index
+                """,
+                (execution_id,),
+            ).fetchall()
+        return [self._decode_ecosystem_stage(row) or {} for row in rows]
+
+    def latest_completed_ecosystem_stage(
+        self,
+        stage_name: str,
+        *,
+        exclude_execution_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        query = """
+            SELECT * FROM ecosystem_execution_stages
+            WHERE stage_name = ? AND status = 'COMPLETED'
+        """
+        values: list[Any] = [stage_name]
+        if exclude_execution_id is not None:
+            query += " AND execution_id != ?"
+            values.append(exclude_execution_id)
+        query += " ORDER BY finished_at DESC, updated_at DESC LIMIT 1"
+        with self.connection() as connection:
+            row = connection.execute(query, tuple(values)).fetchone()
+        return self._decode_ecosystem_stage(row)
+
+    def begin_ecosystem_stage(
+        self,
+        *,
+        execution_id: str,
+        stage_name: str,
+        stage_index: int,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        request_hash = sha256_json(request)
+        now = utc_now()
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                existing = connection.execute(
+                    """
+                    SELECT * FROM ecosystem_execution_stages
+                    WHERE execution_id = ? AND stage_name = ?
+                    """,
+                    (execution_id, stage_name),
+                ).fetchone()
+                if existing is not None and existing["status"] == "COMPLETED":
+                    connection.execute("COMMIT")
+                    decoded = self._decode_ecosystem_stage(existing)
+                    return {**(decoded or {}), "already_completed": True}
+                attempts = int(existing["attempts"] if existing else 0) + 1
+                connection.execute(
+                    """
+                    INSERT INTO ecosystem_execution_stages(
+                        execution_id, stage_name, stage_index, status,
+                        attempts, request_hash, request_json, response_hash,
+                        response_json, artifact_hash, lineage_id, chain_hash,
+                        last_error, started_at, finished_at, updated_at
+                    ) VALUES (?, ?, ?, 'RUNNING', ?, ?, ?, NULL, NULL, NULL,
+                              NULL, NULL, NULL, ?, NULL, ?)
+                    ON CONFLICT(execution_id, stage_name) DO UPDATE SET
+                        stage_index = excluded.stage_index,
+                        status = 'RUNNING', attempts = excluded.attempts,
+                        request_hash = excluded.request_hash,
+                        request_json = excluded.request_json,
+                        response_hash = NULL, response_json = NULL,
+                        last_error = NULL, started_at = excluded.started_at,
+                        finished_at = NULL, updated_at = excluded.updated_at
+                    """,
+                    (
+                        execution_id,
+                        stage_name,
+                        stage_index,
+                        attempts,
+                        request_hash,
+                        json.dumps(request, sort_keys=True, ensure_ascii=False),
+                        now,
+                        now,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO ecosystem_stage_attempts(
+                        execution_id, stage_name, attempt, status,
+                        request_hash, request_json, response_hash,
+                        response_json, last_error, started_at, finished_at
+                    ) VALUES (?, ?, ?, 'RUNNING', ?, ?, NULL, NULL, NULL, ?, NULL)
+                    """,
+                    (
+                        execution_id,
+                        stage_name,
+                        attempts,
+                        request_hash,
+                        json.dumps(request, sort_keys=True, ensure_ascii=False),
+                        now,
+                    ),
+                )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        stage = self.get_ecosystem_stage(execution_id, stage_name) or {}
+        return {**stage, "already_completed": False}
+
+    def complete_ecosystem_stage(
+        self,
+        *,
+        execution_id: str,
+        stage_name: str,
+        attempt: int,
+        response: dict[str, Any],
+    ) -> dict[str, Any]:
+        response_hash = sha256_json(response)
+        now = utc_now()
+        encoded = json.dumps(response, sort_keys=True, ensure_ascii=False)
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    """
+                    SELECT * FROM ecosystem_execution_stages
+                    WHERE execution_id = ? AND stage_name = ?
+                    """,
+                    (execution_id, stage_name),
+                ).fetchone()
+                if row is None:
+                    raise KeyError(f"{execution_id}:{stage_name}")
+                if row["status"] == "COMPLETED":
+                    if row["response_hash"] != response_hash:
+                        raise ResourceConflictError(
+                            "A completed ecosystem stage cannot be rewritten"
+                        )
+                    connection.execute("COMMIT")
+                    return self._decode_ecosystem_stage(row) or {}
+                if int(row["attempts"]) != attempt:
+                    raise ResourceConflictError(
+                        "A stale ecosystem stage attempt cannot complete"
+                    )
+                connection.execute(
+                    """
+                    UPDATE ecosystem_execution_stages
+                    SET status = 'COMPLETED', response_hash = ?,
+                        response_json = ?, last_error = NULL,
+                        finished_at = ?, updated_at = ?
+                    WHERE execution_id = ? AND stage_name = ?
+                      AND attempts = ?
+                    """,
+                    (
+                        response_hash,
+                        encoded,
+                        now,
+                        now,
+                        execution_id,
+                        stage_name,
+                        attempt,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE ecosystem_stage_attempts
+                    SET status = 'COMPLETED', response_hash = ?,
+                        response_json = ?, last_error = NULL, finished_at = ?
+                    WHERE execution_id = ? AND stage_name = ? AND attempt = ?
+                    """,
+                    (
+                        response_hash,
+                        encoded,
+                        now,
+                        execution_id,
+                        stage_name,
+                        attempt,
+                    ),
+                )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return self.get_ecosystem_stage(execution_id, stage_name) or {}
+
+    def fail_ecosystem_stage(
+        self,
+        *,
+        execution_id: str,
+        stage_name: str,
+        attempt: int,
+        error: str,
+        response: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        response_hash = sha256_json(response) if response is not None else None
+        encoded = (
+            json.dumps(response, sort_keys=True, ensure_ascii=False)
+            if response is not None
+            else None
+        )
+        with self.connection() as connection:
+            connection.execute(
+                """
+                UPDATE ecosystem_execution_stages
+                SET status = 'FAILED', response_hash = ?, response_json = ?,
+                    last_error = ?, finished_at = ?, updated_at = ?
+                WHERE execution_id = ? AND stage_name = ? AND attempts = ?
+                """,
+                (
+                    response_hash,
+                    encoded,
+                    error,
+                    now,
+                    now,
+                    execution_id,
+                    stage_name,
+                    attempt,
+                ),
+            )
+            connection.execute(
+                """
+                UPDATE ecosystem_stage_attempts
+                SET status = 'FAILED', response_hash = ?, response_json = ?,
+                    last_error = ?, finished_at = ?
+                WHERE execution_id = ? AND stage_name = ? AND attempt = ?
+                """,
+                (
+                    response_hash,
+                    encoded,
+                    error,
+                    now,
+                    execution_id,
+                    stage_name,
+                    attempt,
+                ),
+            )
+        return self.get_ecosystem_stage(execution_id, stage_name) or {}
+
+    def link_ecosystem_stage_artifact(
+        self,
+        *,
+        execution_id: str,
+        stage_name: str,
+        artifact_hash: str,
+        lineage_id: str,
+        chain_hash: str,
+    ) -> dict[str, Any]:
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE ecosystem_execution_stages
+                SET artifact_hash = ?, lineage_id = ?, chain_hash = ?,
+                    updated_at = ?
+                WHERE execution_id = ? AND stage_name = ?
+                  AND status = 'COMPLETED'
+                """,
+                (
+                    artifact_hash,
+                    lineage_id,
+                    chain_hash,
+                    utc_now(),
+                    execution_id,
+                    stage_name,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(f"{execution_id}:{stage_name}")
+        return self.get_ecosystem_stage(execution_id, stage_name) or {}
+
+    def list_ecosystem_stage_attempts(
+        self,
+        execution_id: str,
+    ) -> list[dict[str, Any]]:
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM ecosystem_stage_attempts
+                WHERE execution_id = ? ORDER BY stage_name, attempt
+                """,
+                (execution_id,),
+            ).fetchall()
+        attempts: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            request_json = item.pop("request_json")
+            response_json = item.pop("response_json")
+            item["request"] = (
+                json.loads(request_json) if request_json else None
+            )
+            item["response"] = (
+                json.loads(response_json) if response_json else None
+            )
+            attempts.append(item)
+        return attempts
+
+    def ecosystem_execution_counts(self) -> dict[str, int]:
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM ecosystem_executions GROUP BY status
+                """
+            ).fetchall()
+        counts = {str(row["status"]): int(row["count"]) for row in rows}
+        counts["TOTAL"] = sum(counts.values())
+        return counts
+
+    def ecosystem_stage_failure_counts(self) -> dict[str, int]:
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT stage_name, COUNT(*) AS count
+                FROM ecosystem_stage_attempts
+                WHERE status = 'FAILED' GROUP BY stage_name
+                """
+            ).fetchall()
+        return {str(row["stage_name"]): int(row["count"]) for row in rows}
 
     def create_dispatch(
         self,
@@ -1984,6 +2897,341 @@ class RuntimeStore:
                     }
                 )
         return recovered
+
+    def enqueue_integration_delivery(
+        self,
+        *,
+        delivery_id: str,
+        integration_name: str,
+        dispatch_id: str,
+        trace_id: str,
+        request_hash: str,
+        request: dict[str, Any],
+        initial_status: str,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO integration_outbox(
+                    delivery_id, integration_name, dispatch_id, trace_id,
+                    request_hash, request_json, status, attempts,
+                    next_attempt_at, lease_owner_id, lease_token,
+                    lease_expires_at, last_error, last_response_json,
+                    created_at, updated_at, completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, NULL, NULL,
+                          NULL, NULL, ?, ?, NULL)
+                ON CONFLICT(delivery_id) DO NOTHING
+                """,
+                (
+                    delivery_id,
+                    integration_name,
+                    dispatch_id,
+                    trace_id,
+                    request_hash,
+                    json.dumps(request, sort_keys=True, ensure_ascii=False),
+                    initial_status,
+                    now if initial_status == "PENDING" else None,
+                    now,
+                    now,
+                ),
+            )
+            created = cursor.rowcount == 1
+        delivery = self.get_integration_delivery(delivery_id)
+        if delivery is None:
+            raise KeyError(delivery_id)
+        if (
+            delivery["integration_name"] != integration_name
+            or delivery["dispatch_id"] != dispatch_id
+            or delivery["trace_id"] != trace_id
+            or delivery["request_hash"] != request_hash
+        ):
+            raise ResourceConflictError(
+                "Integration delivery identity resolved to different content"
+            )
+        delivery["created"] = created
+        return delivery
+
+    @staticmethod
+    def _decode_integration_delivery(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        result = dict(row)
+        result["request"] = json.loads(result.pop("request_json"))
+        raw_response = result.pop("last_response_json")
+        result["last_response"] = (
+            json.loads(raw_response) if raw_response else None
+        )
+        return result
+
+    def get_integration_delivery(
+        self,
+        delivery_id: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM integration_outbox WHERE delivery_id = ?",
+                (delivery_id,),
+            ).fetchone()
+        return self._decode_integration_delivery(row)
+
+    def list_integration_deliveries(
+        self,
+        *,
+        integration_name: str | None = None,
+        dispatch_id: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if integration_name:
+            clauses.append("integration_name = ?")
+            params.append(integration_name)
+        if dispatch_id:
+            clauses.append("dispatch_id = ?")
+            params.append(dispatch_id)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        query = "SELECT * FROM integration_outbox"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with self.connection() as connection:
+            rows = connection.execute(query, tuple(params)).fetchall()
+        return [self._decode_integration_delivery(row) or {} for row in rows]
+
+    def integration_delivery_counts(
+        self,
+        *,
+        integration_name: str,
+    ) -> dict[str, int]:
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM integration_outbox
+                WHERE integration_name = ?
+                GROUP BY status
+                """,
+                (integration_name,),
+            ).fetchall()
+        counts = {str(row["status"]): int(row["count"]) for row in rows}
+        counts["TOTAL"] = sum(counts.values())
+        return counts
+
+    def claim_integration_deliveries(
+        self,
+        *,
+        integration_name: str,
+        instance_id: str,
+        lease_seconds: float,
+        limit: int,
+        delivery_id: str | None = None,
+        include_waiting_configuration: bool = False,
+    ) -> list[dict[str, Any]]:
+        now_dt = datetime.now(UTC)
+        now = now_dt.isoformat()
+        lease_expires_at = (
+            now_dt + timedelta(seconds=max(0.1, lease_seconds))
+        ).isoformat()
+        ready_statuses = ["PENDING", "RETRY"]
+        if include_waiting_configuration:
+            ready_statuses.append("WAITING_CONFIGURATION")
+        placeholders = ", ".join("?" for _ in ready_statuses)
+        params: list[Any] = [integration_name, *ready_statuses, now, now]
+        query = f"""
+            SELECT * FROM integration_outbox
+            WHERE integration_name = ?
+              AND (
+                (status IN ({placeholders})
+                 AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
+                OR
+                (status = 'IN_PROGRESS' AND lease_expires_at <= ?)
+              )
+        """
+        if delivery_id:
+            query += " AND delivery_id = ?"
+            params.append(delivery_id)
+        query += " ORDER BY created_at LIMIT ?"
+        params.append(max(1, limit))
+
+        claimed_ids: list[str] = []
+        with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                rows = connection.execute(query, tuple(params)).fetchall()
+                for row in rows:
+                    attempts = int(row["attempts"]) + 1
+                    token = sha256_json(
+                        {
+                            "delivery_id": row["delivery_id"],
+                            "instance_id": instance_id,
+                            "attempt": attempts,
+                            "claimed_at": now,
+                        }
+                    )
+                    connection.execute(
+                        """
+                        UPDATE integration_outbox
+                        SET status = 'IN_PROGRESS', attempts = ?,
+                            lease_owner_id = ?, lease_token = ?,
+                            lease_expires_at = ?, updated_at = ?
+                        WHERE delivery_id = ?
+                        """,
+                        (
+                            attempts,
+                            instance_id,
+                            token,
+                            lease_expires_at,
+                            now,
+                            row["delivery_id"],
+                        ),
+                    )
+                    claimed_ids.append(row["delivery_id"])
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+        return [
+            delivery
+            for claimed_id in claimed_ids
+            if (
+                delivery := self.get_integration_delivery(claimed_id)
+            ) is not None
+        ]
+
+    def complete_integration_delivery(
+        self,
+        *,
+        delivery_id: str,
+        instance_id: str,
+        lease_token: str,
+        status: str,
+        next_attempt_at: str | None,
+        error: str | None,
+        response: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        terminal = status in {"ACCEPTED", "FAILED"}
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE integration_outbox
+                SET status = ?, next_attempt_at = ?, lease_owner_id = NULL,
+                    lease_token = NULL, lease_expires_at = NULL,
+                    last_error = ?, last_response_json = ?, updated_at = ?,
+                    completed_at = ?
+                WHERE delivery_id = ?
+                  AND status = 'IN_PROGRESS'
+                  AND lease_owner_id = ?
+                  AND lease_token = ?
+                """,
+                (
+                    status,
+                    next_attempt_at,
+                    error,
+                    (
+                        json.dumps(response, sort_keys=True, ensure_ascii=False)
+                        if response is not None
+                        else None
+                    ),
+                    now,
+                    now if terminal else None,
+                    delivery_id,
+                    instance_id,
+                    lease_token,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ResourceConflictError(
+                    "Integration delivery lease no longer belongs to caller"
+                )
+        return self.get_integration_delivery(delivery_id) or {}
+
+    def record_continuity_snapshot(
+        self,
+        *,
+        runtime_instance_id: str,
+        status: str,
+        checked_count: int,
+        issue_count: int,
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        created_at = utc_now()
+        snapshot_id = "continuity_" + sha256_json(
+            {
+                "runtime_instance_id": runtime_instance_id,
+                "created_at": created_at,
+                "snapshot": snapshot,
+            }
+        )[:32]
+        with self.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO continuity_snapshots(
+                    snapshot_id, runtime_instance_id, status,
+                    checked_count, issue_count, snapshot_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    snapshot_id,
+                    runtime_instance_id,
+                    status,
+                    checked_count,
+                    issue_count,
+                    json.dumps(snapshot, sort_keys=True, ensure_ascii=False),
+                    created_at,
+                ),
+            )
+            connection.execute(
+                """
+                DELETE FROM continuity_snapshots
+                WHERE snapshot_id IN (
+                    SELECT snapshot_id FROM continuity_snapshots
+                    ORDER BY created_at DESC
+                    LIMIT -1 OFFSET 100
+                )
+                """
+            )
+        return self.get_continuity_snapshot(snapshot_id) or {}
+
+    @staticmethod
+    def _decode_continuity_snapshot(
+        row: sqlite3.Row | None,
+    ) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        result = dict(row)
+        result["snapshot"] = json.loads(result.pop("snapshot_json"))
+        return result
+
+    def get_continuity_snapshot(
+        self,
+        snapshot_id: str,
+    ) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM continuity_snapshots WHERE snapshot_id = ?
+                """,
+                (snapshot_id,),
+            ).fetchone()
+        return self._decode_continuity_snapshot(row)
+
+    def latest_continuity_snapshot(self) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM continuity_snapshots
+                ORDER BY created_at DESC LIMIT 1
+                """
+            ).fetchone()
+        return self._decode_continuity_snapshot(row)
 
     def counts(self) -> dict[str, int]:
         with self.connection() as connection:

@@ -37,7 +37,6 @@ FORBIDDEN_TOKENS = {
     "project_intelligence",
     "domain_intelligence",
     "evidence",
-    "replay",
     "certification",
 }
 OWNED_CAPABILITIES = {
@@ -158,6 +157,11 @@ def test_forbidden_subsystems_are_not_implementation_symbols_or_imports():
                         f"{path}:{node.lineno}: forbidden import {node.module}"
                     )
     assert violations == []
+
+
+def test_runtime_reconstruction_does_not_claim_external_replay_authority():
+    assert "Deterministic Runtime Reconstruction" in OWNED_CAPABILITIES
+    assert "External Replay Authority" in EXTERNAL_CAPABILITIES
 
 
 def test_forbidden_subsystems_are_not_api_surfaces():

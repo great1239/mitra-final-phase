@@ -27,7 +27,17 @@ services:
       - key: MITRA_COMPANION_LOG_TO_STDOUT
         value: "true"
       - key: MITRA_COMPANION_MANIFEST_DIRECTORY
-        value: /app/contracts/examples
+        value: /app/contracts/production
+      - key: MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS
+        value: "false"
+      - key: MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS
+        value: "true"
       - key: MITRA_COMPANION_HTTP_TIMEOUT_SECONDS
         value: "10"
       - key: MITRA_COMPANION_OTEL_ENABLED
@@ -49,4 +59,30 @@ services:
       - key: MITRA_BHIV_INTEGRATION_TIMEOUT_SECONDS
         value: "10"
       - key: MITRA_BHIV_INTEGRATION_FAIL_CLOSED
-        value: "false"
+        value: "true"
+      - key: MITRA_ECOSYSTEM_TIMEOUT_SECONDS
+        value: "45"
+      - key: MITRA_RAJ_WORKFLOW_BASE_URL
+        sync: false
+      - key: MITRA_RAJ_API_KEY
+        sync: false
+      - key: MITRA_BHIV_ASHMIT_BASE_URL
+        value: https://ai-assistant-backend-8hur.onrender.com
+      - key: MITRA_BHIV_BUCKET_BASE_URL
+        value: https://pratham-bhiv-bucket.onrender.com
+      - key: MITRA_BHIV_BUCKET_PARENT_HASH
+        sync: false
+      - key: MITRA_BHIV_KESHAV_BASE_URL
+        value: https://keshav-cia7.onrender.com
+      - key: MITRA_BHIV_KARMA_BASE_URL
+        sync: false
+      - key: MITRA_BHIV_KARMA_PREVIOUS_HASH
+        sync: false
+      - key: MITRA_BHIV_PRANA_BASE_URL
+        sync: false
+      - key: MITRA_BHIV_INSIGHTFLOW_INGEST_URL
+        sync: false
+      - key: MITRA_BHIV_INSIGHTFLOW_API_KEY
+        sync: false
+      - key: MITRA_CENTRAL_DEPOSITORY_BASE_URL
+        value: https://pratham-bhiv-bucket.onrender.com

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bhiv.example/contracts/mitra/ecosystem-replay-validation.schema.json",
+  "title": "TANTRA Ecosystem Replay Validation Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "runtime_version",
+    "compatibility_version",
+    "package"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_version": {"const": "1.0.0"},
+    "runtime_version": {"const": "1.0.0"},
+    "compatibility_version": {"const": "mitra-companion-1"},
+    "package": {
+      "type": "object",
+      "required": [
+        "replay_type",
+        "execution_id",
+        "trace_id",
+        "components",
+        "reconstructed_execution",
+        "package_hash"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

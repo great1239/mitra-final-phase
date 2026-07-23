@@ -147,6 +147,25 @@ def test_versioned_api_end_to_end(settings_factory, atlas_manifest):
         assert proof.json()["proof"]["phase_summary"]["complete"] is True
         assert proof.json()["proof"]["bundle_hash"]
 
+        reconstruction = client.get(
+            f"/api/v1/dispatches/{dispatch_id}/reconstruction"
+        )
+        assert reconstruction.status_code == 200, reconstruction.text
+        replay = client.post(
+            "/api/v1/reconstruction/validate",
+            json={
+                "schema_version": "1.0.0",
+                "contract_version": "1.0.0",
+                "runtime_version": "1.0.0",
+                "compatibility_version": "mitra-companion-1",
+                "package": reconstruction.json()["reconstruction"],
+            },
+        )
+        assert replay.status_code == 200, replay.text
+        assert replay.json()["reconstruction"]["status"] == "verified"
+        assert replay.json()["reconstruction"]["state_dependency"] == "none"
+        assert replay.json()["reconstruction"]["runtime_state_read"] is False
+
         suspended = client.post(
             f"/api/v1/sessions/{session_id}/suspend",
             json={

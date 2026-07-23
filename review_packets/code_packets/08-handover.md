@@ -2,7 +2,7 @@
 
 ## File: `docs/HANDOVER.md`
 
-**Sprint change:** Added
+**Sprint change:** Added, then upgraded with the canonical live acceptance path
 
 **Purpose:** Gives incoming engineers a clean-room rebuild, validation,
 deployment, and operations path.
@@ -10,9 +10,10 @@ deployment, and operations path.
 **Why modified:** Completed Phase 6 so the runtime can be rebuilt from
 repository documentation alone.
 
-**Key implementation areas:** Prerequisites; exact install and test commands;
-local and container startup; configuration; hosted validation; troubleshooting;
-acceptance checklist.
+**Key implementation areas:** Prerequisites; pinned sibling repositories;
+ignored-secret inputs; exact staged startup; two-product operational validator;
+replay-package retention; hosted boundary; troubleshooting; acceptance
+checklist.
 
 **Review focus:** Command reproducibility, missing assumptions, Windows and
 container portability, version pinning, and truthful hosted limitations.
@@ -21,7 +22,7 @@ container portability, version pinning, and truthful hosted limitations.
 
 ## File: `docs/CENTRAL_DEPOSITORY_HANDOVER.md`
 
-**Sprint change:** Added
+**Sprint change:** Added, then updated with executable two-product handover
 
 **Purpose:** Defines how an external Central Depository consumer retrieves and
 independently verifies Mitra artifacts and lineage.
@@ -30,8 +31,8 @@ independently verifies Mitra artifacts and lineage.
 external system's authority over acceptance and certification.
 
 **Key implementation areas:** Export filters; canonical JSON; artifact hash
-verification; lineage chain verification; failure handling; authority
-boundary.
+verification; lineage chain verification; isolated replay; tamper rejection;
+exact current package IDs; independent-owner strict mode; authority boundary.
 
 **Review focus:** Reproducibility of hashes, subject filtering, chain order,
 consumer responsibilities, and whether HTTP success is kept separate from
@@ -59,4 +60,3 @@ clear separation of local versus hosted evidence, and disclosure of external
 integration limitations.
 
 **Related tests:** `pratham/tests/test_production_readiness_gate.py`.
-

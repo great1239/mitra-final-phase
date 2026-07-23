@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mitra.local/tantra-handover/1.0.0",
+  "title": "Mitra TANTRA Handover Package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "package_type",
+    "package_hash",
+    "evidence_bundle",
+    "lineage_bundle",
+    "replay_bundle",
+    "handover_bundle"
+  ],
+  "properties": {
+    "package_type": {"const": "mitra-tantra-handover-package-v1"},
+    "package_hash": {"$ref": "#/$defs/hash"},
+    "evidence_bundle": {"$ref": "#/$defs/sourceBundle"},
+    "lineage_bundle": {"$ref": "#/$defs/continuousBundle"},
+    "replay_bundle": {
+      "allOf": [
+        {"$ref": "#/$defs/continuousBundle"},
+        {
+          "type": "object",
+          "required": [
+            "original_execution",
+            "replayed_execution",
+            "replay_result",
+            "portable_package",
+            "portable_package_hash"
+          ],
+          "properties": {
+            "replay_result": {"enum": ["IDENTICAL", "FAILED"]},
+            "portable_package": {"type": "object"},
+            "portable_package_hash": {"$ref": "#/$defs/hash"}
+          }
+        }
+      ]
+    },
+    "handover_bundle": {
+      "allOf": [
+        {"$ref": "#/$defs/continuousBundle"},
+        {
+          "type": "object",
+          "required": ["handover_items", "handover_verification"],
+          "properties": {
+            "handover_items": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "type": "object",
+                "required": ["item_reference", "item_hash", "hash_basis"],
+                "properties": {
+                  "item_reference": {"type": "string"},
+                  "item_hash": {"$ref": "#/$defs/hash"},
+                  "hash_basis": {
+                    "const": "sorted-indented-utf8-json-with-newline"
+                  }
+                }
+              }
+            },
+            "handover_verification": {
+              "type": "object",
+              "required": [
+                "all_items_present",
+                "all_hashes_valid",
+                "handover_complete"
+              ],
+              "properties": {
+                "all_items_present": {"const": true},
+                "all_hashes_valid": {"const": true},
+                "handover_complete": {"const": true}
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "continuousBundle": {
+      "type": "object",
+      "required": [
+        "trace_id",
+        "execution_id",
+        "contract_version",
+        "schema_version"
+      ],
+      "properties": {
+        "trace_id": {"$ref": "#/$defs/hash"},
+        "execution_id": {"type": "string", "minLength": 1},
+        "contract_version": {"const": "1.1.0"},
+        "schema_version": {"const": "1.0.0"}
+      }
+    },
+    "sourceBundle": {
+      "allOf": [
+        {"$ref": "#/$defs/continuousBundle"},
+        {
+          "type": "object",
+          "required": [
+            "source_system",
+            "target_system",
+            "decision_chain",
+            "authority_chain",
+            "governance_findings",
+            "replay_findings",
+            "payload",
+            "lineage_references",
+            "replay_references",
+            "handover_references"
+          ],
+          "properties": {
+            "source_system": {"const": "Pratham"},
+            "target_system": {"const": "TANTRA"},
+            "decision_chain": {"type": "array"},
+            "authority_chain": {"type": "array"},
+            "governance_findings": {"type": "array"},
+            "replay_findings": {"type": "array"},
+            "payload": {"type": "object"},
+            "lineage_references": {"type": "array"},
+            "replay_references": {"type": "array"},
+            "handover_references": {"type": "array"}
+          }
+        }
+      ]
+    }
+  }
+}

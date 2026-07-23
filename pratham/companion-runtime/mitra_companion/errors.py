@@ -41,3 +41,17 @@ class TransportError(CompanionRuntimeError):
     status_code = 502
     code = "CAPABILITY_TRANSPORT_FAILED"
 
+
+class EcosystemConfigurationError(CompanionRuntimeError):
+    status_code = 503
+    code = "ECOSYSTEM_INTEGRATION_NOT_READY"
+
+    def __init__(self, message: str, *, result: dict | None = None):
+        super().__init__(message)
+        self.result = result
+
+
+class EcosystemIntegrationError(CompanionRuntimeError):
+    status_code = 502
+    code = "ECOSYSTEM_INTEGRATION_FAILED"
+

@@ -7,11 +7,13 @@
 **Purpose:** Publishes the versioned HTTP contract used by runtime consumers
 and the OpenAPI dashboard.
 
-**Why modified:** Added final convergence, depository, replay, capability,
-companion, recovery, telemetry, and integration endpoints.
+**Why modified:** Added final convergence, depository, reconstruction
+validation, capability, companion, recovery, telemetry, and integration
+endpoints.
 
 **Key implementation areas:** Paths and operations; request envelopes;
-response schemas; status codes; operator APIs; compatibility metadata.
+`POST /api/v1/reconstruction/validate`; response schemas; status codes;
+operator APIs; compatibility metadata.
 
 **Review focus:** Parity with FastAPI routes, explicit success and failure
 responses, stable version fields, filter limits, and schema references.
@@ -56,4 +58,3 @@ response-contract enforcement, and isolation across products.
 
 **Related tests:** This file is the contract test suite; runtime response
 behavior is covered by `pratham/tests/test_dispatch_and_failures.py`.
-

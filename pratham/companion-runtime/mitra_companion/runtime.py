@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from typing import Any
 from uuid import uuid4
 
+import httpx
 from jsonschema import Draft202012Validator
 
 from mitra_attachment import AttachmentRuntime
@@ -20,6 +21,7 @@ from .analysis import RuntimeAnalyzer
 from .bhiv_integrations import BHIVRuntimeIntegrator
 from .capability_graph import CapabilityGraphPlanner
 from .config import RuntimeSettings
+from .continuity import RuntimeContinuityMonitor
 from .constants import (
     DISPATCH_PHASE_MODEL,
     AttachmentState,
@@ -29,6 +31,7 @@ from .constants import (
 from .contracts import (
     CompanionMessageRequest,
     ContextTransferRequest,
+    EcosystemExecutionRequest,
     IntentDispatchRequest,
     ProductExchangeAckRequest,
     ProductExchangeRequest,
@@ -37,6 +40,11 @@ from .contracts import (
 )
 from .depository import CentralDepository
 from .dependency_registry import CapabilityDependencyRegistry
+from .ecosystem import (
+    EcosystemReplayLedger,
+    EcosystemRuntime,
+    PublishedEcosystemClient,
+)
 from .errors import (
     AttachmentValidationError,
     IntentRoutingError,
@@ -58,6 +66,7 @@ from .reconstruction import DeterministicReconstructionLedger
 from .source_scope import SourceScopeRegistry
 from .startup import RuntimeStartupManager
 from .store import RuntimeStore
+from .tantra_handover import TantraHandoverAdapter
 from .telemetry import RuntimeTelemetry
 from .transport import CapabilityTransport
 from .utils import sha256_json, utc_now
@@ -132,6 +141,7 @@ class CompanionRuntime:
         settings: RuntimeSettings,
         *,
         transport: CapabilityTransport | None = None,
+        ecosystem_http_transport: httpx.AsyncBaseTransport | None = None,
     ):
         self.settings = settings
         self.settings.prepare()
@@ -147,6 +157,7 @@ class CompanionRuntime:
         self.router = IntentRouter(self.attachments, self.sessions)
         self.transport = transport or CapabilityTransport(
             default_timeout_seconds=settings.http_timeout_seconds,
+            endpoint_overrides=settings.endpoint_overrides,
         )
         self.telemetry = RuntimeTelemetry(
             settings.telemetry_log_path,
@@ -155,12 +166,31 @@ class CompanionRuntime:
             runtime_instance_id=settings.runtime_instance_id,
         )
         self.depository = CentralDepository(self.store)
+        self.ecosystem = EcosystemRuntime(
+            settings=settings,
+            store=self.store,
+            depository=self.depository,
+            telemetry=self.telemetry,
+            client=PublishedEcosystemClient(
+                settings,
+                http_transport=ecosystem_http_transport,
+            ),
+        )
         self.reconstruction = DeterministicReconstructionLedger(
             self.depository
         )
         self.bhiv_integrations = BHIVRuntimeIntegrator(
             settings,
             self.depository,
+        )
+        self.tantra_handover = TantraHandoverAdapter(
+            settings,
+            self.depository,
+        )
+        self.continuity = RuntimeContinuityMonitor(
+            store=self.store,
+            reconstruction=self.reconstruction,
+            runtime_instance_id=settings.runtime_instance_id,
         )
         self.intent_resolver = NaturalIntentResolver(
             threshold=settings.deterministic_intent_threshold,
@@ -204,17 +234,30 @@ class CompanionRuntime:
             self.lifecycle.transition(
                 RuntimeState.INITIALIZING,
                 "Runtime process started",
-            )
+        )
         self.accepting = True
         self.lifecycle.transition(
             RuntimeState.READY,
             "Runtime storage and interfaces are ready",
         )
         self._heartbeat()
-        recovered_tasks = self.store.recover_interrupted_companion_tasks(
-            current_instance_id=self.instance_id,
-            stale_after_seconds=self.settings.persistent_task_timeout_seconds,
-            recover_current_instance=True,
+        coordination_lease = self.store.claim_runtime_lease(
+            lease_name="shared-maintenance",
+            instance_id=self.instance_id,
+            lease_seconds=(
+                self.settings.persistent_coordination_lease_seconds
+            ),
+        )
+        recovered_tasks = (
+            self.store.recover_interrupted_companion_tasks(
+                current_instance_id=self.instance_id,
+                stale_after_seconds=(
+                    self.settings.persistent_task_timeout_seconds
+                ),
+                recover_current_instance=True,
+            )
+            if coordination_lease["acquired"]
+            else []
         )
         if recovered_tasks:
             self.telemetry.record_event(
@@ -241,6 +284,7 @@ class CompanionRuntime:
 
     def stop(self) -> dict[str, Any]:
         self.supervisor.stop()
+        released_leases = self.store.release_runtime_leases(self.instance_id)
         if self.lifecycle.state != RuntimeState.STOPPED:
             if self.lifecycle.state not in {
                 RuntimeState.DRAINING,
@@ -269,13 +313,20 @@ class CompanionRuntime:
             state=self.lifecycle.state.value,
             accepting=self.accepting,
         )
-        return {**self.status(), "stopped_instance": stopped}
+        return {
+            **self.status(),
+            "stopped_instance": stopped,
+            "released_lease_count": released_leases,
+        }
 
     def status(self) -> dict[str, Any]:
         current_instance = self._heartbeat() if self.accepting else (
             self.store.get_runtime_instance(self.instance_id) or {}
         )
         instances = self.store.list_runtime_instances()
+        coordination_lease = self.store.get_runtime_lease(
+            "shared-maintenance"
+        )
         return {
             "runtime_instance_id": self.instance_id,
             "state": self.lifecycle.state.value,
@@ -306,12 +357,25 @@ class CompanionRuntime:
                 "task_timeout_seconds": (
                     self.settings.persistent_task_timeout_seconds
                 ),
+                "coordination_lease_seconds": (
+                    self.settings.persistent_coordination_lease_seconds
+                ),
+                "coordinator": bool(
+                    coordination_lease
+                    and not coordination_lease.get("expired")
+                    and coordination_lease.get("holder_instance_id")
+                    == self.instance_id
+                ),
+                "coordination_lease": coordination_lease,
             },
             "production": {
                 "configuration": self.settings.production_summary(),
                 "startup": self.startup_manager.last_report(),
             },
             "source_scope": self.source_scope_registry.summary(),
+            "tantra_integration": self.tantra_handover.status(),
+            "ecosystem_convergence": self.ecosystem.status(),
+            "continuity": self.continuity.latest(),
             "attached_products": [
                 item["product_id"] for item in self.attachments.list()
             ],
@@ -361,21 +425,45 @@ class CompanionRuntime:
         if not self.accepting:
             return {"skipped": True, "reason": "runtime-not-accepting"}
         heartbeat = self._heartbeat()
-        stale_instances = self.store.mark_stale_runtime_instances(
-            current_instance_id=self.instance_id,
-            stale_after_seconds=self.settings.persistent_stale_after_seconds,
+        coordination_lease = self.store.claim_runtime_lease(
+            lease_name="shared-maintenance",
+            instance_id=self.instance_id,
+            lease_seconds=(
+                self.settings.persistent_coordination_lease_seconds
+            ),
         )
-        recovered_tasks = self.store.recover_interrupted_companion_tasks(
-            current_instance_id=self.instance_id,
-            stale_after_seconds=self.settings.persistent_task_timeout_seconds,
-            recover_current_instance=False,
+        is_coordinator = bool(coordination_lease["acquired"])
+        stale_instances = (
+            self.store.mark_stale_runtime_instances(
+                current_instance_id=self.instance_id,
+                stale_after_seconds=(
+                    self.settings.persistent_stale_after_seconds
+                ),
+            )
+            if is_coordinator
+            else []
+        )
+        recovered_tasks = (
+            self.store.recover_interrupted_companion_tasks(
+                current_instance_id=self.instance_id,
+                stale_after_seconds=(
+                    self.settings.persistent_task_timeout_seconds
+                ),
+                recover_current_instance=False,
+            )
+            if is_coordinator
+            else []
         )
         maintenance: dict[str, Any] | None = None
-        if run_maintenance and self.supervisor.should_run_maintenance():
+        if (
+            is_coordinator
+            and run_maintenance
+            and self.supervisor.should_run_maintenance()
+        ):
             try:
                 asyncio.get_running_loop()
             except RuntimeError:
-                maintenance = asyncio.run(self.check_attachment_health())
+                maintenance = asyncio.run(self._maintenance_cycle())
             else:
                 maintenance = {
                     "skipped": True,
@@ -405,9 +493,34 @@ class CompanionRuntime:
             )
         return {
             "heartbeat": heartbeat,
+            "coordination_lease": coordination_lease,
+            "is_coordinator": is_coordinator,
             "stale_instances": stale_instances,
             "recovered_tasks": recovered_tasks,
             "maintenance": maintenance,
+        }
+
+    async def _maintenance_cycle(self) -> dict[str, Any]:
+        health = await self.check_attachment_health()
+        integration_health = await self.check_tantra_gateway_health()
+        deliveries = await self.tantra_handover.process_pending()
+        trace_reconciliation = await self.reconcile_tantra_traces()
+        continuity = self.continuity.scan(
+            limit=self.settings.runtime_continuity_dispatch_limit
+        )
+        self.telemetry.record_event(
+            "runtime.maintenance_completed",
+            checked_dependency_count=health["checked_count"],
+            processed_delivery_count=deliveries["processed_count"],
+            continuity_status=continuity["status"],
+            continuity_issue_count=continuity["issue_count"],
+        )
+        return {
+            "health": health,
+            "integration_health": integration_health,
+            "deliveries": deliveries,
+            "trace_reconciliation": trace_reconciliation,
+            "continuity": continuity,
         }
 
     def capability_catalog(self) -> dict[str, Any]:
@@ -427,6 +540,8 @@ class CompanionRuntime:
                 "authority_boundary": "external MDU remains system authority",
             },
             "bhiv_integrations": self.bhiv_integrations.status(),
+            "tantra_integration": self.tantra_handover.status(),
+            "ecosystem_convergence": self.ecosystem.status(),
             "capability_graph": {
                 "graph_type": graph["graph_type"],
                 "node_count": graph["node_count"],
@@ -497,12 +612,20 @@ class CompanionRuntime:
             }
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def attach(self, manifest: ProductAttachmentManifest) -> dict[str, Any]:
+    def attach(
+        self,
+        manifest: ProductAttachmentManifest,
+        *,
+        replace_existing: bool = False,
+    ) -> dict[str, Any]:
         if not self.accepting:
             raise RuntimeError("Runtime is not accepting attachments")
         self._validate_attachment_policy(manifest)
         self.transport.validate_manifest(manifest)
-        attachment = self.attachments.attach(manifest)
+        attachment = self.attachments.attach(
+            manifest,
+            replace_existing=replace_existing,
+        )
         registration = self.router.register(manifest.product_id)
         if (
             self.lifecycle.state == RuntimeState.DEGRADED
@@ -588,8 +711,13 @@ class CompanionRuntime:
     def attach_many(
         self,
         manifests: Iterable[ProductAttachmentManifest],
+        *,
+        replace_existing: bool = False,
     ) -> dict[str, Any]:
-        attachments = [self.attach(manifest) for manifest in manifests]
+        attachments = [
+            self.attach(manifest, replace_existing=replace_existing)
+            for manifest in manifests
+        ]
         return {
             "attached_count": len(attachments),
             "attachments": attachments,
@@ -1176,6 +1304,9 @@ class CompanionRuntime:
                 "product_id": selected_product_id,
                 "manifest_hash": sha256_json(manifest),
             },
+            "dependencies": CapabilityDependencyRegistry(
+                self.attachments.list(include_detached=True)
+            ).catalog(),
             "telemetry": {
                 "metrics": self.telemetry.snapshot(),
                 "events": telemetry_events,
@@ -1218,11 +1349,20 @@ class CompanionRuntime:
         reconstruction: dict[str, Any],
     ) -> dict[str, Any]:
         proof = self.dispatch_proof(dispatch["dispatch_id"])
+        tantra_record = await self.tantra_handover.publish(
+            dispatch=dispatch,
+            route=route,
+            portable_package=self.reconstruction.package(
+                dispatch["dispatch_id"]
+            ),
+            proof=proof,
+        )
         record = await self.bhiv_integrations.publish_dispatch(
             dispatch=dispatch,
             route=route,
             reconstruction=reconstruction,
             proof=proof,
+            additional_results=[tantra_record],
         )
         self.telemetry.record_event(
             "bhiv.convergence_published",
@@ -1232,6 +1372,13 @@ class CompanionRuntime:
             failed_count=record["failed_count"],
             skipped_count=record["skipped_count"],
             artifact_hash=record["artifact_hash"],
+        )
+        self.telemetry.record_event(
+            "tantra.handover_published",
+            dispatch_id=dispatch["dispatch_id"],
+            trace_id=tantra_record.get("trace_id"),
+            integration_status=tantra_record["status"],
+            package_hash=tantra_record.get("package_hash"),
         )
         return record
 
@@ -1811,6 +1958,140 @@ class CompanionRuntime:
             "candidate_count": len(candidates),
         }
 
+    async def execute_ecosystem(
+        self,
+        request: EcosystemExecutionRequest,
+    ) -> dict[str, Any]:
+        """Run the strict owner-contract convergence path selected by Mitra."""
+
+        if not self.accepting:
+            raise RuntimeError("Runtime is not accepting ecosystem executions")
+        if request.idempotency_key:
+            existing = self.store.get_ecosystem_execution_by_idempotency(
+                request.idempotency_key
+            )
+            if existing is not None:
+                request_hash = sha256_json(request.model_dump(mode="json"))
+                if existing["request_hash"] != request_hash:
+                    raise ResourceConflictError(
+                        "The ecosystem idempotency key is already bound to a "
+                        "different request"
+                    )
+                return self.ecosystem_execution(existing["execution_id"])
+        session = self._session_for_ecosystem_request(request)
+        analysis_result = await self.analyze_runtime(
+            RuntimeAnalysisRequest(
+                session_id=session["session_id"],
+                product_id=request.product_id,
+                capability_id=request.capability_id,
+                message=request.message,
+                assignment=request.assignment,
+                payload=request.payload,
+                allow_ai_fallback=False,
+                metadata=request.metadata,
+            )
+        )
+        analysis = analysis_result["analysis"]
+        selected = analysis.get("recommended_candidate")
+        if analysis.get("status") != "matched" or not isinstance(
+            selected,
+            dict,
+        ):
+            raise IntentRoutingError(
+                "No attached published capability matched the ecosystem request"
+            )
+        matches = self.router.discover(
+            product_id=selected.get("product_id"),
+            capability_id=selected.get("capability_id"),
+            intent_id=selected.get("intent_id"),
+            available_only=False,
+        )
+        if len(matches) != 1:
+            raise IntentRoutingError(
+                "The selected ecosystem capability did not resolve uniquely"
+            )
+        candidate = matches[0]
+        attachment = self.attachments.get(candidate["product_id"])
+        manifest = attachment["manifest"]
+        capability_contract = {
+            "contract_type": "mitra.selected-capability.v1",
+            "selection": {
+                "resolver": analysis.get("resolver"),
+                "confidence": analysis.get("confidence"),
+                "reason": analysis.get("reason"),
+            },
+            "product": {
+                "product_id": candidate["product_id"],
+                "display_name": candidate["product_name"],
+                "product_version": candidate["product_version"],
+                "attachment_state": candidate["attachment_state"],
+                "attachment_mode": manifest["attachment_mode"],
+                "base_url": manifest.get("base_url"),
+                "manifest_hash": sha256_json(manifest),
+            },
+            "capability": {
+                "capability_id": candidate["capability_id"],
+                "description": candidate["capability_description"],
+                "context_scopes": candidate["context_scopes"],
+                "metadata": candidate["capability_metadata"],
+            },
+            "intent": {
+                "intent_id": candidate["intent_id"],
+                "description": candidate["description"],
+                "input_schema": candidate["input_schema"],
+                "response_schema": candidate["response_schema"],
+                "dispatch": candidate["dispatch"],
+                "metadata": candidate["metadata"],
+            },
+            "input": {
+                "message": request.message,
+                "assignment": request.assignment,
+                "payload": request.payload,
+            },
+        }
+        return await self.ecosystem.execute(
+            request=request,
+            session=session,
+            capability_contract=capability_contract,
+        )
+
+    def ecosystem_readiness(self) -> dict[str, Any]:
+        return self.ecosystem.client.readiness()
+
+    def ecosystem_contracts(self) -> dict[str, Any]:
+        return self.ecosystem.client.contracts()
+
+    def ecosystem_executions(
+        self,
+        *,
+        status: str | None = None,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return self.ecosystem.list(
+            status=status,
+            session_id=session_id,
+            limit=limit,
+        )
+
+    def ecosystem_execution(self, execution_id: str) -> dict[str, Any]:
+        return self.ecosystem.details(execution_id)
+
+    async def recover_ecosystem_execution(
+        self,
+        execution_id: str,
+    ) -> dict[str, Any]:
+        return await self.ecosystem.recover(execution_id)
+
+    def ecosystem_replay(self, execution_id: str) -> dict[str, Any]:
+        return self.ecosystem.replay(execution_id)
+
+    @staticmethod
+    def validate_ecosystem_replay(
+        package: dict[str, Any],
+    ) -> dict[str, Any]:
+        return EcosystemReplayLedger.validate(package)
+
     def companion_memory(
         self,
         session_id: str,
@@ -1962,6 +2243,114 @@ class CompanionRuntime:
     def dispatch_reconstruction(self, dispatch_id: str) -> dict[str, Any]:
         return self.reconstruction.package(dispatch_id)
 
+    def validate_reconstruction_package(
+        self,
+        package: dict[str, Any],
+    ) -> dict[str, Any]:
+        return DeterministicReconstructionLedger.validate_portable_package(
+            package
+        )
+
+    def tantra_status(self) -> dict[str, Any]:
+        return self.tantra_handover.status()
+
+    def integration_deliveries(
+        self,
+        *,
+        dispatch_id: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return self.tantra_handover.deliveries(
+            dispatch_id=dispatch_id,
+            status=status,
+            limit=limit,
+        )
+
+    async def process_integration_deliveries(
+        self,
+        *,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        return await self.tantra_handover.process_pending(limit=limit)
+
+    async def check_tantra_gateway_health(self) -> dict[str, Any]:
+        health = await self.tantra_handover.check_health()
+        observation = self.store.record_dependency_observation(
+            product_id="tantra-gateway",
+            status=str(health.get("status") or "unknown"),
+            latency_ms=(
+                float(health["latency_ms"])
+                if health.get("latency_ms") is not None
+                else None
+            ),
+            detail=health,
+            runtime_instance_id=self.instance_id,
+        )
+        self.telemetry.record_event(
+            "integration.health_checked",
+            severity=(
+                "error" if health.get("status") == "unhealthy" else "info"
+            ),
+            integration="tantra",
+            status=health.get("status"),
+            latency_ms=health.get("latency_ms"),
+        )
+        return {
+            "health": health,
+            "observation_id": observation["observation_id"],
+        }
+
+    async def reconcile_tantra_traces(
+        self,
+        *,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        result = await self.tantra_handover.reconcile_remote_traces(
+            limit=limit
+        )
+        observation_ids = []
+        for trace in result.get("traces", []):
+            observation = self.store.record_dependency_observation(
+                product_id=f"tantra-trace:{trace['trace_id']}",
+                status=str(trace.get("status") or "unknown"),
+                latency_ms=(
+                    float(trace["latency_ms"])
+                    if trace.get("latency_ms") is not None
+                    else None
+                ),
+                detail={"operation": "trace-reconciliation", **trace},
+                runtime_instance_id=self.instance_id,
+            )
+            observation_ids.append(observation["observation_id"])
+        self.telemetry.record_event(
+            "integration.traces_reconciled",
+            severity=("error" if result.get("status") == "unhealthy" else "info"),
+            integration="tantra",
+            status=result.get("status"),
+            checked_count=result.get("checked_count", 0),
+        )
+        return {**result, "observation_ids": observation_ids}
+
+    def continuity_status(self) -> dict[str, Any]:
+        return self.continuity.latest()
+
+    def run_continuity_check(self, *, limit: int | None = None) -> dict[str, Any]:
+        return self.continuity.scan(
+            limit=limit or self.settings.runtime_continuity_dispatch_limit
+        )
+
+    def dependency_health_status(
+        self,
+        *,
+        product_id: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        return self.continuity.dependency_health(
+            product_id=product_id,
+            limit=limit,
+        )
+
     def central_depository(
         self,
         *,
@@ -2039,6 +2428,55 @@ class CompanionRuntime:
             },
         )
 
+    def _session_for_ecosystem_request(
+        self,
+        request: EcosystemExecutionRequest,
+    ) -> dict[str, Any]:
+        if request.session_id:
+            session = self.sessions.get(request.session_id)
+            if session["state"] != "ACTIVE":
+                raise ResourceConflictError(
+                    "Only active sessions can start ecosystem executions"
+                )
+            if request.actor_id and request.actor_id != session["actor_id"]:
+                raise ResourceConflictError(
+                    "The request actor does not own the selected session"
+                )
+            if (
+                request.workspace_id
+                and request.workspace_id != session["workspace_id"]
+            ):
+                raise ResourceConflictError(
+                    "The request workspace does not match the selected session"
+                )
+            active_product = session.get("active_product_id")
+            if (
+                request.product_id
+                and active_product
+                and request.product_id != active_product
+            ):
+                raise ResourceConflictError(
+                    "Cross-product ecosystem execution requires context transfer"
+                )
+            return session
+        if not request.actor_id or not request.workspace_id:
+            raise IntentRoutingError(
+                "actor_id and workspace_id are required when session_id is "
+                "omitted"
+            )
+        if request.product_id:
+            self.attachments.get(request.product_id)
+        return self.sessions.create(
+            actor_id=request.actor_id,
+            client_type=request.client_type,
+            workspace_id=request.workspace_id,
+            product_id=request.product_id,
+            metadata={
+                "created_by": "ecosystem-execution",
+                **request.metadata,
+            },
+        )
+
     def _persist_companion_memory(
         self,
         session_id: str,
@@ -2106,12 +2544,24 @@ class CompanionRuntime:
                 recovered=recovered,
                 health=health,
             )
+            observation = self.store.record_dependency_observation(
+                product_id=product,
+                status=str(health.get("status") or "unknown"),
+                latency_ms=(
+                    float(health["latency_ms"])
+                    if health.get("latency_ms") is not None
+                    else None
+                ),
+                detail=health,
+                runtime_instance_id=self.instance_id,
+            )
             checks.append(
                 {
                     "product_id": product,
                     "previous_attachment_state": attachment["state"],
                     "health": health,
                     "recovered": recovered,
+                    "observation_id": observation["observation_id"],
                     "attachment": self.attachments.get(product),
                 }
             )
@@ -2121,10 +2571,97 @@ class CompanionRuntime:
         }
 
     def metrics_snapshot(self) -> dict[str, Any]:
-        return self.telemetry.snapshot()
+        snapshot = self.telemetry.snapshot()
+        lease = self.store.get_runtime_lease("shared-maintenance")
+        continuity = self.continuity.latest()
+        snapshot["coordination"] = {
+            "active_runtime_instances": len(
+                self.store.list_runtime_instances()
+            ),
+            "is_coordinator": bool(
+                lease
+                and not lease.get("expired")
+                and lease.get("holder_instance_id") == self.instance_id
+            ),
+            "lease": lease,
+        }
+        snapshot["tantra_delivery_outbox"] = (
+            self.store.integration_delivery_counts(
+                integration_name="tantra"
+            )
+        )
+        snapshot["continuity"] = {
+            "status": continuity.get("status"),
+            "checked_count": continuity.get("checked_count", 0),
+            "issue_count": continuity.get("issue_count", 0),
+            "created_at": continuity.get("created_at"),
+        }
+        snapshot["dependency_health"] = self.continuity.dependency_health(
+            limit=500
+        )
+        snapshot["ecosystem_convergence"] = {
+            "readiness": self.ecosystem_readiness(),
+            "execution_counts": self.store.ecosystem_execution_counts(),
+            "stage_failure_counts": (
+                self.store.ecosystem_stage_failure_counts()
+            ),
+        }
+        return snapshot
 
     def recent_events(self, limit: int = 100) -> list[dict[str, Any]]:
         return self.telemetry.recent_events(limit)
 
     def prometheus_metrics(self) -> str:
-        return self.telemetry.prometheus_text()
+        snapshot = self.metrics_snapshot()
+        lines = [self.telemetry.prometheus_text().rstrip()]
+        lines.extend(
+            [
+                "# HELP mitra_runtime_coordinator Whether this instance owns shared maintenance.",
+                "# TYPE mitra_runtime_coordinator gauge",
+                "mitra_runtime_coordinator "
+                + ("1" if snapshot["coordination"]["is_coordinator"] else "0"),
+                "# HELP mitra_runtime_active_instances Active runtime instances.",
+                "# TYPE mitra_runtime_active_instances gauge",
+                "mitra_runtime_active_instances "
+                + str(snapshot["coordination"]["active_runtime_instances"]),
+                "# HELP mitra_runtime_continuity_issues Failed continuity checks.",
+                "# TYPE mitra_runtime_continuity_issues gauge",
+                "mitra_runtime_continuity_issues "
+                + str(snapshot["continuity"]["issue_count"]),
+                "# HELP mitra_dependency_observations Runtime dependency health observations.",
+                "# TYPE mitra_dependency_observations gauge",
+                "mitra_dependency_observations "
+                + str(snapshot["dependency_health"]["observation_count"]),
+                "# HELP mitra_tantra_outbox_deliveries TANTRA deliveries by durable state.",
+                "# TYPE mitra_tantra_outbox_deliveries gauge",
+                "# HELP mitra_ecosystem_ready Whether every owner contract is configured.",
+                "# TYPE mitra_ecosystem_ready gauge",
+                "mitra_ecosystem_ready "
+                + (
+                    "1"
+                    if snapshot["ecosystem_convergence"]["readiness"]["ready"]
+                    else "0"
+                ),
+                "# HELP mitra_ecosystem_executions Ecosystem executions by state.",
+                "# TYPE mitra_ecosystem_executions gauge",
+            ]
+        )
+        for status, count in sorted(
+            snapshot["tantra_delivery_outbox"].items()
+        ):
+            if status == "TOTAL":
+                continue
+            lines.append(
+                "mitra_tantra_outbox_deliveries"
+                f'{{status="{status}"}} {count}'
+            )
+        for status, count in sorted(
+            snapshot["ecosystem_convergence"]["execution_counts"].items()
+        ):
+            if status == "TOTAL":
+                continue
+            lines.append(
+                "mitra_ecosystem_executions"
+                f'{{status="{status}"}} {count}'
+            )
+        return "\n".join(lines) + "\n"

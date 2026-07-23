@@ -73,22 +73,32 @@ payloads are shared.
 
 | Consumer | Published interaction |
 |---|---|
+| Raj | `GET /healthz`, `POST /api/workflow/execute` version `1.0.0` |
 | Ashmit | `GET /health/system` |
-| Bucket | latest hash, artifact storage/read, chain validation, replay validation |
+| Bucket | owner repository on the local topology; latest hash, strict artifact storage/read, global replay validation; authenticated Redis and artifact volumes are persistent |
 | InsightFlow | execution trace ingest |
 | Karma | integrity append and bucket-artifact append |
 | PRANA | strict byte forwarding and trace-preserving core forwarding |
-| Central Depository | Mitra's subject-filtered runtime export API |
+| Central Depository | configured external append-only contract through the local Bucket owner service; append, exact read-back, global replay, and restart persistence passed |
+| TANTRA | four-bundle handover through `POST /api/v1/execute/evidence-package` |
 
-Karma precedes PRANA. Mitra forwards only after Karma returns `appended`.
-Strict forwarding uses the exact canonical request bytes. Other independent
-consumer calls are recorded with their own response, rejection, failure, or
-explicit skipped result.
+The canonical chain starts at `POST /api/v1/ecosystem/execute`. Karma precedes
+PRANA because the supplied published contract allows forwarding only after
+Karma returns `appended`. Strict forwarding uses the exact canonical request
+bytes. Every owner call records its actual response, rejection, or transport
+failure. Missing owner configuration fails closed; it is never converted into
+embedded acceptance.
 
-Inspect configured/redacted integration state with:
+TANTRA is an external-only coordinator. Mitra creates its interoperable package
+from the verified dispatch reconstruction and records the result under
+`ecosystem_convergence.handoffs`; it does not embed or call the coordinator's
+downstream authority systems directly.
+
+Inspect configured/redacted integration state and contracts with:
 
 ```http
-GET /api/v1/runtime/integrations
+GET /api/v1/ecosystem/readiness
+GET /api/v1/ecosystem/contracts
 ```
 
 ## Product Manifests
@@ -101,7 +111,7 @@ GET /api/v1/runtime/integrations
 | PRANA Runtime | `contracts/examples/product-prana-runtime.json` | manifest contract |
 | Karma Ledger | `contracts/examples/product-karma-ledger.json` | manifest contract |
 | SETU Bridge | `contracts/examples/product-setu-bridge.json` | manifest contract |
-| KESHAV Knowledge | `contracts/examples/product-keshav-knowledge.json` | manifest contract |
+| KESHAV legacy example | `contracts/examples/product-keshav-knowledge.json` | test fixture only; current integration uses conditional owner `POST /analyze` |
 | SARATHI Guide | `contracts/examples/product-sarathi-guide.json` | manifest contract |
 
 These files are contract and test fixtures. Production bootstrap uses
@@ -111,6 +121,16 @@ with `metadata.production_bootstrap: true`.
 
 Both use generic HTTP transport with native payload projection through
 `dispatch.options.request_body`.
+
+On 2026-07-20 both production attachments were live rather than manifest-only.
+UniGuru execution `eco_07fa5401aaf94ebfb2cfd6ead3cd5424` completed the
+drip-irrigation request, and Trade Bot execution
+`eco_1ac97452891c43bdad40b786eb5b9089` returned the requested NVDA symbol.
+Both recorded a KESHAV no-call checkpoint. A third execution,
+`eco_6e30b5bb66c549d6a691c4bc35b0582a`, preserved Trade Bot's real HTTP 422 as
+a typed product error and received a trace-preserving KESHAV proposal before
+completing the downstream chain. Every package passed 123 clean-state replay
+checks and rejected mutation.
 
 Production manifests may declare `metadata.health_contract.translator` for
 non-linear product health behavior. The translator is product-neutral: it can
@@ -124,6 +144,8 @@ not convert a suspended or failed downstream service into healthy state.
 - `pratham/tests/test_bhiv_product_integration.py`
 - `pratham/tests/test_replay_convergence_and_graph.py`
 - `pratham/tests/test_production_hardening.py`
+- `pratham/tests/test_tantra_handover.py`
+- `pratham/tests/test_ecosystem_convergence.py`
 
 These tests submit data and assert requests, responses, forwarding order,
 byte identity, trace identity, reconstruction, and depository lineage.

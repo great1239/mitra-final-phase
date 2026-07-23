@@ -53,6 +53,8 @@ def test_operations_documents_and_environment_template_are_present():
     assert "MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS=false" in production_env
     assert "MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS=false" in production_env
     assert "MITRA_COMPANION_ALLOW_LOOPBACK_MANIFESTS=false" in production_env
+    assert "MITRA_RAJ_WORKFLOW_BASE_URL_FILE" in production_env
+    assert "MITRA_RAJ_API_KEY_FILE" in production_env
     assert "MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED=true" in production_env
     assert "MITRA_COMPANION_PERSISTENT_HEARTBEAT_INTERVAL_SECONDS=5" in (
         production_env
@@ -211,6 +213,9 @@ def test_documentation_handover_contains_clean_rebuild_and_depository_protocol()
     assert "python -m pytest" in handover
     assert "docker compose build --pull" in handover
     assert "scripts/validate_hosted_runtime.py" in handover
+    assert "scripts/validate_ecosystem_runtime.py" in handover
+    assert "contracts/operational-acceptance.json" in handover
+    assert "total_assertions=425" in handover
     assert "ephemeral" in handover
     assert "GET /api/v1/runtime/depository" in depository
     assert "subject_type=dispatch&subject_id={dispatch_id}" in depository
@@ -291,40 +296,49 @@ def test_testing_evidence_records_all_executed_acceptance_paths():
         "Integration Validation",
     ):
         assert f"## {heading}" in evidence
-    assert "104 passed" in evidence
-    assert "633/633 passed" in evidence
-    assert "p95 latency:         803.92 ms" in evidence
-    assert "CAPACITY LIMIT" in evidence
-    assert "Docker was rechecked and repaired on `2026-07-10`" in evidence
-    assert "docker compose config --quiet: passed" in evidence
-    assert (
-        "docker compose up -d --force-recreate --wait --wait-timeout 180: healthy"
-        in evidence
-    )
-    assert '"uvicorn_workers": 1' in evidence
-    assert '"passed": "superseded"' in evidence
-    assert "ROUTING/REPLAY REQUIRES REAL ATTACHED PRODUCT" in evidence
+    assert "15 passed" in evidence
+    assert "controlled implementations" in evidence
+    assert "database_reads=0" in evidence
+    assert "live_service_calls=0" in evidence
+    assert "no production convergence claim" in evidence
+    assert "156 passed" in evidence
+    assert "--validate-package /data/operational-acceptance" in evidence
+    assert "144 passed" in evidence
+    assert "23 / 23 / 0" not in evidence
+    assert "9097.026 ms" not in evidence
 
 
-def test_production_readiness_gate_script_passes():
+def test_production_readiness_gate_blocks_without_live_owner_evidence():
     completed = subprocess.run(
         [sys.executable, "scripts/production_readiness_gate.py"],
         cwd=ROOT,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    assert completed.returncode == 1
     payload = json.loads(completed.stdout)
-    assert payload["production_readiness_gate"] == "passed"
+    assert payload["production_readiness_gate"] == "blocked"
+    assert payload["implementation_readiness"] == "passed"
     assert set(payload["checks"]) == {
         "container",
         "code_packets",
         "deployment",
         "runtime",
         "load_test",
+        "operational_acceptance",
         "handover",
         "screenshots",
         "testing_evidence",
+        "owner_configuration",
     }
-    assert all(status == "passed" for status in payload["checks"].values())
     assert payload["failures"] == []
+    assert payload["checks"]["screenshots"] == "blocked"
+    assert payload["checks"]["owner_configuration"] == "blocked"
+    assert all(
+        status == "passed"
+        for name, status in payload["checks"].items()
+        if name not in {"screenshots", "owner_configuration"}
+    )
+    assert any("Raj".lower() in item.lower() for item in payload["blockers"])
+    assert any("PRANA".lower() in item.lower() for item in payload["blockers"])

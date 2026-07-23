@@ -21,9 +21,12 @@ from .contracts import (
     CompanionMessageRequest,
     ContextTransferRequest,
     ContextUpdateRequest,
+    EcosystemExecutionRequest,
+    EcosystemReplayValidationRequest,
     IntentDispatchRequest,
     ProductExchangeAckRequest,
     ProductExchangeRequest,
+    ReconstructionValidationRequest,
     RuntimeAnalysisRequest,
     SessionCreateRequest,
     SessionResumeRequest,
@@ -113,6 +116,11 @@ def create_app(
         startup = companion.startup_status()
         production_config = runtime_settings.production_summary()
         secrets = runtime_settings.secrets_summary()
+        continuity = companion.continuity_status()
+        deliveries = companion.integration_deliveries(limit=8)
+        dependency_health = companion.dependency_health_status(limit=100)
+        ecosystem = companion.ecosystem.status()
+        ecosystem_executions = companion.ecosystem_executions(limit=8)
         attachment_rows = "".join(
             "<tr>"
             f"<td><strong>{escape(item['manifest']['display_name'])}</strong>"
@@ -160,7 +168,44 @@ def create_app(
             "</tr>"
             for item in startup.get("phases", [])
         ) or "<tr><td colspan='2'>Startup has not completed</td></tr>"
+        delivery_rows = "".join(
+            "<tr>"
+            f"<td><code>{escape(item['delivery_id'][:18])}</code></td>"
+            f"<td><code>{escape(item['dispatch_id'][:18])}</code></td>"
+            f"<td><span class='badge {item['status'].lower()}'>"
+            f"{escape(item['status'])}</span></td>"
+            f"<td>{item['attempts']}</td>"
+            f"<td>{escape(item['updated_at'])}</td>"
+            "</tr>"
+            for item in deliveries
+        ) or "<tr><td colspan='5'>No TANTRA deliveries</td></tr>"
+        dependency_rows = "".join(
+            "<tr>"
+            f"<td>{escape(item['product_id'])}</td>"
+            f"<td><span class='badge {item['latest_status'].lower()}'>"
+            f"{escape(item['latest_status'])}</span></td>"
+            f"<td>{item['sample_count']}</td>"
+            f"<td>{item['consecutive_failures']}</td>"
+            f"<td>{escape(str(item['average_latency_ms'] or '-'))}</td>"
+            "</tr>"
+            for item in dependency_health["products"]
+        ) or "<tr><td colspan='5'>No dependency observations</td></tr>"
+        ecosystem_rows = "".join(
+            "<tr>"
+            f"<td><a href='/operator/ecosystem/{escape(item['execution_id'])}'>"
+            f"<code>{escape(item['execution_id'][:18])}</code></a></td>"
+            f"<td><code>{escape(item['trace_id'][:18])}</code></td>"
+            f"<td>{escape(str(item.get('current_stage') or '-'))}</td>"
+            f"<td><span class='badge {item['status'].lower()}'>"
+            f"{escape(item['status'])}</span></td>"
+            f"<td>{escape(item['updated_at'])}</td>"
+            "</tr>"
+            for item in ecosystem_executions
+        ) or "<tr><td colspan='5'>No ecosystem executions yet</td></tr>"
         counts = status["counts"]
+        outbox_counts = status["tantra_integration"]["delivery_outbox"][
+            "counts"
+        ]
         return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -179,7 +224,7 @@ def create_app(
     * {{ box-sizing:border-box; }}
     body {{
       margin:0; color:var(--ink);
-      background:linear-gradient(180deg, #f9faf7 0, var(--page) 42%, #eaf0ec 100%);
+      background:var(--page);
     }}
     main {{ max-width:1240px; margin:auto; padding:34px 24px 64px; }}
     .top {{
@@ -201,13 +246,16 @@ def create_app(
     .grid {{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin:24px 0; }}
     .card {{
       border:1px solid var(--line); border-radius:8px; padding:18px;
-      background:var(--surface); box-shadow:0 12px 28px var(--shadow);
+      background:var(--surface);
       overflow:auto;
     }}
     .grid .card {{ min-height:112px; display:flex; flex-direction:column; justify-content:space-between; }}
     .label {{ color:var(--muted); font-size:12px; letter-spacing:0; text-transform:uppercase; font-weight:800; }}
     .value {{ font-size:30px; font-weight:850; margin-top:10px; color:#101815; }}
-    .section {{ margin-top:14px; }}
+    .section {{
+      margin-top:14px; padding:22px 0; border:0; border-top:1px solid var(--line);
+      border-radius:0; background:transparent; box-shadow:none;
+    }}
     .section h2 {{ margin:0 0 12px; font-size:18px; line-height:1.25; }}
     table {{ width:100%; border-collapse:collapse; min-width:620px; }}
     th, td {{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:top; }}
@@ -272,7 +320,28 @@ def create_app(
       <div class="value">{escape(str(production_config['production_log_level']))}</div></div>
     <div class="card"><div class="label">Secrets</div>
       <div class="value">{len(secrets['secret_keys_configured'])}</div></div>
+    <div class="card"><div class="label">Coordinator</div>
+      <div class="value">{'YES' if status['persistent_runtime']['coordinator'] else 'NO'}</div></div>
+    <div class="card"><div class="label">Delivery outbox</div>
+      <div class="value">{outbox_counts.get('TOTAL', 0)}</div></div>
+    <div class="card"><div class="label">Continuity</div>
+      <div class="value">{escape(str(continuity.get('status', 'not-run')).upper())}</div></div>
+    <div class="card"><div class="label">Ecosystem contracts</div>
+      <div class="value">{'READY' if ecosystem['readiness']['ready'] else 'PENDING'}</div></div>
+    <div class="card"><div class="label">Ecosystem executions</div>
+      <div class="value">{ecosystem['execution_counts'].get('TOTAL', 0)}</div></div>
   </div>
+  <div class="card section"><h2>TANTRA ecosystem convergence</h2>
+    <div class="flow"><strong>Mitra capability selection</strong> -> Raj workflow
+      execution -> Bucket truth -> Karma integrity -> PRANA strict forwarding ->
+      InsightFlow telemetry -> deterministic replay -> Central Depository export
+      <br><small>Owner services are invoked through published contracts. A failed
+      or unconfigured stage stops downstream execution; no embedded fallback is used.</small></div>
+  </div>
+  <div class="card section"><h2>Recent ecosystem executions</h2>
+    <table><thead><tr><th>Execution</th><th>Trace</th><th>Stage</th>
+      <th>Status</th><th>Updated</th></tr></thead>
+      <tbody>{ecosystem_rows}</tbody></table></div>
   <div class="card section"><h2>Runtime execution flow</h2>
     <div class="flow"><strong>Client</strong> -> Session Runtime -> Context Runtime
       -> Intent Router -> Capability Lookup -> Product Transport
@@ -291,6 +360,14 @@ def create_app(
   <div class="card section"><h2>Runtime instances</h2>
     <table><thead><tr><th>Instance</th><th>State</th><th>Environment</th>
       <th>Heartbeat</th></tr></thead><tbody>{instance_rows}</tbody></table></div>
+  <div class="card section"><h2>TANTRA delivery outbox</h2>
+    <table><thead><tr><th>Delivery</th><th>Dispatch</th><th>Status</th>
+      <th>Attempts</th><th>Updated</th></tr></thead>
+      <tbody>{delivery_rows}</tbody></table></div>
+  <div class="card section"><h2>Dependency health history</h2>
+    <table><thead><tr><th>Product</th><th>Latest</th><th>Samples</th>
+      <th>Consecutive failures</th><th>Average latency ms</th></tr></thead>
+      <tbody>{dependency_rows}</tbody></table></div>
   <div class="card section"><h2>Startup manager</h2>
     <table><thead><tr><th>Phase</th><th>Completed</th></tr></thead>
       <tbody>{startup_rows}</tbody></table></div>
@@ -302,8 +379,559 @@ def create_app(
   <div class="card section"><h2>Integration surfaces</h2>
     <div class="flow"><a href="/docs">OpenAPI explorer</a> &nbsp;|&nbsp;
       <a href="/api/v1/runtime/status">Runtime status</a> &nbsp;|&nbsp;
-      <a href="/api/v1/intents">Intent registry</a></div></div>
+      <a href="/api/v1/runtime/continuity">Continuity</a> &nbsp;|&nbsp;
+      <a href="/api/v1/runtime/dependencies/health">Dependencies</a> &nbsp;|&nbsp;
+      <a href="/api/v1/runtime/integrations/tantra/deliveries">Deliveries</a>
+      &nbsp;|&nbsp; <a href="/api/v1/ecosystem/readiness">Ecosystem readiness</a>
+      &nbsp;|&nbsp; <a href="/api/v1/intents">Intent registry</a></div></div>
 </main></body></html>"""
+
+    @app.get(
+        "/operator/ecosystem/{execution_id}",
+        response_class=HTMLResponse,
+    )
+    async def ecosystem_operator_execution(
+        execution_id: str,
+        stage: str | None = Query(default=None),
+    ) -> str:
+        captured_at = utc_now()
+        detail = companion.ecosystem_execution(execution_id)
+        execution = detail["execution"]
+        stages = detail["stages"]
+        selected = None
+        if stage is not None:
+            selected = next(
+                (item for item in stages if item["stage_name"] == stage),
+                None,
+            )
+            if selected is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Unknown ecosystem stage: {stage}",
+                )
+
+        stage_rows = "".join(
+            "<tr>"
+            f"<td><a href='/operator/ecosystem/{escape(execution_id)}"
+            f"?stage={escape(item['stage_name'])}#stage-detail'>"
+            f"{escape(item['stage_name'])}</a></td>"
+            f"<td>{escape(item['status'])}</td>"
+            f"<td>{item['attempts']}</td>"
+            f"<td><code>{escape(str(item.get('response_hash') or '-'))}</code></td>"
+            f"<td>{escape(str(item.get('finished_at') or '-'))}</td>"
+            "</tr>"
+            for item in stages
+        )
+        selected_content = ""
+        if selected is not None:
+            response = selected.get("response") or {}
+            facts: dict[str, Any] = {
+                "stage": selected["stage_name"],
+                "status": response.get("status"),
+                "trace_id": response.get("trace_id"),
+            }
+            if selected["stage_name"] == "dependency-preflight":
+                facts["owner_checks"] = [
+                    {
+                        "module": operation.get("module"),
+                        "operation": operation.get("operation"),
+                        "http_status": operation.get("http_status"),
+                        "transport_status": operation.get("status"),
+                        "owner_response": operation.get("response"),
+                    }
+                    for operation in response.get("checks", [])
+                ]
+            elif selected["stage_name"] == "raj-execution":
+                operation = response.get("operation") or {}
+                facts.update(
+                    {
+                        "mitra_trace_id": response.get("trace_id"),
+                        "raj_trace_id": response.get("raj_trace_id"),
+                        "workflow_status": (
+                            response.get("execution") or {}
+                        ).get("status"),
+                        "owner_http": {
+                            "module": operation.get("module"),
+                            "operation": operation.get("operation"),
+                            "http_status": operation.get("http_status"),
+                            "contract_validation": operation.get(
+                                "contract_validation"
+                            ),
+                            "owner_status": (
+                                operation.get("response") or {}
+                            ).get("status"),
+                        },
+                    }
+                )
+            elif selected["stage_name"] == "keshav-diagnosis":
+                operation = response.get("operation") or {}
+                facts.update(
+                    {
+                        "invoked": response.get("invoked"),
+                        "reason": response.get("reason"),
+                        "authority": response.get("authority"),
+                        "source_error_hash": response.get(
+                            "source_error_hash"
+                        ),
+                        "diagnosis": response.get("diagnosis"),
+                        "owner_http": (
+                            {
+                                "module": operation.get("module"),
+                                "operation": operation.get("operation"),
+                                "http_status": operation.get("http_status"),
+                                "contract_validation": operation.get(
+                                    "contract_validation"
+                                ),
+                            }
+                            if operation
+                            else None
+                        ),
+                    }
+                )
+            elif selected["stage_name"] == "bucket-truth":
+                facts.update(
+                    {
+                        "artifact_id": response.get("artifact_id"),
+                        "artifact_hash": response.get("artifact_hash"),
+                        "parent_hash": response.get("parent_hash"),
+                        "owner_operations": [
+                            {
+                                "operation": operation.get("operation"),
+                                "http_status": operation.get("http_status"),
+                                "owner_status": (
+                                    operation.get("response") or {}
+                                ).get("status"),
+                            }
+                            for operation in response.get("operations", [])
+                        ],
+                    }
+                )
+            elif selected["stage_name"] == "karma-integrity":
+                operation = response.get("operation") or {}
+                facts.update(
+                    {
+                        "accepted_hash": response.get("accepted_hash"),
+                        "request_sha256": response.get("request_sha256"),
+                        "owner_http": {
+                            "operation": operation.get("operation"),
+                            "http_status": operation.get("http_status"),
+                            "owner_response": operation.get("response"),
+                        },
+                    }
+                )
+            elif selected["stage_name"] == "prana-forwarding":
+                operations = response.get("operations", [])
+                strict = operations[0] if len(operations) > 0 else {}
+                core = operations[1] if len(operations) > 1 else {}
+                facts.update(
+                    {
+                        "strict_bytes_sha256": response.get(
+                            "strict_bytes_sha256"
+                        ),
+                        "strict_forward": {
+                            "http_status": strict.get("http_status"),
+                            "owner_status": (
+                                strict.get("response") or {}
+                            ).get("status"),
+                            "strict_validation": strict.get(
+                                "strict_validation"
+                            ),
+                            "response_headers": {
+                                key: value
+                                for key, value in (
+                                    strict.get("response_headers") or {}
+                                ).items()
+                                if key.startswith("x-prana-")
+                            },
+                        },
+                        "core_forward": {
+                            "http_status": core.get("http_status"),
+                            "owner_status": (
+                                core.get("response") or {}
+                            ).get("status"),
+                            "trace_validation": core.get(
+                                "trace_validation"
+                            ),
+                        },
+                    }
+                )
+            elif selected["stage_name"] == "insightflow-telemetry":
+                operation = response.get("operation") or {}
+                facts.update(
+                    {
+                        "event_type": (
+                            response.get("envelope") or {}
+                        ).get("event_type"),
+                        "owner_http": {
+                            "operation": operation.get("operation"),
+                            "http_status": operation.get("http_status"),
+                            "owner_response": operation.get("response"),
+                        },
+                    }
+                )
+            facts_json = escape(
+                json.dumps(
+                    facts,
+                    indent=2,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                )
+            )
+            request_json = escape(
+                json.dumps(
+                    selected.get("request"),
+                    indent=2,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                )
+            )
+            response_json = escape(
+                json.dumps(
+                    selected.get("response"),
+                    indent=2,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                )
+            )
+            selected_content = f"""
+  <section class="stage-detail" id="stage-detail">
+    <div class="stage-heading">
+      <div><div class="eyebrow">Selected stage</div>
+        <h2>{escape(selected['stage_name'])}</h2></div>
+      <strong class="status">{escape(selected['status'])}</strong>
+    </div>
+    <dl class="hashes">
+      <div><dt>Request SHA-256</dt><dd><code>{escape(str(selected.get('request_hash') or '-'))}</code></dd></div>
+      <div><dt>Response SHA-256</dt><dd><code>{escape(str(selected.get('response_hash') or '-'))}</code></dd></div>
+      <div><dt>Artifact SHA-256</dt><dd><code>{escape(str(selected.get('artifact_hash') or '-'))}</code></dd></div>
+      <div><dt>Lineage chain</dt><dd><code>{escape(str(selected.get('chain_hash') or '-'))}</code></dd></div>
+    </dl>
+    <section class="contract-facts"><h3>Contract facts</h3>
+      <pre>{facts_json}</pre></section>
+    <div class="payload-grid">
+      <section><h3>Recorded request</h3><pre>{request_json}</pre></section>
+      <section><h3>Recorded response</h3><pre>{response_json}</pre></section>
+    </div>
+  </section>"""
+
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(execution_id)} | Mitra execution ledger</title>
+  <style>
+    :root {{
+      color-scheme:light; font-family:Inter,"Segoe UI",Arial,sans-serif;
+      --page:#f5f7f3; --surface:#fff; --ink:#17201d; --muted:#62706b;
+      --line:#d7dfd9; --signal:#17735d; --soft:#dff3ec; --blue:#2f68d8;
+    }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; color:var(--ink); background:var(--page); }}
+    main {{ max-width:1380px; margin:auto; padding:30px 24px 60px; }}
+    header {{ display:flex; justify-content:space-between; gap:24px;
+      border-bottom:1px solid var(--line); padding-bottom:22px; }}
+    .eyebrow {{ color:var(--signal); font-weight:800; font-size:12px;
+      text-transform:uppercase; }}
+    h1 {{ margin:7px 0; font-size:32px; overflow-wrap:anywhere; }}
+    h2 {{ margin:6px 0 0; font-size:24px; }}
+    h3 {{ margin:0; padding:12px 14px; border-bottom:1px solid var(--line);
+      font-size:14px; }}
+    .meta {{ color:var(--muted); line-height:1.6; font-size:13px; }}
+    .status {{ align-self:flex-start; color:#0d5c49; background:var(--soft);
+      border:1px solid #9dc9b9; padding:8px 11px; border-radius:6px; }}
+    .summary {{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px;
+      margin:22px 0; }}
+    .summary div {{ background:var(--surface); border:1px solid var(--line);
+      border-radius:6px; padding:14px; min-width:0; }}
+    .summary span {{ display:block; color:var(--muted); font-size:11px;
+      font-weight:800; text-transform:uppercase; margin-bottom:7px; }}
+    code {{ color:#224fba; overflow-wrap:anywhere; }}
+    .ledger {{ overflow:auto; border-top:1px solid var(--line);
+      border-bottom:1px solid var(--line); }}
+    table {{ width:100%; border-collapse:collapse; min-width:920px;
+      background:var(--surface); }}
+    th,td {{ text-align:left; padding:11px 10px; border-bottom:1px solid var(--line);
+      vertical-align:top; }}
+    th {{ color:var(--muted); font-size:11px; text-transform:uppercase;
+      background:#edf2ee; }}
+    td code {{ font-size:11px; }}
+    a {{ color:var(--blue); font-weight:750; text-decoration:none; }}
+    a:hover {{ text-decoration:underline; }}
+    .stage-detail {{ margin-top:26px; border-top:1px solid var(--line); }}
+    .stage-heading {{ display:flex; justify-content:space-between; gap:20px;
+      align-items:flex-start; padding:20px 0 16px; }}
+    .hashes {{ display:grid; grid-template-columns:repeat(2,1fr); gap:1px;
+      background:var(--line); border:1px solid var(--line); margin:0 0 14px; }}
+    .hashes div {{ background:var(--surface); padding:12px; min-width:0; }}
+    dt {{ color:var(--muted); font-size:11px; font-weight:800;
+      text-transform:uppercase; margin-bottom:5px; }}
+    dd {{ margin:0; overflow-wrap:anywhere; }}
+    .payload-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }}
+    .payload-grid section,.contract-facts {{ background:var(--surface); border:1px solid var(--line);
+      min-width:0; }}
+    .contract-facts {{ margin-bottom:14px; }}
+    .contract-facts pre {{ max-height:none; }}
+    pre {{ margin:0; padding:14px; color:#152923; background:#fbfcfa;
+      font:12px/1.55 Consolas,"SFMono-Regular",monospace; white-space:pre-wrap;
+      overflow-wrap:anywhere; max-height:680px; overflow:auto; }}
+    footer {{ margin-top:24px; color:var(--muted); font-size:13px; }}
+    @media(max-width:850px) {{
+      header,.stage-heading {{ flex-direction:column; }}
+      .summary,.hashes,.payload-grid {{ grid-template-columns:1fr; }}
+    }}
+  </style>
+</head>
+<body><main>
+  <header><div><div class="eyebrow">Mitra immutable execution ledger</div>
+    <h1>{escape(execution_id)}</h1>
+    <div class="meta">Trace {escape(execution['trace_id'])}<br>
+      Environment {escape(runtime_settings.deployment_environment)}<br>
+      Snapshot UTC {escape(captured_at)}</div></div>
+    <strong class="status">{escape(execution['status'])}</strong>
+  </header>
+  <section class="summary">
+    <div><span>Current stage</span>{escape(str(execution.get('current_stage') or '-'))}</div>
+    <div><span>Recorded stages</span>{len(stages)}</div>
+    <div><span>Replay package</span><code>{escape(str(execution.get('replay_package_hash') or 'not sealed'))}</code></div>
+    <div><span>Updated UTC</span>{escape(execution['updated_at'])}</div>
+  </section>
+  <section class="ledger"><table><thead><tr><th>Stage</th><th>Status</th>
+    <th>Attempts</th><th>Response SHA-256</th><th>Finished UTC</th></tr></thead>
+    <tbody>{stage_rows}</tbody></table></section>
+  {selected_content}
+  <footer><a href="/">Dashboard</a> &nbsp;|&nbsp;
+    <a href="/api/v1/ecosystem/executions/{escape(execution_id)}">Execution API</a>
+    &nbsp;|&nbsp; <a href="/api/v1/ecosystem/executions/{escape(execution_id)}/replay">Replay API</a></footer>
+</main></body></html>"""
+
+    @app.get("/operator/runtime", response_class=HTMLResponse)
+    async def operator_runtime_view(
+        view: str = Query(default="status"),
+        execution_id: str | None = Query(default=None),
+    ) -> str:
+        captured_at = utc_now()
+        state = companion.lifecycle.state
+        healthy = state in {RuntimeState.READY, RuntimeState.ACTIVE}
+        metrics_snapshot = companion.metrics_snapshot()
+        resources: dict[str, tuple[str, Any]] = {
+            "status": (
+                "Runtime status",
+                {
+                    "captured_at": captured_at,
+                    "runtime": companion.status(),
+                    "opentelemetry": app.state.opentelemetry,
+                },
+            ),
+            "startup": (
+                "Runtime startup",
+                {
+                    "captured_at": captured_at,
+                    "startup": companion.startup_status(),
+                },
+            ),
+            "attachments": (
+                "Attached products",
+                {
+                    "captured_at": captured_at,
+                    "attachments": [
+                        {
+                            "product_id": item["product_id"],
+                            "display_name": item["manifest"]["display_name"],
+                            "state": item["state"],
+                            "base_url": item["manifest"].get("base_url"),
+                            "capability_ids": [
+                                capability["capability_id"]
+                                for capability in item["manifest"][
+                                    "capabilities"
+                                ]
+                            ],
+                            "updated_at": item["updated_at"],
+                        }
+                        for item in companion.attachments.list()
+                    ],
+                },
+            ),
+            "health": (
+                "Health and readiness",
+                {
+                    "captured_at": captured_at,
+                    "health": {
+                        "status": "healthy" if healthy else "degraded",
+                        "runtime_state": state.value,
+                        "accepting": companion.accepting,
+                    },
+                    "readiness": {
+                        "ready": companion.accepting,
+                        "ecosystem_ready": companion.ecosystem_readiness()[
+                            "ready"
+                        ],
+                    },
+                    "ecosystem": companion.ecosystem_readiness(),
+                },
+            ),
+            "metrics": (
+                "Production metrics",
+                {
+                    "captured_at": captured_at,
+                    "durable_ecosystem_convergence": {
+                        "execution_counts": metrics_snapshot[
+                            "ecosystem_convergence"
+                        ]["execution_counts"],
+                        "stage_failure_counts": metrics_snapshot[
+                            "ecosystem_convergence"
+                        ]["stage_failure_counts"],
+                        "readiness": metrics_snapshot[
+                            "ecosystem_convergence"
+                        ]["readiness"],
+                    },
+                    "runtime_coordination": metrics_snapshot["coordination"],
+                    "process_event_counters": metrics_snapshot["counters"],
+                    "dispatch_latency_ms": metrics_snapshot[
+                        "dispatch_latency_ms"
+                    ],
+                    "dependency_health": metrics_snapshot[
+                        "dependency_health"
+                    ],
+                },
+            ),
+            "telemetry": (
+                "Runtime telemetry",
+                {
+                    "captured_at": captured_at,
+                    "events": companion.recent_events(40),
+                },
+            ),
+            "instances": (
+                "Runtime instances",
+                {
+                    "captured_at": captured_at,
+                    "current_instance_id": companion.instance_id,
+                    "active_instance_count": len(
+                        companion.runtime_instances()
+                    ),
+                    "coordination": companion.status()["persistent_runtime"],
+                    "active_instances": companion.runtime_instances(),
+                    "stopped_instances": [
+                        item
+                        for item in companion.runtime_instances(
+                            include_stopped=True
+                        )
+                        if item.get("state") == "STOPPED"
+                    ],
+                },
+            ),
+        }
+        if view == "replay":
+            if not execution_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="execution_id is required for the replay view",
+                )
+            replay = companion.ecosystem_replay(execution_id)
+            resources[view] = (
+                "Deterministic replay reconstruction",
+                {
+                    "captured_at": captured_at,
+                    "execution_id": execution_id,
+                    "package_hash": replay["package"]["package_hash"],
+                    "reconstructed_execution_hash": replay["package"][
+                        "reconstructed_execution_hash"
+                    ],
+                    "validation": replay["validation"],
+                },
+            )
+        elif view == "depository":
+            if not execution_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="execution_id is required for the depository view",
+                )
+            resources[view] = (
+                "Central Depository export",
+                {
+                    "captured_at": captured_at,
+                    "execution_id": execution_id,
+                    "depository": companion.central_depository(
+                        subject_type="ecosystem_execution",
+                        subject_id=execution_id,
+                        limit=100,
+                    ),
+                },
+            )
+        elif view == "recovery":
+            recovered = (
+                companion.ecosystem_execution(execution_id)
+                if execution_id
+                else None
+            )
+            replay_validation = (
+                companion.ecosystem_replay(execution_id)["validation"]
+                if execution_id
+                else None
+            )
+            resources[view] = (
+                "Durable runtime recovery",
+                {
+                    "captured_at": captured_at,
+                    "runtime_instance_id": companion.instance_id,
+                    "recovered_execution": (
+                        recovered["execution"] if recovered else None
+                    ),
+                    "replay_validation": replay_validation,
+                    "instances": companion.runtime_instances(
+                        include_stopped=True
+                    ),
+                    "startup": companion.startup_status(),
+                },
+            )
+        if view not in resources:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Unknown operator runtime view: {view}",
+            )
+        title, payload = resources[view]
+        pretty = escape(
+            json.dumps(
+                payload,
+                indent=2,
+                sort_keys=False,
+                ensure_ascii=False,
+            )
+        )
+        return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(title)} | Mitra</title>
+  <style>
+    :root {{ color-scheme:light; font-family:Inter,"Segoe UI",Arial,sans-serif;
+      --page:#f5f7f3; --surface:#fff; --ink:#17201d; --muted:#62706b;
+      --line:#d7dfd9; --signal:#17735d; --blue:#2f68d8; }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; color:var(--ink); background:var(--page); }}
+    main {{ max-width:1320px; margin:auto; padding:30px 24px 56px; }}
+    header {{ display:flex; justify-content:space-between; gap:24px;
+      padding-bottom:20px; border-bottom:1px solid var(--line); }}
+    .eyebrow {{ color:var(--signal); font-weight:800; font-size:12px;
+      text-transform:uppercase; }}
+    h1 {{ margin:7px 0; font-size:34px; }}
+    .meta {{ color:var(--muted); font-size:13px; line-height:1.6; }}
+    nav {{ align-self:flex-start; text-align:right; line-height:1.8; }}
+    a {{ color:var(--blue); font-weight:750; text-decoration:none; }}
+    a:hover {{ text-decoration:underline; }}
+    pre {{ margin:20px 0 0; padding:20px; border:1px solid var(--line);
+      border-radius:6px; color:#152923; background:var(--surface);
+      font:13px/1.58 Consolas,"SFMono-Regular",monospace; white-space:pre-wrap;
+      overflow-wrap:anywhere; overflow:auto; }}
+    @media(max-width:700px) {{ header {{ flex-direction:column; }}
+      nav {{ text-align:left; }} main {{ padding:22px 14px 42px; }} }}
+  </style>
+</head><body><main><header><div>
+  <div class="eyebrow">Mitra operator output</div><h1>{escape(title)}</h1>
+  <div class="meta">Environment {escape(runtime_settings.deployment_environment)}<br>
+    Snapshot UTC {escape(captured_at)}</div></div>
+  <nav><a href="/">Dashboard</a><br><a href="/docs">OpenAPI</a></nav>
+</header><pre>{pretty}</pre></main></body></html>"""
 
     @app.get("/health")
     async def health() -> dict:
@@ -324,7 +952,11 @@ def create_app(
     async def ready() -> dict:
         if not companion.accepting:
             raise HTTPException(status_code=503, detail="Runtime is not ready")
-        return versioned_response(ready=True, runtime=companion.status())
+        return versioned_response(
+            ready=True,
+            ecosystem_ready=companion.ecosystem_readiness()["ready"],
+            runtime=companion.status(),
+        )
 
     @app.get("/api/v1/runtime/status")
     async def runtime_status() -> dict:
@@ -460,7 +1092,93 @@ def create_app(
     @app.get("/api/v1/runtime/integrations")
     async def runtime_integrations() -> dict:
         return versioned_response(
-            integrations=companion.bhiv_integrations.status()
+            integrations={
+                "bhiv": companion.bhiv_integrations.status(),
+                "tantra": companion.tantra_status(),
+            }
+        )
+
+    @app.get("/api/v1/runtime/integrations/tantra/deliveries")
+    async def runtime_tantra_deliveries(
+        dispatch_id: str | None = None,
+        status: str | None = None,
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> dict:
+        return versioned_response(
+            deliveries=companion.integration_deliveries(
+                dispatch_id=dispatch_id,
+                status=status,
+                limit=limit,
+            )
+        )
+
+    @app.post("/api/v1/runtime/integrations/tantra/process")
+    async def runtime_tantra_process(
+        request: VersionedContract,
+        limit: int = Query(default=20, ge=1, le=100),
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            processing=await companion.process_integration_deliveries(
+                limit=limit
+            )
+        )
+
+    @app.get("/api/v1/runtime/integrations/tantra/health")
+    async def runtime_tantra_health() -> dict:
+        return versioned_response(
+            integration_health=await companion.check_tantra_gateway_health()
+        )
+
+    @app.post("/api/v1/runtime/integrations/tantra/reconcile")
+    async def runtime_tantra_reconcile(
+        request: VersionedContract,
+        limit: int = Query(default=20, ge=1, le=100),
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            reconciliation=await companion.reconcile_tantra_traces(
+                limit=limit
+            )
+        )
+
+    @app.get("/api/v1/runtime/continuity")
+    async def runtime_continuity() -> dict:
+        return versioned_response(
+            continuity=companion.continuity_status()
+        )
+
+    @app.post("/api/v1/runtime/continuity/check")
+    async def runtime_continuity_check(
+        request: VersionedContract,
+        limit: int = Query(default=25, ge=1, le=500),
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            continuity=companion.run_continuity_check(limit=limit)
+        )
+
+    @app.get("/api/v1/runtime/dependencies/health")
+    async def runtime_dependency_health(
+        product_id: str | None = None,
+        limit: int = Query(default=100, ge=1, le=1000),
+    ) -> dict:
+        return versioned_response(
+            dependency_health=companion.dependency_health_status(
+                product_id=product_id,
+                limit=limit,
+            )
+        )
+
+    @app.post("/api/v1/reconstruction/validate")
+    async def validate_reconstruction(
+        request: ReconstructionValidationRequest,
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            reconstruction=companion.validate_reconstruction_package(
+                request.package
+            )
         )
 
     @app.post("/api/v1/runtime/analysis")
@@ -468,6 +1186,74 @@ def create_app(
         validate_contract(request)
         return versioned_response(
             **await companion.analyze_runtime(request)
+        )
+
+    @app.get("/api/v1/ecosystem/readiness")
+    async def ecosystem_readiness() -> dict:
+        return versioned_response(
+            ecosystem=companion.ecosystem_readiness()
+        )
+
+    @app.get("/api/v1/ecosystem/contracts")
+    async def ecosystem_contracts() -> dict:
+        return versioned_response(
+            ecosystem=companion.ecosystem_contracts()
+        )
+
+    @app.post("/api/v1/ecosystem/replay/validate")
+    async def ecosystem_replay_validate(
+        request: EcosystemReplayValidationRequest,
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            replay=companion.validate_ecosystem_replay(request.package)
+        )
+
+    @app.post("/api/v1/ecosystem/execute", status_code=201)
+    async def ecosystem_execute(
+        request: EcosystemExecutionRequest,
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            ecosystem=await companion.execute_ecosystem(request)
+        )
+
+    @app.get("/api/v1/ecosystem/executions")
+    async def ecosystem_executions(
+        status: str | None = None,
+        session_id: str | None = None,
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> dict:
+        return versioned_response(
+            executions=companion.ecosystem_executions(
+                status=status,
+                session_id=session_id,
+                limit=limit,
+            )
+        )
+
+    @app.get("/api/v1/ecosystem/executions/{execution_id}")
+    async def ecosystem_execution(execution_id: str) -> dict:
+        return versioned_response(
+            ecosystem=companion.ecosystem_execution(execution_id)
+        )
+
+    @app.post("/api/v1/ecosystem/executions/{execution_id}/recover")
+    async def ecosystem_recover(
+        execution_id: str,
+        request: VersionedContract,
+    ) -> dict:
+        validate_contract(request)
+        return versioned_response(
+            ecosystem=await companion.recover_ecosystem_execution(
+                execution_id
+            )
+        )
+
+    @app.get("/api/v1/ecosystem/executions/{execution_id}/replay")
+    async def ecosystem_replay(execution_id: str) -> dict:
+        return versioned_response(
+            replay=companion.ecosystem_replay(execution_id)
         )
 
     @app.post("/api/v1/companion/messages")
