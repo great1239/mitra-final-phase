@@ -48,10 +48,6 @@ services:
     branch: main
     dockerContext: .
     dockerfilePath: integration_services/insightflow-owner.Dockerfile
-    dockerCommand: >-
-      sh -c "alembic upgrade head &&
-      python /app/seed_insightflow_key.py &&
-      uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:

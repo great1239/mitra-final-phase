@@ -27,4 +27,4 @@ COPY --from=source /source/alembic.ini /app/alembic.ini
 COPY integration_services/seed_insightflow_key.py /app/seed_insightflow_key.py
 
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python /app/seed_insightflow_key.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
