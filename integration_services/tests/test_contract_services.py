@@ -18,6 +18,9 @@ def test_karma_persists_chain_and_detects_replay(tmp_path) -> None:
             genesis_hash=DEFAULT_GENESIS_HASH,
         )
     )
+    health = client.get("/health").json()
+    assert health["storage_backend"] == "sqlite"
+    assert health["durable"] is False
     event = {
         "payload": {"value": 1},
         "previous_hash": DEFAULT_GENESIS_HASH,

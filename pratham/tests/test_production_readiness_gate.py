@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -98,6 +100,61 @@ def test_operations_documents_and_environment_template_are_present():
     assert "Commercial Foundation public contract registry" in reuse_doc
     assert "Runtime proof-bundle producer" in reuse_doc
     assert "Source scope and prior-submission feature catalog" in reuse_doc
+
+
+def test_public_module_blueprint_is_portable_and_fail_closed():
+    blueprint = yaml.safe_load(
+        _read("deploy/render.public-modules.yaml")
+    )
+    services = {
+        service["name"]: service
+        for service in blueprint["services"]
+    }
+    assert set(services) == {
+        "pratham-mitra-raj-gateway",
+        "pratham-mitra-karma-integrity",
+        "pratham-mitra-prana-forwarder",
+        "pratham-mitra-insightflow-registry",
+        "pratham-mitra-insightflow-bridge",
+    }
+    assert all(service["plan"] == "free" for service in services.values())
+    assert all(service["runtime"] == "docker" for service in services.values())
+    assert all(
+        service["repo"]
+        == "https://github.com/great1239/mitra-final-phase"
+        for service in services.values()
+    )
+
+    rendered = _read("deploy/render.public-modules.yaml")
+    assert "localhost" not in rendered
+    assert "127.0.0.1" not in rendered
+    assert "KARMA_DATABASE_URL" in rendered
+    assert "sync: false" in rendered
+    assert "integration_services/insightflow-owner.Dockerfile" in rendered
+
+    bridge_env = {
+        item["key"]: item
+        for item in services[
+            "pratham-mitra-insightflow-bridge"
+        ]["envVars"]
+    }
+    assert bridge_env["INSIGHTFLOW_REGISTRY_API_KEY"]["fromService"] == {
+        "type": "web",
+        "name": "pratham-mitra-insightflow-registry",
+        "envVarKey": "INSIGHTFLOW_REGISTRY_API_KEY",
+    }
+
+    prana_env = {
+        item["key"]: item
+        for item in services[
+            "pratham-mitra-prana-forwarder"
+        ]["envVars"]
+    }
+    assert prana_env["PRANA_TARGET_API_KEY"]["fromService"] == {
+        "type": "web",
+        "name": "pratham-mitra-insightflow-bridge",
+        "envVarKey": "INSIGHTFLOW_BRIDGE_API_KEY",
+    }
 
 
 def test_runtime_instances_are_first_class_production_surface():
