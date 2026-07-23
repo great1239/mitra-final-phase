@@ -33,9 +33,14 @@
     "MITRA_COMPANION_LOG_TO_STDOUT": "true",
     "MITRA_BHIV_INTEGRATION_FAIL_CLOSED": "true",
     "MITRA_ECOSYSTEM_TIMEOUT_SECONDS": "45",
+    "MITRA_RAJ_WORKFLOW_BASE_URL": "https://pratham-mitra-raj-gateway.onrender.com",
     "MITRA_BHIV_ASHMIT_BASE_URL": "https://ai-assistant-backend-8hur.onrender.com",
     "MITRA_BHIV_BUCKET_BASE_URL": "https://pratham-bhiv-bucket.onrender.com",
     "MITRA_BHIV_KESHAV_BASE_URL": "https://keshav-cia7.onrender.com",
+    "MITRA_BHIV_KARMA_BASE_URL": "https://pratham-mitra-karma-integrity.onrender.com",
+    "MITRA_BHIV_KARMA_PREVIOUS_HASH": "0000000000000000000000000000000000000000000000000000000000000000",
+    "MITRA_BHIV_PRANA_BASE_URL": "https://pratham-mitra-prana-forwarder.onrender.com",
+    "MITRA_BHIV_INSIGHTFLOW_INGEST_URL": "https://pratham-mitra-insightflow-bridge.onrender.com/ingest/execution",
     "MITRA_CENTRAL_DEPOSITORY_BASE_URL": "https://pratham-bhiv-bucket.onrender.com"
   },
   "services": {

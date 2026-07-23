@@ -157,6 +157,30 @@ def test_public_module_blueprint_is_portable_and_fail_closed():
     }
 
 
+def test_vercel_runtime_uses_public_modules_without_committed_secrets():
+    deployment = json.loads(_read("vercel.json"))
+    environment = deployment["env"]
+
+    assert environment["MITRA_RAJ_WORKFLOW_BASE_URL"] == (
+        "https://pratham-mitra-raj-gateway.onrender.com"
+    )
+    assert environment["MITRA_BHIV_KARMA_BASE_URL"] == (
+        "https://pratham-mitra-karma-integrity.onrender.com"
+    )
+    assert environment["MITRA_BHIV_PRANA_BASE_URL"] == (
+        "https://pratham-mitra-prana-forwarder.onrender.com"
+    )
+    assert environment["MITRA_BHIV_INSIGHTFLOW_INGEST_URL"] == (
+        "https://pratham-mitra-insightflow-bridge.onrender.com/"
+        "ingest/execution"
+    )
+    assert all("localhost" not in value for value in environment.values())
+    assert all("127.0.0.1" not in value for value in environment.values())
+    assert "MITRA_RAJ_API_KEY" not in environment
+    assert "MITRA_BHIV_ASHMIT_API_KEY" not in environment
+    assert "MITRA_BHIV_INSIGHTFLOW_API_KEY" not in environment
+
+
 def test_runtime_instances_are_first_class_production_surface():
     assert "runtime_instance_id" in _read(
         "pratham/companion-runtime/mitra_companion/config.py"
@@ -365,7 +389,7 @@ def test_testing_evidence_records_all_executed_acceptance_paths():
     assert "9097.026 ms" not in evidence
 
 
-def test_production_readiness_gate_blocks_without_live_owner_evidence():
+def test_production_readiness_gate_blocks_only_on_missing_live_evidence():
     completed = subprocess.run(
         [sys.executable, "scripts/production_readiness_gate.py"],
         cwd=ROOT,
@@ -391,11 +415,11 @@ def test_production_readiness_gate_blocks_without_live_owner_evidence():
     }
     assert payload["failures"] == []
     assert payload["checks"]["screenshots"] == "blocked"
-    assert payload["checks"]["owner_configuration"] == "blocked"
+    assert payload["checks"]["owner_configuration"] == "passed"
     assert all(
         status == "passed"
         for name, status in payload["checks"].items()
-        if name not in {"screenshots", "owner_configuration"}
+        if name != "screenshots"
     )
-    assert any("Raj".lower() in item.lower() for item in payload["blockers"])
-    assert any("PRANA".lower() in item.lower() for item in payload["blockers"])
+    assert payload["blockers"]
+    assert all("SCREENSHOTS" in item for item in payload["blockers"])
