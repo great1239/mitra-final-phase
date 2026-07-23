@@ -42,6 +42,8 @@ critical code entry points.
 23. [Operational acceptance](23-operational-acceptance.md)
 24. [Clean rebuild efficiency](24-clean-rebuild-efficiency.md)
 25. [Public Bucket persistence](25-public-bucket-persistence.md)
+26. [Deployment parity gate](26-deployment-parity-gate.md)
+27. [Portable deployment validation](27-portable-deployment-validation.md)
 
 ## Reviewer Path
 

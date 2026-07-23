@@ -11,6 +11,7 @@ from uuid import uuid4
 
 _TRUE_VALUES: Final[set[str]] = {"1", "true", "yes", "on"}
 _SQLITE_SYNCHRONOUS_VALUES: Final[set[str]] = {"EXTRA", "FULL", "NORMAL"}
+_RUNTIME_STORAGE_MODES: Final[set[str]] = {"ephemeral", "persistent"}
 _NON_PRODUCTION_ENVIRONMENTS: Final[set[str]] = {
     "dev",
     "development",
@@ -131,6 +132,18 @@ def _sqlite_synchronous(value: str | None) -> str:
     return normalized
 
 
+def _runtime_storage_mode(value: str | None, *, platform: str) -> str:
+    default = "ephemeral" if platform == "vercel" else "persistent"
+    normalized = (value or default).strip().lower()
+    if normalized not in _RUNTIME_STORAGE_MODES:
+        allowed = ", ".join(sorted(_RUNTIME_STORAGE_MODES))
+        raise ValueError(
+            "MITRA_COMPANION_RUNTIME_STORAGE_MODE must be one of "
+            f"{allowed}; received {normalized!r}"
+        )
+    return normalized
+
+
 def _non_production_manifest_default(
     environment: str,
     profile: str,
@@ -171,6 +184,12 @@ class RuntimeSettings:
     otel_service_name: str = "mitra-companion-runtime"
     otel_exporter_otlp_endpoint: str | None = None
     deployment_environment: str = "production"
+    deployment_platform: str = "standalone"
+    release_revision: str = "unknown"
+    runtime_storage_mode: str = "persistent"
+    require_ecosystem_ready: bool = False
+    require_public_owner_endpoints: bool = False
+    require_durable_runtime: bool = False
     uvicorn_workers: int = 1
     runtime_instance_id: str = field(default_factory=_default_instance_id)
     deterministic_intent_threshold: float = 0.28
@@ -287,6 +306,19 @@ class RuntimeSettings:
             get("MITRA_COMPANION_CONFIG_PROFILE", deployment_environment)
             or "production"
         )
+        deployment_platform = (
+            get("MITRA_COMPANION_DEPLOYMENT_PLATFORM")
+            or ("vercel" if get("VERCEL") else None)
+            or ("render" if get("RENDER") else None)
+            or "standalone"
+        ).strip().lower()
+        release_revision = (
+            get("MITRA_COMPANION_RELEASE_REVISION")
+            or get("VERCEL_GIT_COMMIT_SHA")
+            or get("RENDER_GIT_COMMIT")
+            or get("GITHUB_SHA")
+            or "unknown"
+        ).strip()
         manifest_dev_default = _non_production_manifest_default(
             deployment_environment,
             production_config_profile,
@@ -379,6 +411,24 @@ class RuntimeSettings:
             or "mitra-companion-runtime",
             otel_exporter_otlp_endpoint=otel_endpoint,
             deployment_environment=deployment_environment,
+            deployment_platform=deployment_platform,
+            release_revision=release_revision,
+            runtime_storage_mode=_runtime_storage_mode(
+                get("MITRA_COMPANION_RUNTIME_STORAGE_MODE"),
+                platform=deployment_platform,
+            ),
+            require_ecosystem_ready=_bool_value(
+                get("MITRA_COMPANION_REQUIRE_ECOSYSTEM_READY"),
+                False,
+            ),
+            require_public_owner_endpoints=_bool_value(
+                get("MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS"),
+                False,
+            ),
+            require_durable_runtime=_bool_value(
+                get("MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME"),
+                False,
+            ),
             uvicorn_workers=max(
                 1,
                 int(get("MITRA_COMPANION_UVICORN_WORKERS", "1") or "1"),
@@ -539,6 +589,8 @@ class RuntimeSettings:
             self.production_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def production_summary(self) -> dict[str, object]:
+        from .deployment import deployment_parity_report
+
         bhiv_configured = {
             "ashmit": bool(
                 self.bhiv_ashmit_base_url and self.bhiv_ashmit_api_key
@@ -578,6 +630,9 @@ class RuntimeSettings:
         return {
             "profile": self.production_config_profile,
             "environment": self.deployment_environment,
+            "deployment_platform": self.deployment_platform,
+            "release_revision": self.release_revision,
+            "runtime_storage_mode": self.runtime_storage_mode,
             "service_name": self.otel_service_name,
             "runtime_instance_id": self.runtime_instance_id,
             "config_sources": list(self.config_sources),
@@ -728,6 +783,7 @@ class RuntimeSettings:
                     self.bhiv_insightflow_api_key
                 ),
             },
+            "deployment_parity": deployment_parity_report(self),
             "tantra_integration": {
                 "timeout_seconds": self.tantra_integration_timeout_seconds,
                 "package_production": "active",

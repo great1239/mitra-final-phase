@@ -165,6 +165,82 @@ def test_runtime_operations_api_exposes_production_mode(settings_factory):
         assert client.get("/ready").status_code == 200
 
 
+def test_strict_deployment_readiness_rejects_local_only_configuration(
+    settings_factory,
+):
+    settings = settings_factory()
+    settings.deployment_environment = "production-vercel"
+    settings.deployment_platform = "vercel"
+    settings.runtime_storage_mode = "ephemeral"
+    settings.persistent_runtime_enabled = False
+    settings.require_ecosystem_ready = True
+    settings.require_public_owner_endpoints = True
+    settings.require_durable_runtime = True
+    settings.allow_example_manifests = False
+    settings.allow_simulated_manifests = False
+    settings.allow_loopback_manifests = False
+    settings.allow_localhost_manifests = False
+    settings.manifest_directory = ROOT / "contracts" / "production"
+    settings.bhiv_bucket_base_url = "http://bucket:8000"
+
+    with TestClient(create_app(settings)) as client:
+        ready = client.get("/ready")
+        assert ready.status_code == 503
+        report = ready.json()["detail"]["deployment_parity"]
+        issue_codes = {
+            item["code"] for item in report["blocking_issues"]
+        }
+        assert "OWNER_CONFIGURATION_MISSING" in issue_codes
+        assert "OWNER_ENDPOINT_NOT_PORTABLE" in issue_codes
+        assert "DURABLE_RUNTIME_STORAGE_REQUIRED" in issue_codes
+
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.json()["status"] == "degraded"
+        assert health.json()["deployment_parity"]["ready"] is False
+
+
+def test_strict_deployment_readiness_accepts_portable_configuration(
+    settings_factory,
+):
+    settings = settings_factory()
+    settings.deployment_environment = "production"
+    settings.deployment_platform = "container"
+    settings.runtime_storage_mode = "persistent"
+    settings.persistent_runtime_enabled = True
+    settings.require_ecosystem_ready = True
+    settings.require_public_owner_endpoints = True
+    settings.require_durable_runtime = True
+    settings.allow_example_manifests = False
+    settings.allow_simulated_manifests = False
+    settings.allow_loopback_manifests = False
+    settings.allow_localhost_manifests = False
+    settings.manifest_directory = ROOT / "contracts" / "production"
+    settings.raj_workflow_base_url = "https://raj.example.com"
+    settings.bhiv_ashmit_base_url = "https://ashmit.example.com"
+    settings.bhiv_ashmit_api_key = "configured-secret"
+    settings.bhiv_bucket_base_url = "https://bucket.example.com"
+    settings.bhiv_keshav_base_url = "https://keshav.example.com"
+    settings.bhiv_karma_base_url = "https://karma.example.com"
+    settings.bhiv_prana_base_url = "https://prana.example.com"
+    settings.bhiv_insightflow_ingest_url = (
+        "https://insightflow.example.com/ingest/execution"
+    )
+    settings.central_depository_base_url = (
+        "https://depository.example.com"
+    )
+
+    with TestClient(create_app(settings)) as client:
+        ready = client.get("/ready")
+        assert ready.status_code == 200
+        assert ready.json()["deployment_parity"]["ready"] is True
+        parity = client.get(
+            "/api/v1/runtime/deployment-parity"
+        ).json()["deployment_parity"]
+        assert parity["owner_configuration"]["pending_modules"] == []
+        assert parity["runtime_storage"]["durable"] is True
+
+
 def test_startup_source_reconciles_a_persisted_manifest_revision(
     settings_factory,
 ):

@@ -373,6 +373,8 @@ proof document or recursively embed depository snapshots.
 Before ownership transfer, verify:
 
 - `/health` and `/ready` return HTTP 200;
+- `/api/v1/runtime/deployment-parity` reports `ready=true` and the expected
+  deployed commit SHA;
 - real manifests attach and declared intents are discoverable;
 - a submitted payload is present in the completed dispatch response;
 - deterministic reconstruction reproduces the submitted input and output;
@@ -395,6 +397,8 @@ Before ownership transfer, verify:
 Do not mark the runtime complete unless the canonical interoperability command
 passes after the documented rebuild. A unit test, configured URL, dashboard,
 or architecture packet cannot waive a failed live owner response.
+Use `docs/DEPLOYMENT_PARITY.md` for the release gate shared by Docker, Render,
+and Vercel.
 
 ## 12. Troubleshooting
 

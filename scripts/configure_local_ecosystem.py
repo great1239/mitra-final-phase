@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import secrets
+import subprocess
 from pathlib import Path
 from urllib.parse import quote
 
@@ -25,6 +26,39 @@ def read_env(path: Path) -> dict[str, str]:
         key, value = line.split("=", 1)
         values[key.strip()] = value.strip().strip('"').strip("'")
     return values
+
+
+def build_local_mongo_uri(
+    username: str,
+    password: str,
+    database_name: str,
+) -> str:
+    return (
+        f"mongodb://{quote(username, safe='')}:{quote(password, safe='')}"
+        "@ashmit-mongo:27017/"
+        f"{quote(database_name, safe='')}?authSource=admin"
+    )
+
+
+def source_revision() -> str:
+    try:
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return f"{revision}-dirty" if dirty else revision
 
 
 def main() -> None:
@@ -90,9 +124,10 @@ def main() -> None:
     mongo_user = existing.get("ASHMIT_MONGO_ROOT_USER") or "mitra_ashmit"
     mongo_password = local_secret("ASHMIT_MONGO_ROOT_PASSWORD")
     database_name = ashmit["DATABASE_NAME"]
-    local_mongo_uri = (
-        f"mongodb://{quote(mongo_user, safe='')}:{quote(mongo_password, safe='')}"
-        f"@ashmit-mongo:27017/{quote(database_name, safe='')}?authSource=admin"
+    local_mongo_uri = build_local_mongo_uri(
+        mongo_user,
+        mongo_password,
+        database_name,
     )
 
     product_endpoint_overrides = {
@@ -103,6 +138,7 @@ def main() -> None:
         "ASHMIT_BACKEND_CONTEXT": "../Ashmit-Mitra-T42/backend",
         "ASHMIT_API_KEY": ashmit["API_KEY"],
         "ASHMIT_MONGODB_URI": ashmit["MONGODB_URI"],
+        "ASHMIT_LOCAL_MONGODB_URI": local_mongo_uri,
         "ASHMIT_MONGO_ROOT_USER": mongo_user,
         "ASHMIT_MONGO_ROOT_PASSWORD": mongo_password,
         "ASHMIT_DATABASE_NAME": database_name,
@@ -122,6 +158,7 @@ def main() -> None:
             product_endpoint_overrides,
             separators=(",", ":"),
         ),
+        "MITRA_COMPANION_RELEASE_REVISION": source_revision(),
         "INSIGHTFLOW_POSTGRES_USER": "bhiv",
         "INSIGHTFLOW_POSTGRES_PASSWORD": local_secret(
             "INSIGHTFLOW_POSTGRES_PASSWORD"

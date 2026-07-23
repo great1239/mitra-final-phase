@@ -14,6 +14,18 @@ services:
         value: production
       - key: MITRA_COMPANION_CONFIG_PROFILE
         value: production-independent
+      - key: MITRA_COMPANION_DEPLOYMENT_PLATFORM
+        value: render
+      - key: MITRA_COMPANION_RUNTIME_STORAGE_MODE
+        value: persistent
+      - key: MITRA_COMPANION_REQUIRE_ECOSYSTEM_READY
+        value: "true"
+      - key: MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS
+        value: "true"
+      - key: MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME
+        value: "true"
+      - key: MITRA_COMPANION_RELEASE_REVISION
+        sync: false
       - key: MITRA_COMPANION_DATA_ROOT
         value: /data
       - key: MITRA_COMPANION_DATABASE_PATH
@@ -68,6 +80,8 @@ services:
         sync: false
       - key: MITRA_BHIV_ASHMIT_BASE_URL
         value: https://ai-assistant-backend-8hur.onrender.com
+      - key: MITRA_BHIV_ASHMIT_API_KEY
+        sync: false
       - key: MITRA_BHIV_BUCKET_BASE_URL
         value: https://pratham-bhiv-bucket.onrender.com
       - key: MITRA_BHIV_BUCKET_PARENT_HASH

@@ -112,7 +112,10 @@ available for the existing website contract under `/api/companion/*` and
 `POST /api/v1/ecosystem/execute` when it requires the final strict Raj-to-
 Depository chain. The current Vercel process cannot reach the local owner
 containers, so the full-chain acceptance result is local Docker evidence, not
-a public full-chain deployment claim.
+a public full-chain deployment claim. The production readiness endpoint now
+fails closed when owner configuration, public endpoint portability, durable
+storage, or release identity requirements are not satisfied. See
+`docs/DEPLOYMENT_PARITY.md`.
 
 Vercel upload through the assigned team:
 
@@ -130,6 +133,7 @@ pnpm dlx vercel@latest deploy --prod --scope team_ciZh4E8ZRzVl7Gxnwl5y5Wbq
 - Runtime status: `GET /api/v1/runtime/status`
 - Runtime startup: `GET /api/v1/runtime/startup`
 - Runtime config: `GET /api/v1/runtime/config`
+- Deployment parity: `GET /api/v1/runtime/deployment-parity`
 - Runtime instances: `GET /api/v1/runtime/instances`
 - Capability graph: `GET /api/v1/runtime/capability-graph`
 - Capability plan: `POST /api/v1/runtime/capability-plan`
@@ -210,6 +214,7 @@ an isolated Python process.
 - [Central Depository Handover](docs/CENTRAL_DEPOSITORY_HANDOVER.md)
 - [Independent Hosting](docs/INDEPENDENT_HOSTING.md)
 - [Vercel Deployment](docs/VERCEL_DEPLOYMENT.md)
+- [Deployment Parity](docs/DEPLOYMENT_PARITY.md)
 - [Phase 3 Production Deployment](docs/PHASE_3_PRODUCTION_DEPLOYMENT.md)
 - [SLO and Capacity](docs/SLO_AND_CAPACITY.md)
 - [Security Boundary Re-execution](REEXECUTION_REPORT.md)

@@ -409,12 +409,24 @@ services:
       context: ${ASHMIT_BACKEND_CONTEXT:-../Ashmit-Mitra-T42/backend}
       dockerfile: Dockerfile
     restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - >-
+        if [ "$${ASHMIT_USE_EXTERNAL_MONGODB}" = "true" ]; then
+          export MONGODB_URI="$${ASHMIT_EXTERNAL_MONGODB_URI}";
+        else
+          export MONGODB_URI="$${ASHMIT_LOCAL_MONGODB_URI}";
+        fi;
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
     environment:
       ENV: production
       ENVIRONMENT: production
       API_KEY: ${ASHMIT_API_KEY:?set ASHMIT_API_KEY}
       JWT_SECRET_KEY: ${ASHMIT_JWT_SECRET_KEY:?set ASHMIT_JWT_SECRET_KEY}
-      MONGODB_URI: ${ASHMIT_MONGODB_URI:?set ASHMIT_MONGODB_URI}
+      ASHMIT_USE_EXTERNAL_MONGODB: ${ASHMIT_USE_EXTERNAL_MONGODB:-false}
+      ASHMIT_EXTERNAL_MONGODB_URI: ${ASHMIT_MONGODB_URI:-}
+      ASHMIT_LOCAL_MONGODB_URI: ${ASHMIT_LOCAL_MONGODB_URI:?run scripts/configure_local_ecosystem.py}
       DATABASE_NAME: ${ASHMIT_DATABASE_NAME:-mitra_production}
       BUCKET_MONGO_DATABASE: ${ASHMIT_DATABASE_NAME:-mitra_production}
       BUCKET_MONGO_ENABLED: "true"
@@ -450,6 +462,12 @@ services:
       MITRA_COMPANION_ALLOW_LOCALHOST_MANIFESTS: "false"
       MITRA_COMPANION_REQUIRE_PRODUCTION_BOOTSTRAP_MANIFESTS: "true"
       MITRA_COMPANION_ENVIRONMENT: production
+      MITRA_COMPANION_DEPLOYMENT_PLATFORM: docker-compose
+      MITRA_COMPANION_RUNTIME_STORAGE_MODE: persistent
+      MITRA_COMPANION_REQUIRE_ECOSYSTEM_READY: "true"
+      MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS: "false"
+      MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME: "true"
+      MITRA_COMPANION_RELEASE_REVISION: ${MITRA_COMPANION_RELEASE_REVISION:-unknown}
       MITRA_COMPANION_OTEL_ENABLED: "false"
       MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON: ${MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON:-{"https://uni-guru.in":"http://uniguru:8000","https://trade-bot-api.onrender.com":"http://trade-bot:8000"}}
       MITRA_ECOSYSTEM_TIMEOUT_SECONDS: "120"

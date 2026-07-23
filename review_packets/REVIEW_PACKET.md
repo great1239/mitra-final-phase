@@ -112,6 +112,7 @@ observable on the public and durable deployment topologies.
 - `POST /api/v1/ecosystem/replay/validate`
 - `GET /health`
 - `GET /ready`
+- `GET /api/v1/runtime/deployment-parity`
 - `GET /metrics`
 - `GET /api/v1/runtime/telemetry`
 - `GET /api/v1/runtime/depository`
@@ -125,7 +126,9 @@ The complete static API contract is
 
 The hosted dashboard and read APIs run on the assigned Vercel host. The Vercel
 profile uses ephemeral `/tmp` state and disables the persistent supervisor.
-It is suitable for public API access, not durable failover certification.
+It is suitable for public API access, not durable failover certification. The
+deployment parity gate now keeps `/ready` at HTTP 503 on that profile until
+durable state and every public owner contract are present.
 
 Live full-chain execution is accepted only when
 `GET /api/v1/ecosystem/readiness` returns `ready=true` and the selected product
@@ -175,6 +178,11 @@ validation uses Docker or Render with `/data`.
 - Added one canonical output-driven acceptance command covering both owner
   products, all owner responses, idempotency, telemetry, depository lineage,
   isolated replay, and recorded-response tampering.
+- Added an enforced local/hosted parity gate for owner configuration, endpoint
+  portability, persistent runtime state, production manifests, and deployed
+  commit identity.
+- Added hosted CI that runs both behavior validators against the deployed
+  network after repository tests pass.
 
 ## Replay Proof
 

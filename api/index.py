@@ -18,6 +18,14 @@ for package_root in (
 
 os.environ.setdefault("MITRA_COMPANION_ENVIRONMENT", "production-vercel")
 os.environ.setdefault("MITRA_COMPANION_CONFIG_PROFILE", "production-vercel")
+os.environ.setdefault("MITRA_COMPANION_DEPLOYMENT_PLATFORM", "vercel")
+os.environ.setdefault("MITRA_COMPANION_RUNTIME_STORAGE_MODE", "ephemeral")
+os.environ.setdefault("MITRA_COMPANION_REQUIRE_ECOSYSTEM_READY", "true")
+os.environ.setdefault(
+    "MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS",
+    "true",
+)
+os.environ.setdefault("MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME", "true")
 os.environ.setdefault("MITRA_COMPANION_DATA_ROOT", "/tmp/mitra-runtime")
 os.environ.setdefault(
     "MITRA_COMPANION_DATABASE_PATH",

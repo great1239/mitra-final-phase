@@ -179,6 +179,8 @@ def main() -> int:
                 "restart: unless-stopped",
                 "read_only: true",
                 "MITRA_COMPANION_MANIFEST_DIRECTORY: /app/contracts/production",
+                "MITRA_COMPANION_REQUIRE_ECOSYSTEM_READY",
+                "MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME",
                 "MITRA_RAJ_WORKFLOW_BASE_URL",
                 "MITRA_BHIV_KESHAV_BASE_URL",
                 "MITRA_BHIV_INSIGHTFLOW_INGEST_URL",
@@ -188,10 +190,14 @@ def main() -> int:
             "api/index.py": (
                 'ROOT / "contracts" / "production"',
                 '"MITRA_COMPANION_ALLOW_SIMULATED_MANIFESTS", "false"',
+                '"MITRA_COMPANION_REQUIRE_ECOSYSTEM_READY", "true"',
+                '"MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME", "true"',
             ),
             "vercel.json": (
                 '"MITRA_COMPANION_MANIFEST_DIRECTORY": "contracts/production"',
                 '"MITRA_ECOSYSTEM_TIMEOUT_SECONDS": "45"',
+                '"MITRA_COMPANION_RUNTIME_STORAGE_MODE": "ephemeral"',
+                '"MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS": "true"',
             ),
             "render.yaml": (
                 "healthCheckPath: /ready",
@@ -221,6 +227,12 @@ def main() -> int:
                 "/api/v1/ecosystem/execute",
                 "/api/v1/ecosystem/replay/validate",
                 "/api/v1/ecosystem/executions/{execution_id}/recover",
+                "/api/v1/runtime/deployment-parity",
+            ),
+            "pratham/companion-runtime/mitra_companion/deployment.py": (
+                "OWNER_CONFIGURATION_MISSING",
+                "OWNER_ENDPOINT_NOT_PORTABLE",
+                "DURABLE_RUNTIME_STORAGE_REQUIRED",
             ),
             "pratham/companion-runtime/mitra_companion/store.py": (
                 "ecosystem_executions",

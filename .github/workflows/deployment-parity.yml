@@ -1,0 +1,57 @@
+name: Deployment parity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+  deployment_status:
+
+jobs:
+  implementation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install runtime and test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Run regression suite
+        run: python -m pytest
+
+  hosted-parity:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'deployment_status' &&
+       github.event.deployment_status.state == 'success')
+    needs: implementation
+    runs-on: ubuntu-latest
+    env:
+      MITRA_HOSTED_RUNTIME_URL: ${{ vars.MITRA_HOSTED_RUNTIME_URL }}
+      MITRA_EXPECTED_RELEASE_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install validation dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Resolve hosted target
+        shell: bash
+        run: |
+          target="${MITRA_HOSTED_RUNTIME_URL:-https://mitra-live-runtime-sprint.vercel.app}"
+          echo "MITRA_HOSTED_RUNTIME_URL=${target}" >> "$GITHUB_ENV"
+      - name: Validate hosted runtime surface and release identity
+        run: >-
+          python scripts/validate_hosted_runtime.py
+          "$MITRA_HOSTED_RUNTIME_URL" --summary
+      - name: Execute canonical hosted ecosystem workflow
+        run: >-
+          python scripts/validate_ecosystem_runtime.py
+          "$MITRA_HOSTED_RUNTIME_URL" --summary

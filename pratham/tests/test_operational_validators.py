@@ -52,6 +52,59 @@ def test_hosted_validator_builds_required_nested_schema_values() -> None:
     assert len(payload["context"]["source"]) <= 32
 
 
+def test_hosted_validator_rejects_incomplete_deployment_control_plane(
+    monkeypatch,
+) -> None:
+    validator = _load_script(
+        "validate_hosted_runtime_control_plane",
+        "scripts/validate_hosted_runtime.py",
+    )
+    monkeypatch.setenv("MITRA_EXPECTED_RELEASE_REVISION", "expected-sha")
+    results = [
+        {
+            "name": "deployment-parity",
+            "status": "ok",
+            "body_sample": {
+                "deployment_parity": {
+                    "ready": False,
+                    "release_revision": "stale-sha",
+                }
+            },
+        },
+        {
+            "name": "ecosystem-readiness",
+            "status": "ok",
+            "body_sample": {"ecosystem": {"ready": False}},
+        },
+    ]
+
+    validator._validate_deployment_control_plane(results)
+
+    assert results[0]["status"] == "failed"
+    assert "revision" in results[0]["error"]
+    assert results[1]["status"] == "failed"
+    assert "incomplete" in results[1]["error"]
+
+
+def test_local_ecosystem_mongo_uri_is_container_portable() -> None:
+    configurator = _load_script(
+        "configure_local_ecosystem",
+        "scripts/configure_local_ecosystem.py",
+    )
+
+    uri = configurator.build_local_mongo_uri(
+        "owner@example",
+        "password:with/slash",
+        "mitra production",
+    )
+
+    assert uri == (
+        "mongodb://owner%40example:password%3Awith%2Fslash"
+        "@ashmit-mongo:27017/mitra%20production?authSource=admin"
+    )
+    assert configurator.source_revision() != "unknown"
+
+
 def test_operational_cases_cover_both_real_product_owners() -> None:
     validator = _load_script(
         "validate_ecosystem_runtime",

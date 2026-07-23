@@ -7,8 +7,8 @@ production deployment is live at:
 https://mitra-live-runtime-sprint.vercel.app
 ```
 
-Use this Vercel URL as the canonical hosted runtime for production validation
-and review handoff. Ignore custom-domain binding for this sprint.
+Use this Vercel URL for public review access and hosted validation. It is not a
+production-certified runtime while the deployment parity gate is blocked.
 
 ## Team
 
@@ -29,8 +29,12 @@ proof, dashboard/OpenAPI checks, and review access. It is not equivalent to the
 Docker persistent runtime profile because Vercel functions use ephemeral local
 storage under `/tmp`.
 
-For long-duration validation, persistent SQLite, and supervisor behavior, use
-the Docker/Render profile.
+The Vercel profile deliberately sets
+`MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME=true` while identifying its storage as
+`ephemeral`. Consequently, `/ready` returns HTTP 503 instead of allowing a
+publicly reachable dashboard to be mistaken for production readiness. For
+long-duration validation, persistent SQLite, and supervisor behavior, use the
+Docker/Render profile or externalize the runtime store.
 
 ## Upload
 
@@ -52,8 +56,9 @@ After deployment:
 
 ```powershell
 python scripts/validate_hosted_runtime.py
+python scripts/validate_ecosystem_runtime.py https://mitra-live-runtime-sprint.vercel.app --summary
 ```
 
-The validator prints each request and response check and exits nonzero if the
-hosted dispatch output or deterministic reconstruction does not match the
-submitted payload.
+The validators exit nonzero when deployment parity, ecosystem configuration,
+owner calls, dispatch output, or deterministic reconstruction is incomplete.
+See `docs/DEPLOYMENT_PARITY.md`.

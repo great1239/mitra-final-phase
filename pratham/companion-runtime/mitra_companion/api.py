@@ -34,6 +34,7 @@ from .contracts import (
     validate_contract,
     versioned_response,
 )
+from .deployment import deployment_parity_report
 from .errors import CompanionRuntimeError
 from .frontend_connector import create_frontend_connector_router
 from .manifest_sources import DirectoryManifestSourceAdapter
@@ -328,6 +329,8 @@ def create_app(
       <div class="value">{escape(str(continuity.get('status', 'not-run')).upper())}</div></div>
     <div class="card"><div class="label">Ecosystem contracts</div>
       <div class="value">{'READY' if ecosystem['readiness']['ready'] else 'PENDING'}</div></div>
+    <div class="card"><div class="label">Deployment parity</div>
+      <div class="value">{'READY' if production_config['deployment_parity']['ready'] else 'BLOCKED'}</div></div>
     <div class="card"><div class="label">Ecosystem executions</div>
       <div class="value">{ecosystem['execution_counts'].get('TOTAL', 0)}</div></div>
   </div>
@@ -375,6 +378,9 @@ def create_app(
     <div class="flow">Profile <strong>{escape(str(production_config['profile']))}</strong>
       | Config sources {escape(', '.join(production_config['config_sources']))}
       | Log {escape(str(production_config['production_log_path']))}
+      <br>Platform {escape(str(production_config['deployment_platform']))}
+      | Storage {escape(str(production_config['runtime_storage_mode']))}
+      | Revision {escape(str(production_config['release_revision']))}
       <br><small>{escape(str(secrets['redaction']))}</small></div></div>
   <div class="card section"><h2>Integration surfaces</h2>
     <div class="flow"><a href="/docs">OpenAPI explorer</a> &nbsp;|&nbsp;
@@ -383,6 +389,7 @@ def create_app(
       <a href="/api/v1/runtime/dependencies/health">Dependencies</a> &nbsp;|&nbsp;
       <a href="/api/v1/runtime/integrations/tantra/deliveries">Deliveries</a>
       &nbsp;|&nbsp; <a href="/api/v1/ecosystem/readiness">Ecosystem readiness</a>
+      &nbsp;|&nbsp; <a href="/api/v1/runtime/deployment-parity">Deployment parity</a>
       &nbsp;|&nbsp; <a href="/api/v1/intents">Intent registry</a></div></div>
 </main></body></html>"""
 
@@ -936,10 +943,13 @@ def create_app(
     @app.get("/health")
     async def health() -> dict:
         state = companion.lifecycle.state
-        healthy = state in {RuntimeState.READY, RuntimeState.ACTIVE}
+        runtime_healthy = state in {RuntimeState.READY, RuntimeState.ACTIVE}
+        deployment_parity = deployment_parity_report(runtime_settings)
+        healthy = runtime_healthy and deployment_parity["ready"]
         return versioned_response(
             status="healthy" if healthy else "degraded",
             runtime=companion.status(),
+            deployment_parity=deployment_parity,
             metrics=companion.metrics_snapshot(),
             opentelemetry=app.state.opentelemetry,
         )
@@ -952,9 +962,19 @@ def create_app(
     async def ready() -> dict:
         if not companion.accepting:
             raise HTTPException(status_code=503, detail="Runtime is not ready")
+        deployment_parity = deployment_parity_report(runtime_settings)
+        if not deployment_parity["ready"]:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "message": "Deployment parity gate is not ready",
+                    "deployment_parity": deployment_parity,
+                },
+            )
         return versioned_response(
             ready=True,
             ecosystem_ready=companion.ecosystem_readiness()["ready"],
+            deployment_parity=deployment_parity,
             runtime=companion.status(),
         )
 
@@ -985,6 +1005,12 @@ def create_app(
     async def runtime_config() -> dict:
         return versioned_response(
             configuration=runtime_settings.production_summary()
+        )
+
+    @app.get("/api/v1/runtime/deployment-parity")
+    async def runtime_deployment_parity() -> dict:
+        return versioned_response(
+            deployment_parity=deployment_parity_report(runtime_settings)
         )
 
     @app.get("/api/v1/runtime/secrets")

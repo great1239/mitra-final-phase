@@ -26,6 +26,11 @@ READ_ENDPOINTS = (
     ("api-status", "/api/v1/runtime/status"),
     ("api-telemetry", "/api/v1/runtime/telemetry?limit=20"),
     ("api-integrations", "/api/v1/runtime/integrations"),
+    (
+        "deployment-parity",
+        "/api/v1/runtime/deployment-parity",
+    ),
+    ("ecosystem-readiness", "/api/v1/ecosystem/readiness"),
     ("api-depository", "/api/v1/runtime/depository"),
 )
 
@@ -186,6 +191,46 @@ def _require(
     if not condition:
         result["status"] = "failed"
         result["error"] = message
+
+
+def _validate_deployment_control_plane(
+    results: list[dict[str, Any]],
+) -> None:
+    by_name = {item["name"]: item for item in results}
+    parity_result = by_name["deployment-parity"]
+    parity_body = parity_result.get("body_sample")
+    parity = (
+        parity_body.get("deployment_parity")
+        if isinstance(parity_body, dict)
+        else None
+    )
+    _require(
+        parity_result,
+        isinstance(parity, dict) and parity.get("ready") is True,
+        "deployment parity gate is not ready",
+    )
+
+    expected_revision = os.getenv("MITRA_EXPECTED_RELEASE_REVISION")
+    if expected_revision:
+        _require(
+            parity_result,
+            isinstance(parity, dict)
+            and parity.get("release_revision") == expected_revision,
+            "hosted release revision does not match the expected commit",
+        )
+
+    ecosystem_result = by_name["ecosystem-readiness"]
+    ecosystem_body = ecosystem_result.get("body_sample")
+    ecosystem = (
+        ecosystem_body.get("ecosystem")
+        if isinstance(ecosystem_body, dict)
+        else None
+    )
+    _require(
+        ecosystem_result,
+        isinstance(ecosystem, dict) and ecosystem.get("ready") is True,
+        "hosted ecosystem configuration is incomplete",
+    )
 
 
 def _sample_value(name: str, schema: dict[str, Any]) -> Any:
@@ -586,6 +631,7 @@ def main() -> int:
             _probe(client, base_url, name, path)
             for name, path in READ_ENDPOINTS
         ]
+        _validate_deployment_control_plane(read_results)
         flow_results = _runtime_flow(client, base_url)
         post_flow_results = [
             _probe(client, base_url, name, path)
@@ -613,6 +659,16 @@ def main() -> int:
             for item in results
         ),
         "health": any(item["name"] == "health" and item["status"] == "ok" for item in results),
+        "deployment_parity": any(
+            item["name"] == "deployment-parity"
+            and item["status"] == "ok"
+            for item in results
+        ),
+        "ecosystem_configuration": any(
+            item["name"] == "ecosystem-readiness"
+            and item["status"] == "ok"
+            for item in results
+        ),
         "metrics": any(item["name"] == "metrics" and item["status"] == "ok" for item in results),
         "telemetry": any(item["name"] == "post-flow-telemetry" and item["status"] == "ok" for item in results),
         "replay": any(item["name"] == "replay-reconstruction" and item["status"] == "ok" for item in results),

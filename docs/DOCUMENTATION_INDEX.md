@@ -19,6 +19,7 @@ Runtime. Incoming engineers should follow the documents in the order below.
 | Run and connect the Ashmit owner service | `docs/ASHMIT_OWNER_RUNTIME.md` |
 | Deploy to the durable host | `docs/INDEPENDENT_HOSTING.md` |
 | Deploy the public serverless host | `docs/VERCEL_DEPLOYMENT.md` |
+| Prevent local/hosted configuration drift | `docs/DEPLOYMENT_PARITY.md` |
 | Review SLOs and capacity | `docs/SLO_AND_CAPACITY.md` |
 | Review failure behavior | `docs/FAILURE_MATRIX.md` |
 
