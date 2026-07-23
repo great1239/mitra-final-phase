@@ -28,8 +28,8 @@ The gate rejects:
   a public-host profile;
 - simulated, example, loopback, or localhost product manifests;
 - an unavailable production manifest directory;
-- ephemeral storage or a disabled persistent supervisor when durable runtime
-  state is required.
+- ephemeral storage, a disabled persistent supervisor, or Vercel persistent
+  mode without a shared PostgreSQL database when durable state is required.
 
 ## Platform Profiles
 
@@ -37,11 +37,12 @@ The complete Docker ecosystem uses internal service DNS and a persistent
 volume. It therefore requires ecosystem and durable-runtime readiness but does
 not require public HTTPS between containers.
 
-The Vercel profile uses `/tmp` and cannot provide durable runtime SQLite or a
-continuous supervisor. It is intentionally marked `ephemeral` while the
-durable-runtime requirement remains enabled. It must not pass production
-readiness until Mitra is moved to a persistent host or its runtime store is
-externalized. Public dashboard availability is not production certification.
+The Vercel profile externalizes runtime state to managed PostgreSQL. Its
+process-local `/tmp` files are not authoritative. The parity report identifies
+`runtime_storage.backend=postgresql`, and `/ready` passes only while the shared
+database, strict manifests, and all public owner endpoints are configured.
+Vercel may suspend compute between requests; this limits continuous scheduling
+but does not erase checkpoints or replay state.
 
 ## Reproducible Validation
 

@@ -169,9 +169,13 @@ def deployment_parity_report(
                     }
                 )
 
+    durable_backend = bool(settings.database_url) or (
+        settings.deployment_platform != "vercel"
+    )
     durable = (
         settings.runtime_storage_mode == "persistent"
         and settings.persistent_runtime_enabled
+        and durable_backend
     )
     if settings.require_durable_runtime and not durable:
         blocking_issues.append(
@@ -270,6 +274,9 @@ def deployment_parity_report(
         },
         "runtime_storage": {
             "mode": settings.runtime_storage_mode,
+            "backend": (
+                "postgresql" if settings.database_url else "sqlite"
+            ),
             "persistent_runtime_enabled": (
                 settings.persistent_runtime_enabled
             ),

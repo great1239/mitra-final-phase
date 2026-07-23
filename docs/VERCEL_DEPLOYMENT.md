@@ -24,17 +24,19 @@ Files:
 - `vercel.json`
 - `requirements.txt`
 
-This is a Vercel serverless profile. It is suitable for public hosted API
-proof, dashboard/OpenAPI checks, and review access. It is not equivalent to the
-Docker persistent runtime profile because Vercel functions use ephemeral local
-storage under `/tmp`.
+This is a Vercel serverless profile backed by shared managed PostgreSQL.
+Runtime state, checkpoints, leases, replay packages, and depository lineage use
+`MITRA_COMPANION_DATABASE_URL`; `/tmp` is limited to process-local logs and a
+non-active SQLite fallback path. The database URL is a sensitive Vercel
+environment variable and is never committed or returned by runtime APIs.
 
-The Vercel profile deliberately sets
-`MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME=true` while identifying its storage as
-`ephemeral`. Consequently, `/ready` returns HTTP 503 instead of allowing a
-publicly reachable dashboard to be mistaken for production readiness. For
-long-duration validation, persistent SQLite, and supervisor behavior, use the
-Docker/Render profile or externalize the runtime store.
+The profile sets persistent storage and supervisor mode, and
+`MITRA_COMPANION_REQUIRE_DURABLE_RUNTIME=true` verifies that Vercel cannot pass
+the gate without the external PostgreSQL backend. A cold start creates a new
+runtime instance against the same state and can resume incomplete checkpoints.
+Vercel can still suspend compute between requests, so periodic background work
+is opportunistic on this host. Use a continuously resident Docker/Render
+runtime when strict wall-clock scheduling is required.
 
 ## Upload
 

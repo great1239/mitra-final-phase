@@ -44,6 +44,7 @@ critical code entry points.
 25. [Public Bucket persistence](25-public-bucket-persistence.md)
 26. [Deployment parity gate](26-deployment-parity-gate.md)
 27. [Portable deployment validation](27-portable-deployment-validation.md)
+28. [Public runtime portability](28-public-runtime-portability.md)
 
 ## Reviewer Path
 

@@ -13,6 +13,54 @@ from .errors import ContextRevisionConflict, ResourceConflictError
 from .utils import sha256_json, utc_now
 
 
+_POSTGRES_TRANSACTION_LOCK = 4_834_857_201
+
+
+class _PostgresConnection:
+    """Small DB-API compatibility layer for the runtime's portable SQL."""
+
+    def __init__(self, database_url: str) -> None:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except ImportError as exc:
+            raise RuntimeError(
+                "PostgreSQL runtime storage requires psycopg"
+            ) from exc
+        self._connection = psycopg.connect(
+            database_url,
+            autocommit=True,
+            connect_timeout=15,
+            row_factory=dict_row,
+        )
+
+    def execute(
+        self,
+        statement: str,
+        parameters: tuple[Any, ...] = (),
+    ) -> Any:
+        if statement.strip().upper() == "BEGIN IMMEDIATE":
+            self._connection.execute("BEGIN")
+            return self._connection.execute(
+                "SELECT pg_advisory_xact_lock(%s)",
+                (_POSTGRES_TRANSACTION_LOCK,),
+            )
+        return self._connection.execute(
+            statement.replace("?", "%s"),
+            parameters,
+        )
+
+    def executescript(self, script: str) -> Any:
+        cursor = None
+        for statement in script.split(";"):
+            if statement.strip():
+                cursor = self.execute(statement)
+        return cursor
+
+    def close(self) -> None:
+        self._connection.close()
+
+
 class RuntimeStore:
     """Durable state for lifecycle, sessions, contexts, attachments, and dispatches."""
 
@@ -21,9 +69,20 @@ class RuntimeStore:
         database_path: Path,
         *,
         synchronous: str = "FULL",
+        database_url: str | None = None,
     ):
         self.database_path = Path(database_path)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self.database_url = database_url
+        if self.database_url and not self.database_url.startswith(
+            ("postgresql://", "postgres://")
+        ):
+            raise ValueError(
+                "Runtime database URL must use postgresql:// or postgres://"
+            )
+        self.storage_backend = (
+            "postgresql" if self.database_url else "sqlite"
+        )
         self.synchronous = synchronous.upper()
         if self.synchronous not in {"EXTRA", "FULL", "NORMAL"}:
             raise ValueError(
@@ -33,7 +92,15 @@ class RuntimeStore:
         self._initialize()
 
     @contextmanager
-    def connection(self) -> Iterator[sqlite3.Connection]:
+    def connection(self) -> Iterator[Any]:
+        if self.database_url:
+            connection = _PostgresConnection(self.database_url)
+            try:
+                yield connection
+            finally:
+                connection.close()
+            return
+
         connection = sqlite3.connect(
             self.database_path,
             timeout=30,
@@ -51,9 +118,9 @@ class RuntimeStore:
 
     def _initialize(self) -> None:
         with self._schema_lock, self.connection() as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.executescript(
-                """
+            if not self.database_url:
+                connection.execute("PRAGMA journal_mode=WAL")
+            schema = """
                 CREATE TABLE IF NOT EXISTS runtime_transitions (
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                     from_state TEXT,
@@ -397,9 +464,15 @@ class RuntimeStore:
                     ON continuity_snapshots(created_at);
 
                 """
-            )
-            self._migrate_legacy_workspace_contexts(connection)
-            self._migrate_dispatch_phases(connection)
+            if self.database_url:
+                schema = schema.replace(
+                    "sequence INTEGER PRIMARY KEY AUTOINCREMENT",
+                    "sequence BIGSERIAL PRIMARY KEY",
+                )
+            connection.executescript(schema)
+            if not self.database_url:
+                self._migrate_legacy_workspace_contexts(connection)
+                self._migrate_dispatch_phases(connection)
 
     def upsert_runtime_instance(
         self,
@@ -737,15 +810,25 @@ class RuntimeStore:
         target = to_state.value if isinstance(to_state, RuntimeState) else to_state
         occurred_at = utc_now()
         with self.connection() as connection:
-            cursor = connection.execute(
-                """
-                INSERT INTO runtime_transitions(from_state, to_state, reason, occurred_at)
+            statement = """
+                INSERT INTO runtime_transitions(
+                    from_state, to_state, reason, occurred_at
+                )
                 VALUES (?, ?, ?, ?)
-                """,
+                """
+            if self.database_url:
+                statement += " RETURNING sequence"
+            cursor = connection.execute(
+                statement,
                 (source, target, reason, occurred_at),
             )
+            sequence = (
+                cursor.fetchone()["sequence"]
+                if self.database_url
+                else cursor.lastrowid
+            )
         return {
-            "sequence": cursor.lastrowid,
+            "sequence": sequence,
             "from_state": source,
             "to_state": target,
             "reason": reason,
@@ -2182,10 +2265,11 @@ class RuntimeStore:
                         )
                     connection.execute(
                         """
-                        INSERT OR IGNORE INTO central_artifacts(
+                        INSERT INTO central_artifacts(
                             artifact_hash, artifact_type, artifact_json,
                             metadata_json, created_at
                         ) VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(artifact_hash) DO NOTHING
                         """,
                         (
                             item["artifact_hash"],

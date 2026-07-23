@@ -149,6 +149,7 @@ class CompanionRuntime:
         self.store = RuntimeStore(
             settings.database_path,
             synchronous=settings.sqlite_synchronous,
+            database_url=settings.database_url,
         )
         self.lifecycle = RuntimeLifecycle(self.store)
         self.sessions = SessionRuntime(self.store)

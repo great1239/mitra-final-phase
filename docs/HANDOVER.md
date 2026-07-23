@@ -127,6 +127,7 @@ is:
 |---|---|
 | `MITRA_COMPANION_DATA_ROOT` | writable persistent root |
 | `MITRA_COMPANION_DATABASE_PATH` | SQLite database |
+| `MITRA_COMPANION_DATABASE_URL` | shared PostgreSQL runtime database; required for durable serverless operation |
 | `MITRA_COMPANION_MANIFEST_DIRECTORY` | product manifest directory |
 | `MITRA_COMPANION_ENDPOINT_OVERRIDES_JSON` | optional published-origin to private-runtime-origin JSON map; defaults to `{}` |
 | `MITRA_COMPANION_ALLOW_EXAMPLE_MANIFESTS` | development-only fixture opt-in |
@@ -340,14 +341,17 @@ See `docs/INTEGRATION_GUIDE.md`.
 
 ## 9. Deployment Choice
 
-Use Docker or `deploy/render.persistent-runtime.yaml` when durable Mitra
-state, recovery, long-duration execution, or multiple runtime instances are
-required. The root `render.yaml` is the independently hosted public module
-stack and uses networked PostgreSQL for durable Karma and InsightFlow state.
+Use Docker or `deploy/render.persistent-runtime.yaml` when continuously
+resident supervision and strict wall-clock maintenance are required. The root
+`render.yaml` is the independently hosted public module stack and uses
+networked PostgreSQL for durable Karma and InsightFlow state.
 
-Use `vercel.json` only for the public serverless API. Its `/tmp` database is
-ephemeral and persistent supervision is disabled. Do not use a Vercel
-deployment as proof of durable failover or disaster recovery.
+The public `vercel.json` profile also uses shared PostgreSQL through the
+sensitive `MITRA_COMPANION_DATABASE_URL` deployment variable. Sessions,
+contexts, checkpoints, replay packages, leases, and depository lineage survive
+cold starts and process replacement. `/tmp` is not authoritative. Vercel can
+pause compute between requests, so use the resident container profile for
+continuous background scheduling.
 
 ## 10. Central Depository Handover
 

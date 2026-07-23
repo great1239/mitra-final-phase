@@ -196,7 +196,8 @@ def main() -> int:
             "vercel.json": (
                 '"MITRA_COMPANION_MANIFEST_DIRECTORY": "contracts/production"',
                 '"MITRA_ECOSYSTEM_TIMEOUT_SECONDS": "45"',
-                '"MITRA_COMPANION_RUNTIME_STORAGE_MODE": "ephemeral"',
+                '"MITRA_COMPANION_RUNTIME_STORAGE_MODE": "persistent"',
+                '"MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED": "true"',
                 '"MITRA_COMPANION_REQUIRE_PUBLIC_OWNER_ENDPOINTS": "true"',
             ),
             "deploy/render.persistent-runtime.yaml": (
@@ -242,6 +243,7 @@ def main() -> int:
                 "DURABLE_RUNTIME_STORAGE_REQUIRED",
             ),
             "pratham/companion-runtime/mitra_companion/store.py": (
+                "class _PostgresConnection",
                 "ecosystem_executions",
                 "ecosystem_execution_stages",
                 "ecosystem_stage_attempts",

@@ -174,8 +174,11 @@ def test_vercel_runtime_uses_public_modules_without_committed_secrets():
         "https://pratham-mitra-insightflow-bridge.onrender.com/"
         "ingest/execution"
     )
+    assert environment["MITRA_COMPANION_RUNTIME_STORAGE_MODE"] == "persistent"
+    assert environment["MITRA_COMPANION_PERSISTENT_RUNTIME_ENABLED"] == "true"
     assert all("localhost" not in value for value in environment.values())
     assert all("127.0.0.1" not in value for value in environment.values())
+    assert "MITRA_COMPANION_DATABASE_URL" not in environment
     assert "MITRA_RAJ_API_KEY" not in environment
     assert "MITRA_BHIV_ASHMIT_API_KEY" not in environment
     assert "MITRA_BHIV_INSIGHTFLOW_API_KEY" not in environment
@@ -297,7 +300,8 @@ def test_documentation_handover_contains_clean_rebuild_and_depository_protocol()
     assert "scripts/validate_ecosystem_runtime.py" in handover
     assert "contracts/operational-acceptance.json" in handover
     assert "total_assertions=425" in handover
-    assert "ephemeral" in handover
+    assert "MITRA_COMPANION_DATABASE_URL" in handover
+    assert "shared PostgreSQL" in handover
     assert "GET /api/v1/runtime/depository" in depository
     assert "subject_type=dispatch&subject_id={dispatch_id}" in depository
     assert 'separators=(",", ":")' in depository

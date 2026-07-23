@@ -13,6 +13,7 @@ from mitra_companion.constants import (
     RUNTIME_VERSION,
     SCHEMA_VERSION,
 )
+from mitra_companion.deployment import deployment_parity_report
 from mitra_companion.runtime import CompanionRuntime
 from mitra_companion.contracts import ProductAttachmentManifest
 
@@ -34,6 +35,8 @@ def test_production_configuration_loads_env_file_and_secret_files(
         "MITRA_COMPANION_CONFIG_FILE",
         "MITRA_COMPANION_DATA_ROOT",
         "MITRA_COMPANION_DATABASE_PATH",
+        "MITRA_COMPANION_DATABASE_URL",
+        "MITRA_COMPANION_DATABASE_URL_FILE",
         "MITRA_COMPANION_SQLITE_SYNCHRONOUS",
         "MITRA_COMPANION_TELEMETRY_LOG_PATH",
         "MITRA_COMPANION_LOG_PATH",
@@ -52,12 +55,17 @@ def test_production_configuration_loads_env_file_and_secret_files(
     data_root = tmp_path / "data"
     resolver_secret = tmp_path / "resolver-url.secret"
     otel_secret = tmp_path / "otel-url.secret"
+    database_secret = tmp_path / "database-url.secret"
     resolver_secret.write_text(
         "https://resolver.internal/runtime-analysis\n",
         encoding="utf-8",
     )
     otel_secret.write_text(
         "http://otel.internal:4318/v1/traces\n",
+        encoding="utf-8",
+    )
+    database_secret.write_text(
+        "postgresql://runtime:secret@postgres.internal/mitra\n",
         encoding="utf-8",
     )
     env_file = tmp_path / "production.env"
@@ -68,6 +76,7 @@ def test_production_configuration_loads_env_file_and_secret_files(
                 "MITRA_COMPANION_ENVIRONMENT=production-test",
                 f"MITRA_COMPANION_DATA_ROOT={data_root}",
                 f"MITRA_COMPANION_DATABASE_PATH={data_root / 'runtime.db'}",
+                f"MITRA_COMPANION_DATABASE_URL_FILE={database_secret}",
                 "MITRA_COMPANION_SQLITE_SYNCHRONOUS=NORMAL",
                 f"MITRA_COMPANION_TELEMETRY_LOG_PATH={data_root / 'telemetry.jsonl'}",
                 f"MITRA_COMPANION_LOG_PATH={data_root / 'production.jsonl'}",
@@ -94,10 +103,17 @@ def test_production_configuration_loads_env_file_and_secret_files(
     assert settings.otel_exporter_otlp_endpoint == (
         "http://otel.internal:4318/v1/traces"
     )
+    assert settings.database_url == (
+        "postgresql://runtime:secret@postgres.internal/mitra"
+    )
     assert settings.production_log_level == "WARNING"
     assert settings.production_log_to_stdout is False
     assert settings.sqlite_synchronous == "NORMAL"
     assert summary["sqlite_synchronous"] == "NORMAL"
+    assert summary["database_backend"] == "postgresql"
+    assert "MITRA_COMPANION_DATABASE_URL" in (
+        summary["secrets"]["secret_keys_loaded_from_files"]
+    )
     assert "MITRA_COMPANION_AI_RESOLVER_URL" in (
         summary["secrets"]["secret_keys_loaded_from_files"]
     )
@@ -106,6 +122,7 @@ def test_production_configuration_loads_env_file_and_secret_files(
     )
     assert "resolver.internal" not in summary_text
     assert "otel.internal" not in summary_text
+    assert "postgres.internal" not in summary_text
 
 
 def test_runtime_operations_api_exposes_production_mode(settings_factory):
@@ -239,6 +256,35 @@ def test_strict_deployment_readiness_accepts_portable_configuration(
         ).json()["deployment_parity"]
         assert parity["owner_configuration"]["pending_modules"] == []
         assert parity["runtime_storage"]["durable"] is True
+
+
+def test_vercel_durability_requires_external_database(settings_factory):
+    settings = settings_factory()
+    settings.deployment_platform = "vercel"
+    settings.runtime_storage_mode = "persistent"
+    settings.persistent_runtime_enabled = True
+    settings.require_durable_runtime = True
+
+    blocked = deployment_parity_report(settings)
+    assert blocked["runtime_storage"] == {
+        "mode": "persistent",
+        "backend": "sqlite",
+        "persistent_runtime_enabled": True,
+        "durable": False,
+    }
+    assert {
+        issue["code"] for issue in blocked["blocking_issues"]
+    } == {"DURABLE_RUNTIME_STORAGE_REQUIRED"}
+
+    settings.database_url = "postgresql://runtime.example/mitra"
+    ready = deployment_parity_report(settings)
+    assert ready["runtime_storage"] == {
+        "mode": "persistent",
+        "backend": "postgresql",
+        "persistent_runtime_enabled": True,
+        "durable": True,
+    }
+    assert ready["blocking_issues"] == []
 
 
 def test_startup_source_reconciles_a_persisted_manifest_revision(

@@ -129,11 +129,14 @@ continuity scans at a time.
 
 ## Deployment Topology
 
-Docker and Render use durable `/data` storage and support persistent runtime
-supervision. Vercel uses ephemeral `/tmp` storage and disables persistent
-supervision. It is a public API host, not the durable recovery topology.
+Docker and the persistent Render profile can use SQLite on durable `/data`.
+The public Vercel profile uses managed PostgreSQL for runtime state; `/tmp`
+contains only non-authoritative process-local files. Both backends preserve the
+same store, lease, outbox, checkpoint, and replay interfaces.
 
-SQLite coordination supports multiple processes sharing one durable host. It
-does not claim cross-host consensus. Horizontal multi-host deployment must
-replace the store with a shared transactional database or event fabric while
-preserving the same lease and outbox contracts.
+SQLite coordination supports multiple processes sharing one durable host.
+PostgreSQL adds cross-instance transactions and a transaction-scoped advisory
+lock for the sections that use SQLite `BEGIN IMMEDIATE`. This allows stateless
+instances to share runtime state without changing orchestration contracts.
+Vercel may still suspend background compute between requests, so continuously
+scheduled maintenance requires a resident container runtime.

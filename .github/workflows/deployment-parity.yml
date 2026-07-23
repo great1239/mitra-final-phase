@@ -12,6 +12,22 @@ on:
 jobs:
   implementation:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mitra
+          POSTGRES_PASSWORD: mitra-ci
+          POSTGRES_DB: mitra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mitra -d mitra"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    env:
+      MITRA_TEST_POSTGRES_URL: postgresql://mitra:mitra-ci@127.0.0.1:5432/mitra
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

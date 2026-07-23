@@ -22,6 +22,7 @@ _NON_PRODUCTION_ENVIRONMENTS: Final[set[str]] = {
 _SECRET_VALUE_KEYS: Final[set[str]] = {
     "MITRA_COMPANION_AI_RESOLVER_URL",
     "MITRA_COMPANION_AI_ANALYSIS_URL",
+    "MITRA_COMPANION_DATABASE_URL",
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "MITRA_BHIV_ASHMIT_BASE_URL",
     "MITRA_BHIV_ASHMIT_API_KEY",
@@ -169,6 +170,7 @@ class RuntimeSettings:
     service_root: Path
     data_root: Path
     database_path: Path
+    database_url: str | None = None
     sqlite_synchronous: str = "FULL"
     runtime_version: str = "1.0.0"
     compatibility_version: str = "mitra-companion-1"
@@ -329,6 +331,7 @@ class RuntimeSettings:
             or ai_resolver_url
         )
         otel_endpoint = get_secret("OTEL_EXPORTER_OTLP_ENDPOINT")
+        database_url = get_secret("MITRA_COMPANION_DATABASE_URL")
         bhiv_ashmit_base_url = get_secret("MITRA_BHIV_ASHMIT_BASE_URL")
         bhiv_ashmit_api_key = get_secret("MITRA_BHIV_ASHMIT_API_KEY")
         bhiv_bucket_base_url = get_secret("MITRA_BHIV_BUCKET_BASE_URL")
@@ -352,6 +355,7 @@ class RuntimeSettings:
             service_root=service_root,
             data_root=data_root,
             database_path=database_path,
+            database_url=database_url,
             sqlite_synchronous=_sqlite_synchronous(
                 get("MITRA_COMPANION_SQLITE_SYNCHRONOUS", "FULL")
             ),
@@ -640,6 +644,9 @@ class RuntimeSettings:
             if self.production_config_file
             else None,
             "data_root": str(self.data_root),
+            "database_backend": (
+                "postgresql" if self.database_url else "sqlite"
+            ),
             "database_path": _redact_path(self.database_path, self.data_root),
             "sqlite_synchronous": self.sqlite_synchronous,
             "telemetry_log_path": _redact_path(

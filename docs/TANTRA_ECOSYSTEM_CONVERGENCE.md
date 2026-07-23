@@ -239,8 +239,10 @@ https://mitra-live-runtime-sprint.vercel.app
 ```
 
 The main `mitra.blackholeinfiverse.com` site remains unchanged. It can call the
-public runtime directly or through its proxy when required. Vercel uses
-ephemeral `/tmp`; durable failover, long-duration operation, and disaster
-recovery require the Docker/Render profile backed by durable storage. The
-local Compose endpoints are not reachable from Vercel; full-chain public
-execution requires equivalent HTTPS deployments for every owner service.
+public runtime directly or through its proxy when required. The public runtime
+stores authoritative state in managed PostgreSQL; `/tmp` is process-local
+only. Raj, Karma, PRANA, and the InsightFlow registry/bridge are independently
+hosted through the root Render Blueprint. Ashmit, Bucket, KESHAV, UniGuru, and
+Trade Bot remain attached through their published HTTPS contracts. Vercel may
+pause background compute between requests, so strict continuous scheduling
+still belongs on the resident Docker/Render runtime.
