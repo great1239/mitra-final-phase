@@ -48,6 +48,7 @@ services:
     branch: main
     dockerContext: .
     dockerfilePath: integration_services/insightflow-owner.Dockerfile
+    dockerCommand: /app/start_insightflow.sh
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
