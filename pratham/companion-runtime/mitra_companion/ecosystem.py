@@ -428,7 +428,7 @@ class PublishedEcosystemClient:
             operation: str,
             base_url: str,
             path: str,
-        ) -> None:
+        ) -> tuple[str, dict[str, Any]]:
             url = urljoin(base_url.rstrip("/") + "/", path)
             try:
                 result = await self._request(
@@ -441,51 +441,55 @@ class PublishedEcosystemClient:
                 )
             except ExternalStageError as exc:
                 result = exc.result
-            checks.append(result)
-            checks_by_module[module] = result
+            return module, result
 
+        probes: list[Awaitable[tuple[str, dict[str, Any]]]] = []
         if modules["raj"]["configured"]:
-            await probe(
+            probes.append(probe(
                 module="raj",
                 operation="raj.health",
                 base_url=self.settings.raj_workflow_base_url or "",
                 path="healthz",
-            )
+            ))
         if modules["keshav"]["configured"]:
-            await probe(
+            probes.append(probe(
                 module="keshav",
                 operation="keshav.health",
                 base_url=self.settings.bhiv_keshav_base_url or "",
                 path="health",
-            )
+            ))
         if modules["bucket"]["configured"]:
-            await probe(
+            probes.append(probe(
                 module="bucket",
                 operation="bucket.health",
                 base_url=self.settings.bhiv_bucket_base_url or "",
                 path="health",
-            )
+            ))
         if modules["ashmit"]["configured"]:
-            await probe(
+            probes.append(probe(
                 module="ashmit",
                 operation="ashmit.health-system",
                 base_url=self.settings.bhiv_ashmit_base_url or "",
                 path="health/system",
-            )
+            ))
         if modules["prana"]["configured"]:
-            await probe(
+            probes.append(probe(
                 module="prana",
                 operation="prana.health",
                 base_url=self.settings.bhiv_prana_base_url or "",
                 path="health",
-            )
+            ))
         if modules["central_depository"]["configured"]:
-            await probe(
+            probes.append(probe(
                 module="central_depository",
                 operation="central-depository.latest-hash",
                 base_url=self.settings.central_depository_base_url or "",
                 path="bucket/latest-hash",
-            )
+            ))
+
+        for module, result in await asyncio.gather(*probes):
+            checks.append(result)
+            checks_by_module[module] = result
 
         unhealthy_modules: list[str] = []
 

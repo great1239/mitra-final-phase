@@ -338,6 +338,37 @@ class DelayedContractTransport(httpx.AsyncBaseTransport):
         return self.environment.handler(request)
 
 
+class ConcurrentHealthTransport(httpx.AsyncBaseTransport):
+    def __init__(self, environment: ContractEnvironment) -> None:
+        self.environment = environment
+        self.active_health_requests = 0
+        self.max_active_health_requests = 0
+
+    async def handle_async_request(
+        self,
+        request: httpx.Request,
+    ) -> httpx.Response:
+        is_health_probe = request.method == "GET" and request.url.path in {
+            "/health",
+            "/health/system",
+            "/healthz",
+            "/bucket/latest-hash",
+        }
+        if not is_health_probe:
+            return self.environment.handler(request)
+
+        self.active_health_requests += 1
+        self.max_active_health_requests = max(
+            self.max_active_health_requests,
+            self.active_health_requests,
+        )
+        try:
+            await asyncio.sleep(0.05)
+            return self.environment.handler(request)
+        finally:
+            self.active_health_requests -= 1
+
+
 def _configured_runtime(
     settings_factory,
     environment: ContractEnvironment,
@@ -370,6 +401,36 @@ def _configured_runtime(
     runtime.start()
     runtime.attach(_manifest())
     return runtime
+
+
+@pytest.mark.asyncio
+async def test_dependency_preflight_probes_owner_services_concurrently(
+    settings_factory,
+):
+    environment = ContractEnvironment()
+    transport = ConcurrentHealthTransport(environment)
+    runtime = _configured_runtime(
+        settings_factory,
+        environment,
+        transport=transport,
+    )
+    try:
+        result = await runtime.ecosystem.client.dependency_preflight(
+            "parallel-preflight-trace"
+        )
+    finally:
+        runtime.stop()
+
+    assert result["status"] == "healthy"
+    assert [check["module"] for check in result["checks"]] == [
+        "raj",
+        "keshav",
+        "bucket",
+        "ashmit",
+        "prana",
+        "central_depository",
+    ]
+    assert transport.max_active_health_requests == 6
 
 
 @pytest.mark.asyncio
